@@ -19,30 +19,24 @@
 
 **Windows 10+ — Portable Version**
 
-#### Winget
+#### PowerShell (recomendado)
 ```powershell
-winget install "WallFlow"
-```
-
-#### Scoop
-```powershell
-scoop install WallFlow
-```
-
-#### Chocolatey
-```powershell
-choco install wallflow
-```
-
-#### PowerShell (directo)
-```powershell
-iwr 'https://github.com/Sciclox/Wall-Flow/releases/latest/download/install.ps1' -OutFile install.ps1
-.\install.ps1
+# Instalación automática (descarga, extrae, acceso directo)
+powershell -c "iwr -Uri 'https://github.com/Sciclox/Wall-Flow/releases/latest/download/install.ps1' -OutFile install.ps1; .\install.ps1"
 ```
 
 #### Manual
-1. Descarga `WallFlow-v1.0.0.zip` desde [Releases](https://github.com/Sciclox/Wall-Flow/releases)
-2. Extrae y ejecuta `WallFlow.exe`
+| Archivo | Descripción |
+|---------|-------------|
+| [`WallFlow.exe`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow.exe) | Ejecutable portable (self-contained, no requiere .NET) |
+| [`WallFlow-v1.0.0.zip`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow-v1.0.0.zip) | Zip con el ejecutable |
+
+#### Package Managers (próximamente)
+```powershell
+winget install "WallFlow"     # Próximamente
+scoop install WallFlow        # Próximamente
+choco install wallflow        # Próximamente
+```
 
 ---
 
