@@ -42,6 +42,26 @@
         </Grid>
     </ControlTemplate>
 
+    <DataTemplate x:Key="WallpaperItemTemplate">
+        <Border CornerRadius="8" Background="Transparent" Padding="8,6" Margin="0,2">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="48" Height="36" CornerRadius="6" ClipToBounds="True" Margin="0,0,12,0">
+                    <Border.Background>
+                        <ImageBrush ImageSource="{Binding FilePath}" Stretch="UniformToFill" />
+                    </Border.Background>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding FileName}" Foreground="White"
+                               FontFamily="Segoe UI" FontSize="14" FontWeight="Normal"
+                               TextTrimming="CharacterEllipsis" MaxWidth="400" />
+                    <TextBlock Text="{Binding FilePath}" Foreground="#888888"
+                               FontFamily="Segoe UI" FontSize="11"
+                               TextTrimming="CharacterEllipsis" MaxWidth="400" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </DataTemplate>
+
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Template" Value="{StaticResource FrostedScrollBar}" />

@@ -20,6 +20,9 @@ public partial class MainWindow : Window
     private const int GAP = 8;
     private const int PAD = 25;
     private const int HOTKEY_ID = 9001;
+    private const int LAUNCHER_HOTKEY_ID = 9002;
+
+    public static event Action? LauncherRequested;
 
     private readonly List<WallpaperEntry> _wallpapers = new();
     private readonly string _wallpaperDir;
@@ -117,6 +120,7 @@ public partial class MainWindow : Window
         HideFromAltTab(hwnd);
         EnableBlur(hwnd);
         RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57);
+        RegisterHotKey(hwnd, LAUNCHER_HOTKEY_ID, 0x0002, 0x20);
 
         var screenW = SystemParameters.PrimaryScreenWidth;
         var screenH = SystemParameters.PrimaryScreenHeight;
@@ -321,12 +325,20 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+        if (msg == WM_HOTKEY)
         {
-            Visibility = Visibility == Visibility.Visible
-                ? Visibility.Hidden
-                : Visibility.Visible;
-            handled = true;
+            if (wParam.ToInt32() == HOTKEY_ID)
+            {
+                Visibility = Visibility == Visibility.Visible
+                    ? Visibility.Hidden
+                    : Visibility.Visible;
+                handled = true;
+            }
+            else if (wParam.ToInt32() == LAUNCHER_HOTKEY_ID)
+            {
+                LauncherRequested?.Invoke();
+                handled = true;
+            }
         }
         return IntPtr.Zero;
     }
