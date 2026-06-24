@@ -31,7 +31,22 @@ Gestor de fondos de pantalla minimalista para Windows con integración en la ban
 
 ## Instalación
 
-1. Descarga la última versión desde [Releases](https://github.com/Sciclox/Wall-Flow/releases)
+### Por comando (PowerShell)
+
+```powershell
+# Opción 1: Descargar y ejecutar el instalador automático
+iwr -Uri 'https://github.com/Sciclox/Wall-Flow/releases/latest/download/install.ps1' -OutFile install.ps1
+.\install.ps1
+
+# Opción 2: Una línea (descarga, extrae y ejecuta)
+iwr -Uri 'https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow-v1.0.0.zip' -OutFile WallFlow.zip
+Expand-Archive -Path WallFlow.zip -DestinationPath "$env:LOCALAPPDATA\WallFlow" -Force
+& "$env:LOCALAPPDATA\WallFlow\WallFlow.exe"
+```
+
+### Manual
+
+1. Descarga `WallFlow-v1.0.0.zip` desde [Releases](https://github.com/Sciclox/Wall-Flow/releases)
 2. Extrae el archivo en cualquier carpeta
 3. Ejecuta `WallFlow.exe`
 
