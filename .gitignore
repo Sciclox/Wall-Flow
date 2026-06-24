@@ -40,3 +40,6 @@ bld/
 # OS files
 .DS_Store
 Thumbs.db
+
+publish/
+*.zip

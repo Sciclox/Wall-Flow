@@ -9,74 +9,87 @@ param(
 $repo = "Sciclox/Wall-Flow"
 $apiUrl = "https://api.github.com/repos/$repo/releases/latest"
 
-Write-Host "=== WallFlow Installer ===" -ForegroundColor Cyan
+Write-Host "╔══════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║     WallFlow Installer       ║" -ForegroundColor Cyan
+Write-Host "╚══════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
-# Check .NET Runtime
-$dotnet = Get-Command "dotnet" -ErrorAction SilentlyContinue
-$hasRuntime = $false
-if ($dotnet) {
-    $info = dotnet --info 2>$null
-    if ($info -match "Microsoft\.NETCore\.App.*8\.\d+\.\d+") {
-        $hasRuntime = $true
-    }
-}
-
-if (-not $hasRuntime) {
-    Write-Host "[!] .NET 8 Runtime no detectado." -ForegroundColor Yellow
-    Write-Host "    Descárgalo desde: https://dotnet.microsoft.com/download/dotnet/8.0"
-    Write-Host "    O instálalo con: winget install Microsoft.DotNet.DesktopRuntime.8"
-    $opt = Read-Host "    ¿Continuar de todas formas? (s/N)"
-    if ($opt -ne "s") { exit 1 }
-}
-
 # Get latest release
-Write-Host "[*] Obteniendo última versión..." -ForegroundColor Green
+Write-Host "❯ Obteniendo última versión..." -ForegroundColor Green
 try {
     $release = Invoke-RestMethod -Uri $apiUrl -ErrorAction Stop
     $tag = $release.tag_name
-    $zipUrl = ($release.assets | Where-Object { $_.name -like "*.zip" }).browser_download_url
+    $zipAsset = $release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
 
-    if (-not $zipUrl) {
-        Write-Host "[!] No se encontró el archivo ZIP en la release." -ForegroundColor Red
+    if (-not $zipAsset) {
+        Write-Host "✖ No se encontró el archivo ZIP en la release." -ForegroundColor Red
         exit 1
     }
 
-    Write-Host "[*] Versión: $tag" -ForegroundColor Green
-    Write-Host "[*] Descargando: $zipUrl" -ForegroundColor Green
+    $zipUrl = $zipAsset.browser_download_url
+    $zipSize = [Math]::Round($zipAsset.size / 1MB, 1)
+
+    Write-Host "❯ Versión: $tag ($zipSize MB)" -ForegroundColor Green
+    Write-Host "❯ Descargando..." -ForegroundColor Green
 
     $zipPath = "$env:TEMP\WallFlow.zip"
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
 
-    # Extract
-    Write-Host "[*] Extrayendo a: $InstallDir" -ForegroundColor Green
-    if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
+    Write-Host "❯ Instalando en: $InstallDir" -ForegroundColor Green
+
+    if (Test-Path $InstallDir) {
+        Remove-Item -Recurse -Force $InstallDir -ErrorAction SilentlyContinue
+    }
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     Expand-Archive -Path $zipPath -DestinationPath $InstallDir -Force
     Remove-Item -Path $zipPath -Force
 
-    # Create shortcut
     $exePath = Join-Path $InstallDir "WallFlow.exe"
-    if (Test-Path $exePath) {
-        $shortcutDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\WallFlow"
-        New-Item -ItemType Directory -Path $shortcutDir -Force | Out-Null
-        $shortcutPath = Join-Path $shortcutDir "WallFlow.lnk"
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $exePath
-        $shortcut.WorkingDirectory = $InstallDir
-        $shortcut.Description = "WallFlow - Wallpaper Manager"
-        $shortcut.Save()
-        Write-Host "[+] Acceso directo creado en el menú Inicio" -ForegroundColor Cyan
+
+    if (-not (Test-Path $exePath)) {
+        Write-Host "✖ Error: No se encontró WallFlow.exe" -ForegroundColor Red
+        exit 1
+    }
+
+    # Start Menu shortcut
+    $shortcutDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\WallFlow"
+    New-Item -ItemType Directory -Path $shortcutDir -Force | Out-Null
+    $shortcutPath = Join-Path $shortcutDir "WallFlow.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $exePath
+    $shortcut.WorkingDirectory = $InstallDir
+    $shortcut.Description = "WallFlow - Wallpaper Manager"
+    $shortcut.Save()
+
+    # Auto-start registry
+    if ($AddToStartup) {
+        $runKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Software\Microsoft\Windows\CurrentVersion\Run", $true)
+        if ($runKey) {
+            $runKey.SetValue("WallFlow", "`"$exePath`"")
+            $runKey.Dispose()
+            Write-Host "❯ Autoarranque configurado" -ForegroundColor Green
+        }
     }
 
     Write-Host ""
-    Write-Host "=== Instalación completada ===" -ForegroundColor Cyan
-    Write-Host "Ejecuta: $exePath" -ForegroundColor White
+    Write-Host "╔══════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║   Instalación completada!    ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Para desinstalar, elimina la carpeta: $InstallDir" -ForegroundColor Gray
+    Write-Host "   Ejecutar: $exePath" -ForegroundColor White
+    Write-Host ""
+    Write-Host "   Para desinstalar, elimina la carpeta:" -ForegroundColor Gray
+    Write-Host "   $InstallDir" -ForegroundColor Gray
+    Write-Host ""
+
+    # Ask to run
+    $run = Read-Host "¿Ejecutar WallFlow ahora? (S/n)"
+    if ($run -ne "n") {
+        Start-Process -FilePath $exePath
+    }
 
 } catch {
-    Write-Host "[!] Error: $_" -ForegroundColor Red
+    Write-Host "✖ Error: $_" -ForegroundColor Red
     exit 1
 }
