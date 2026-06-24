@@ -1,0 +1,68 @@
+<Window x:Class="WallFlow.ContextMenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True"
+        ShowInTaskbar="False" Topmost="True"
+        Background="Transparent"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize"
+        Width="240"
+        Opacity="0"
+        RenderTransformOrigin="0.5,0.5"
+        Deactivated="Window_Deactivated"
+        Loaded="Window_Loaded"
+        MouseLeave="Window_MouseLeave"
+        PreviewMouseDown="Window_PreviewMouseDown">
+    <Border x:Name="RootBorder" CornerRadius="10" Background="#2D2D2D" BorderBrush="#404040" BorderThickness="1" Padding="6"
+            RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform>
+            <ScaleTransform ScaleX="0.95" ScaleY="0.95" />
+        </Border.RenderTransform>
+        <Border.Effect>
+            <DropShadowEffect Color="Black" Opacity="0.6" BlurRadius="20" ShadowDepth="6" />
+        </Border.Effect>
+        <StackPanel>
+            <!-- Auto-start -->
+            <Border x:Name="AutoStartBorder" Padding="10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="AutoStart_Click"
+                    Cursor="Hand">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="Autoarranque" Foreground="#FFFFFF"
+                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                    <Border Grid.Column="2" Width="20" Height="20" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="CheckMark" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="14" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="Collapsed" />
+                    </Border>
+                </Grid>
+            </Border>
+            <Border Height="1" Background="#3F3F3F" Margin="6,6" />
+            <!-- Exit -->
+            <Border x:Name="ExitBorder" Padding="10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="Exit_Click"
+                    Cursor="Hand">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Salir" Foreground="#FFFFFF"
+                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</Window>

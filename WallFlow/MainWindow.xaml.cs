@@ -1,0 +1,350 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+
+namespace WallFlow;
+
+public partial class MainWindow : Window
+{
+    private const int IMG_W = 250;
+    private const int IMG_H = 430;
+    private const int GAP = 8;
+    private const int PAD = 25;
+    private const int HOTKEY_ID = 9001;
+
+    private readonly List<WallpaperEntry> _wallpapers = new();
+    private readonly string _wallpaperDir;
+    private static readonly string[] SupportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp" };
+
+    private int _visibleCount;
+    private int _totalPages;
+    private int _currentPage;
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hwnd, int index, int dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+
+    [DllImport("user32.dll")]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    private const int SPI_SETDESKWALLPAPER = 20;
+    private const int SPIF_UPDATEINIFILE = 0x01;
+    private const int SPIF_SENDCHANGE = 0x02;
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int MOD_ALT = 0x0001;
+    private const int WM_HOTKEY = 0x0312;
+
+    private enum AccentState
+    {
+        ACCENT_DISABLED = 0,
+        ACCENT_ENABLE_GRADIENT = 1,
+        ACCENT_ENABLE_BLURBEHIND = 3,
+        ACCENT_ENABLE_ACRYLICBLURBEHIND = 4
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AccentPolicy
+    {
+        public AccentState AccentState;
+        public int AccentFlags;
+        public int GradientColor;
+        public int AnimationId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowCompositionAttributeData
+    {
+        public WindowCompositionAttribute Attribute;
+        public IntPtr Data;
+        public int SizeOfData;
+    }
+
+    private enum WindowCompositionAttribute
+    {
+        WCA_ACCENT_POLICY = 19
+    }
+
+    private static readonly DependencyProperty ScrollOffsetProperty =
+        DependencyProperty.Register("ScrollOffset", typeof(double), typeof(MainWindow),
+            new PropertyMetadata(0.0, OnScrollOffsetChanged));
+
+    private double ScrollOffset
+    {
+        get => (double)GetValue(ScrollOffsetProperty);
+        set => SetValue(ScrollOffsetProperty, value);
+    }
+
+    private static void OnScrollOffsetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var w = (MainWindow)d;
+        w.ImageScroll?.ScrollToHorizontalOffset((double)e.NewValue);
+    }
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        PreviewMouseWheel += OnPreviewMouseWheel;
+        _wallpaperDir = GetWallpaperDirectory();
+        LoadWallpapers();
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+
+        HideFromAltTab(hwnd);
+        EnableBlur(hwnd);
+        RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57);
+
+        var screenW = SystemParameters.PrimaryScreenWidth;
+        var screenH = SystemParameters.PrimaryScreenHeight;
+        var maxW = screenW - 30;
+
+        _visibleCount = Math.Max(1, (int)((maxW - PAD * 2 - 2 + GAP) / (IMG_W + GAP)));
+        _totalPages = (int)Math.Ceiling((double)_wallpapers.Count / _visibleCount);
+        _currentPage = 0;
+
+        var wh = _visibleCount * (IMG_W + GAP) + PAD * 2 + 2;
+        var w = Math.Min(
+            _wallpapers.Count * (IMG_W + GAP) + PAD * 2 + 2,
+            wh
+        );
+        var h = IMG_H + PAD * 2 + 8 + 2;
+
+        Left = (screenW - w) / 2;
+        Top = (screenH - h) / 2;
+        Width = w;
+        Height = h;
+    }
+
+    private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        e.Handled = true;
+        if (_totalPages <= 1) return;
+
+        var page = _currentPage;
+        if (e.Delta < 0) page = Math.Min(_currentPage + 1, _totalPages - 1);
+        else page = Math.Max(_currentPage - 1, 0);
+
+        if (page == _currentPage) return;
+        _currentPage = page;
+
+        var target = _currentPage * _visibleCount * (IMG_W + GAP);
+        var anim = new DoubleAnimation(target, TimeSpan.FromMilliseconds(350));
+        anim.EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut };
+        BeginAnimation(ScrollOffsetProperty, anim);
+    }
+
+    private static void HideFromAltTab(IntPtr hwnd)
+    {
+        try
+        {
+            var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void EnableBlur(IntPtr hwnd)
+    {
+        try
+        {
+            var accent = new AccentPolicy
+            {
+                AccentState = AccentState.ACCENT_ENABLE_BLURBEHIND,
+                AccentFlags = 0,
+                GradientColor = 0,
+                AnimationId = 0
+            };
+
+            var size = Marshal.SizeOf(accent);
+            var ptr = Marshal.AllocHGlobal(size);
+            Marshal.StructureToPtr(accent, ptr, false);
+
+            var data = new WindowCompositionAttributeData
+            {
+                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                Data = ptr,
+                SizeOfData = size
+            };
+
+            SetWindowCompositionAttribute(hwnd, ref data);
+            Marshal.FreeHGlobal(ptr);
+        }
+        catch
+        {
+        }
+    }
+
+    private static string GetWallpaperDirectory()
+    {
+        var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wallflow.txt");
+        if (File.Exists(configPath))
+        {
+            var dir = File.ReadAllText(configPath).Trim();
+            if (Directory.Exists(dir))
+                return dir;
+        }
+
+        var defaultDir = @"C:\Users\Lenovo\OneDrive\Imágenes\Wallpapers";
+
+        if (!Directory.Exists(defaultDir))
+        {
+            var picturesDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            if (Directory.Exists(picturesDir))
+                return picturesDir;
+        }
+
+        return defaultDir;
+    }
+
+    private void LoadWallpapers()
+    {
+        if (!Directory.Exists(_wallpaperDir))
+            return;
+
+        var files = Directory.EnumerateFiles(_wallpaperDir, "*", SearchOption.AllDirectories)
+            .Where(f => SupportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+            .OrderBy(f => f)
+            .ToList();
+
+        foreach (var file in files)
+        {
+            _wallpapers.Add(new WallpaperEntry
+            {
+                FilePath = file,
+                FileName = Path.GetFileNameWithoutExtension(file)
+            });
+        }
+
+        WallpaperList.ItemsSource = _wallpapers.Select(CreateTile).ToList();
+    }
+
+    private Border CreateTile(WallpaperEntry entry)
+    {
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.UriSource = new Uri(entry.FilePath);
+        bitmap.DecodePixelWidth = IMG_W * 2;
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.EndInit();
+        bitmap.Freeze();
+
+        var scale = new ScaleTransform(1, 1);
+
+        var border = new Border
+        {
+            Style = (Style)FindResource("ImageTile"),
+            Width = IMG_W,
+            Height = IMG_H,
+            Tag = entry,
+            RenderTransform = scale,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            Clip = new RectangleGeometry(new Rect(0, 0, IMG_W, IMG_H), 16, 16),
+            Background = new ImageBrush(bitmap)
+            {
+                Stretch = Stretch.UniformToFill,
+                AlignmentX = AlignmentX.Center,
+                AlignmentY = AlignmentY.Center
+            }
+        };
+
+        var pressAnim = new DoubleAnimation(0.93, TimeSpan.FromMilliseconds(80));
+        var releaseAnim = new DoubleAnimation(1, TimeSpan.FromMilliseconds(120))
+            { EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } };
+
+        border.PreviewMouseDown += (_, _) =>
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, pressAnim);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, pressAnim);
+        };
+
+        border.PreviewMouseUp += (_, _) =>
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, releaseAnim);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, releaseAnim);
+        };
+
+        border.MouseLeave += (_, _) =>
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, releaseAnim);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, releaseAnim);
+        };
+
+        border.MouseLeftButtonUp += (_, _) => SetWallpaper(entry);
+
+        return border;
+    }
+
+    private static void SetWallpaper(WallpaperEntry entry)
+    {
+        SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+    }
+
+    private void Window_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+            Close();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var source = PresentationSource.FromVisual(this) as HwndSource;
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+        {
+            Visibility = Visibility == Visibility.Visible
+                ? Visibility.Hidden
+                : Visibility.Visible;
+            handled = true;
+        }
+        return IntPtr.Zero;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            UnregisterHotKey(hwnd, HOTKEY_ID);
+        }
+        catch { }
+        base.OnClosed(e);
+    }
+}
+
+public class WallpaperEntry
+{
+    public string FilePath { get; set; } = "";
+    public string FileName { get; set; } = "";
+}
