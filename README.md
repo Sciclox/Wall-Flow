@@ -1,4 +1,4 @@
-# WallFlow
+<h1 align="center">WallFlow</h1>
 
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge)
@@ -29,6 +29,7 @@ powershell -c "iwr -Uri 'https://github.com/Sciclox/Wall-Flow/releases/latest/do
 | Archivo | Descripción |
 |---------|-------------|
 | [`WallFlow.exe`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow.exe) | Ejecutable portable (self-contained, no requiere .NET) |
+| [`logofondo.ico`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/logofondo.ico) | Icono de la aplicación |
 | [`WallFlow-v1.0.0.zip`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow-v1.0.0.zip) | Zip con el ejecutable |
 
 ---
