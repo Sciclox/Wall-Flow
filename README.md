@@ -2,7 +2,7 @@
 
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+![License](https://img.shields.io/badge/license-GPLv3-blue?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-WPF-512BD4?style=for-the-badge)
 
 > Gestor de fondos de pantalla minimalista para Windows con integración en la bandeja del sistema.
@@ -88,4 +88,4 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 ## 📄 Licencia
 
-MIT
+GNU General Public License v3.0
