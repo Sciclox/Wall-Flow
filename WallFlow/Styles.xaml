@@ -68,7 +68,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollViewer">
                     <Grid>
-                        <ScrollContentPresenter CanContentScroll="True"
+                        <ScrollContentPresenter CanContentScroll="False"
                                                  Margin="{TemplateBinding Padding}" />
                         <ScrollBar x:Name="PART_HorizontalScrollBar"
                                    Orientation="Horizontal"
