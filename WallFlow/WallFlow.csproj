@@ -9,6 +9,7 @@
     <AssemblyName>WallFlow</AssemblyName>
     <RootNamespace>WallFlow</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>logofondo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

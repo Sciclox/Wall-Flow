@@ -62,14 +62,18 @@ try {
     $shortcut.Description = "WallFlow - Wallpaper Manager"
     $shortcut.Save()
 
-    # Auto-start registry
+    # Auto-start shortcut (Startup folder)
     if ($AddToStartup) {
-        $runKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Software\Microsoft\Windows\CurrentVersion\Run", $true)
-        if ($runKey) {
-            $runKey.SetValue("WallFlow", "`"$exePath`"")
-            $runKey.Dispose()
-            Write-Host "❯ Autoarranque configurado" -ForegroundColor Green
-        }
+        $startupDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+        $startupShortcut = Join-Path $startupDir "WallFlow.lnk"
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($startupShortcut)
+        $shortcut.TargetPath = $exePath
+        $shortcut.IconLocation = "$exePath, 0"
+        $shortcut.WorkingDirectory = $InstallDir
+        $shortcut.Description = "WallFlow - Visor de fondos de pantalla"
+        $shortcut.Save()
+        Write-Host "❯ Autoarranque configurado" -ForegroundColor Green
     }
 
     Write-Host ""

@@ -11,7 +11,7 @@
         KeyDown="Window_KeyDown"
         Loaded="Window_Loaded">
 
-    <Border CornerRadius="16"
+    <Border x:Name="RootBorder" CornerRadius="8"
             Background="#18000000"
             BorderBrush="#40FFFFFF"
             BorderThickness="1">

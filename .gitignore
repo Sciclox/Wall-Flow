@@ -42,4 +42,5 @@ bld/
 Thumbs.db
 
 publish/
+installer/
 *.zip

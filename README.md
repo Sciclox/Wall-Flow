@@ -29,7 +29,7 @@ powershell -c "iwr -Uri 'https://github.com/Sciclox/Wall-Flow/releases/latest/do
 | Archivo | Descripción |
 |---------|-------------|
 | [`WallFlow.exe`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow.exe) | Ejecutable portable (self-contained, no requiere .NET) |
-| [`logofondo.ico`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/logofondo.ico) | Icono de la aplicación |
+| [`WallFlow-Setup.exe`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow-Setup.exe) | Instalador con Inno Setup |
 | [`WallFlow-v1.0.0.zip`](https://github.com/Sciclox/Wall-Flow/releases/latest/download/WallFlow-v1.0.0.zip) | Zip con el ejecutable |
 
 ---
@@ -52,7 +52,7 @@ Para usar un directorio personalizado, crea un archivo `wallflow.txt` junto al e
 |---|---|
 | 🖼️ **Exploración visual** | Navegación por tus wallpapers con scroll horizontal paginado |
 | 🎯 **Establecer wallpaper** | Haz clic en cualquier wallpaper para aplicarlo al instante |
-| 🔄 **Autoarranque** | Opción para iniciar con Windows desde el menú contextual |
+| 🔄 **Autoarranque** | Inicia con Windows con icono visible en apps de inicio |
 | ⌨️ **Atajo de teclado** | `Alt + W` para mostrar/ocultar la ventana |
 | 🎛️ **Bandeja del sistema** | Icono en el área de notificaciones con menú contextual animado |
 | 🌫️ **Overlay transparente** | Interfaz semitransparente sobre el escritorio con efecto blur |

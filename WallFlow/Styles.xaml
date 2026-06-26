@@ -5,6 +5,7 @@
         <Setter Property="WindowStyle" Value="None" />
         <Setter Property="ResizeMode" Value="NoResize" />
         <Setter Property="AllowsTransparency" Value="True" />
+        <Setter Property="UseLayoutRounding" Value="True" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="FontFamily" Value="Segoe UI" />
@@ -15,11 +16,6 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Margin" Value="4" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Effect">
-            <Setter.Value>
-                <DropShadowEffect BlurRadius="20" ShadowDepth="6" Opacity="0.3" Color="Black" />
-            </Setter.Value>
-        </Setter>
     </Style>
 
     <ControlTemplate x:Key="FrostedScrollBar" TargetType="ScrollBar">

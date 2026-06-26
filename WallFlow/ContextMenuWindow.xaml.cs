@@ -6,7 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
-using Microsoft.Win32;
+using System.IO;
 
 namespace WallFlow;
 
@@ -259,24 +259,35 @@ public partial class ContextMenuWindow : Window
 
     private static bool IsAutoStartEnabled()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(
-            @"Software\Microsoft\Windows\CurrentVersion\Run");
-        return key?.GetValue("WallFlow") != null;
+        var shortcutPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Startup),
+            "WallFlow.lnk");
+        return File.Exists(shortcutPath);
     }
 
     private static void ToggleAutoStart()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(
-            @"Software\Microsoft\Windows\CurrentVersion\Run", true);
-        if (key == null) return;
+        var startupFolder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+        var shortcutPath = Path.Combine(startupFolder, "WallFlow.lnk");
 
-        if (key.GetValue("WallFlow") != null)
-            key.DeleteValue("WallFlow", false);
+        if (File.Exists(shortcutPath))
+        {
+            File.Delete(shortcutPath);
+        }
         else
         {
-            var path = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(path))
-                key.SetValue("WallFlow", $"\"{path}\"");
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return;
+
+            dynamic shell = Activator.CreateInstance(shellType)!;
+            dynamic shortcut = shell.CreateShortcut(shortcutPath);
+            shortcut.TargetPath = Environment.ProcessPath;
+            shortcut.IconLocation = Environment.ProcessPath + ", 0";
+            shortcut.Description = "WallFlow - Visor de fondos de pantalla";
+            shortcut.WorkingDirectory = Path.GetDirectoryName(Environment.ProcessPath);
+            shortcut.Save();
+            Marshal.FinalReleaseComObject(shortcut);
+            Marshal.FinalReleaseComObject(shell);
         }
     }
 }

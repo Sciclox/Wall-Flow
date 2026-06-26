@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,6 +12,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace WallFlow;
 
@@ -32,8 +35,14 @@ public partial class MainWindow : Window
     private int _totalPages;
     private int _currentPage;
 
+    private FileSystemWatcher? _watcher;
+    private DispatcherTimer? _debounceTimer;
+
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int SystemParametersInfo(int uAction, int uParam, StringBuilder lpvParam, int fuWinIni);
 
     [DllImport("user32.dll")]
     private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
@@ -50,7 +59,31 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    [DllImport("user32.dll")]
+    private static extern bool RedrawWindow(IntPtr hwnd, IntPtr rcUpdate, IntPtr hrgnUpdate, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr hrgn, bool bRedraw);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int cx, int cy);
+
+    [DllImport("gdi32.dll")]
+    private static extern int DeleteObject(IntPtr hrgn);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
+
+    private const uint RDW_INVALIDATE = 0x0001;
+    private const uint RDW_ERASE = 0x0004;
+    private const uint RDW_UPDATENOW = 0x0100;
+    private const uint RDW_ALLCHILDREN = 0x0080;
+
     private const int SPI_SETDESKWALLPAPER = 20;
+    private const int SPI_GETDESKWALLPAPER = 0x0073;
     private const int SPIF_UPDATEINIFILE = 0x01;
     private const int SPIF_SENDCHANGE = 0x02;
 
@@ -58,6 +91,7 @@ public partial class MainWindow : Window
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int MOD_ALT = 0x0001;
     private const int WM_HOTKEY = 0x0312;
+    private const int WM_SETTINGCHANGE = 0x001A;
 
     private enum AccentState
     {
@@ -117,10 +151,17 @@ public partial class MainWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
 
+        int preference = DWMWCP_ROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int));
+
         HideFromAltTab(hwnd);
-        EnableBlur(hwnd);
+
         RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57);
         RegisterHotKey(hwnd, LAUNCHER_HOTKEY_ID, 0x0002, 0x20);
+
+        RootBorder.SizeChanged += UpdateBorderClip;
+
+        StartWatching();
 
         var screenW = SystemParameters.PrimaryScreenWidth;
         var screenH = SystemParameters.PrimaryScreenHeight;
@@ -141,6 +182,188 @@ public partial class MainWindow : Window
         Top = (screenH - h) / 2;
         Width = w;
         Height = h;
+
+        UpdateBorderClip(null, null);
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        int pixelW = (int)Math.Round(w * dpi.DpiScaleX);
+        int pixelH = (int)Math.Round(h * dpi.DpiScaleY);
+        int radiusPx = (int)Math.Round(8 * dpi.DpiScaleX);
+        var rgn = CreateRoundRectRgn(0, 0, pixelW, pixelH, radiusPx, radiusPx);
+        if (rgn != IntPtr.Zero)
+        {
+            SetWindowRgn(hwnd, rgn, true);
+            DeleteObject(rgn);
+        }
+
+        RefreshBackdrop(hwnd);
+
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible)
+            {
+                var h = new WindowInteropHelper(this).Handle;
+                RefreshBackdrop(h);
+                UpdateWindowRegion(h);
+            }
+        };
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var wallpaper = GetCurrentWallpaper();
+            if (!string.IsNullOrEmpty(wallpaper) && File.Exists(wallpaper))
+            {
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, wallpaper,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                RefreshBackdrop(hwnd);
+            }
+        }), DispatcherPriority.ApplicationIdle);
+    }
+
+    private void UpdateBorderClip(object? sender, RoutedEventArgs? e)
+    {
+        var w = RootBorder.ActualWidth;
+        var h = RootBorder.ActualHeight;
+        RootBorder.Clip = new RectangleGeometry(new Rect(0, 0, w, h), 8, 8);
+        Clip = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight), 8, 8);
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        UpdateWindowRegion(hwnd);
+    }
+
+    private void UpdateWindowRegion(IntPtr hwnd)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        int pixelW = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
+        int pixelH = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+        int radius = (int)Math.Round(8 * dpi.DpiScaleX);
+
+        var rgn = CreateRoundRectRgn(0, 0, pixelW, pixelH, radius, radius);
+        if (rgn != IntPtr.Zero)
+        {
+            SetWindowRgn(hwnd, rgn, true);
+            DeleteObject(rgn);
+        }
+    }
+
+    private static void ApplyAccent(IntPtr hwnd, AccentState state)
+    {
+        var accent = new AccentPolicy { AccentState = state };
+        var size = Marshal.SizeOf(accent);
+        var ptr = Marshal.AllocHGlobal(size);
+
+        try
+        {
+            Marshal.StructureToPtr(accent, ptr, false);
+
+            var data = new WindowCompositionAttributeData
+            {
+                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                Data = ptr,
+                SizeOfData = size
+            };
+
+            SetWindowCompositionAttribute(hwnd, ref data);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(ptr);
+        }
+    }
+
+    private static void RefreshBackdrop(IntPtr hwnd)
+    {
+        ApplyAccent(hwnd, AccentState.ACCENT_DISABLED);
+
+        Dispatcher.CurrentDispatcher.InvokeAsync(async () =>
+        {
+            await Task.Delay(10);
+            ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
+            RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
+                RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        });
+    }
+
+    private static string GetCurrentWallpaper()
+    {
+        var sb = new StringBuilder(260);
+        SystemParametersInfo(SPI_GETDESKWALLPAPER, sb.Capacity, sb, 0);
+        return sb.ToString();
+    }
+
+    private void StartWatching()
+    {
+        if (!Directory.Exists(_wallpaperDir)) return;
+
+        _watcher = new FileSystemWatcher(_wallpaperDir)
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
+            Filter = "*.*"
+        };
+
+        _debounceTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+
+        _debounceTimer.Tick += OnDebounceTick;
+
+        FileSystemEventHandler handler = OnFileChanged;
+        RenamedEventHandler renamed = (s, e) => OnFileChanged(s, e);
+
+        _watcher.Created += handler;
+        _watcher.Deleted += handler;
+        _watcher.Renamed += renamed;
+        _watcher.EnableRaisingEvents = true;
+    }
+
+    private void OnFileChanged(object sender, FileSystemEventArgs e)
+    {
+        if (e.Name is null) return;
+        var ext = Path.GetExtension(e.Name).ToLowerInvariant();
+        if (!SupportedExtensions.Contains(ext)) return;
+
+        _debounceTimer?.Stop();
+        _debounceTimer?.Start();
+    }
+
+    private void OnDebounceTick(object? sender, EventArgs e)
+    {
+        _debounceTimer?.Stop();
+        RefreshWallpapers();
+    }
+
+    private void RefreshWallpapers()
+    {
+        var offset = ScrollOffset;
+        var page = _currentPage;
+
+        _wallpapers.Clear();
+
+        var files = Directory.EnumerateFiles(_wallpaperDir, "*", SearchOption.AllDirectories)
+            .Where(f => SupportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+            .OrderBy(f => f)
+            .ToList();
+
+        foreach (var file in files)
+        {
+            _wallpapers.Add(new WallpaperEntry
+            {
+                FilePath = file,
+                FileName = Path.GetFileNameWithoutExtension(file)
+            });
+        }
+
+        _totalPages = (int)Math.Ceiling((double)_wallpapers.Count / _visibleCount);
+        _currentPage = Math.Min(page, Math.Max(0, _totalPages - 1));
+
+        WallpaperList.ItemsSource = _wallpapers.Select(CreateTile).ToList();
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            ScrollOffset = Math.Min(offset, _currentPage * _visibleCount * (IMG_W + GAP));
+        }), DispatcherPriority.Loaded);
     }
 
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -167,37 +390,6 @@ public partial class MainWindow : Window
         {
             var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
-        }
-        catch
-        {
-        }
-    }
-
-    private static void EnableBlur(IntPtr hwnd)
-    {
-        try
-        {
-            var accent = new AccentPolicy
-            {
-                AccentState = AccentState.ACCENT_ENABLE_BLURBEHIND,
-                AccentFlags = 0,
-                GradientColor = 0,
-                AnimationId = 0
-            };
-
-            var size = Marshal.SizeOf(accent);
-            var ptr = Marshal.AllocHGlobal(size);
-            Marshal.StructureToPtr(accent, ptr, false);
-
-            var data = new WindowCompositionAttributeData
-            {
-                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                Data = ptr,
-                SizeOfData = size
-            };
-
-            SetWindowCompositionAttribute(hwnd, ref data);
-            Marshal.FreeHGlobal(ptr);
         }
         catch
         {
@@ -268,7 +460,7 @@ public partial class MainWindow : Window
             Tag = entry,
             RenderTransform = scale,
             RenderTransformOrigin = new Point(0.5, 0.5),
-            Clip = new RectangleGeometry(new Rect(0, 0, IMG_W, IMG_H), 16, 16),
+            CornerRadius = new CornerRadius(8),
             Background = new ImageBrush(bitmap)
             {
                 Stretch = Stretch.UniformToFill,
@@ -299,15 +491,18 @@ public partial class MainWindow : Window
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, releaseAnim);
         };
 
-        border.MouseLeftButtonUp += (_, _) => SetWallpaper(entry);
+        border.MouseLeftButtonUp += (_, _) => ChangeWallpaper(entry);
 
         return border;
     }
 
-    private static void SetWallpaper(WallpaperEntry entry)
+    private void ChangeWallpaper(WallpaperEntry entry)
     {
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        RefreshBackdrop(hwnd);
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -340,11 +535,22 @@ public partial class MainWindow : Window
                 handled = true;
             }
         }
+        else if (msg == WM_SETTINGCHANGE)
+        {
+            var area = Marshal.PtrToStringAuto(lParam);
+            if (area == "Desk")
+            {
+                RefreshBackdrop(hwnd);
+                handled = true;
+            }
+        }
         return IntPtr.Zero;
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _watcher?.Dispose();
+        _debounceTimer?.Stop();
         try
         {
             var hwnd = new WindowInteropHelper(this).Handle;
