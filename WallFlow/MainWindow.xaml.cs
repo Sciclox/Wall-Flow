@@ -37,6 +37,7 @@ public partial class MainWindow : Window
 
     private FileSystemWatcher? _watcher;
     private DispatcherTimer? _debounceTimer;
+    private bool _isChangingWallpaper;
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -74,6 +75,24 @@ public partial class MainWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT pt);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
@@ -81,6 +100,9 @@ public partial class MainWindow : Window
     private const uint RDW_ERASE = 0x0004;
     private const uint RDW_UPDATENOW = 0x0100;
     private const uint RDW_ALLCHILDREN = 0x0080;
+
+    private const int WH_MOUSE_LL = 14;
+    private const int WM_MOUSEWHEEL = 0x020A;
 
     private const int SPI_SETDESKWALLPAPER = 20;
     private const int SPI_GETDESKWALLPAPER = 0x0073;
@@ -123,9 +145,32 @@ public partial class MainWindow : Window
         WCA_ACCENT_POLICY = 19
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int x;
+        public int y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSLLHOOKSTRUCT
+    {
+        public POINT pt;
+        public int mouseData;
+        public int flags;
+        public int time;
+        public IntPtr dwExtraInfo;
+    }
+
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
     private static readonly DependencyProperty ScrollOffsetProperty =
         DependencyProperty.Register("ScrollOffset", typeof(double), typeof(MainWindow),
             new PropertyMetadata(0.0, OnScrollOffsetChanged));
+
+    private static MainWindow? _instance;
+    private static IntPtr _mouseHookId;
+    private static LowLevelMouseProc? _mouseProc;
 
     private double ScrollOffset
     {
@@ -142,7 +187,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        PreviewMouseWheel += OnPreviewMouseWheel;
         _wallpaperDir = GetWallpaperDirectory();
         LoadWallpapers();
     }
@@ -207,6 +251,8 @@ public partial class MainWindow : Window
                 UpdateWindowRegion(h);
             }
         };
+
+        InstallMouseHook();
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
@@ -366,13 +412,12 @@ public partial class MainWindow : Window
         }), DispatcherPriority.Loaded);
     }
 
-    private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    private void HandleMouseWheel(int delta)
     {
-        e.Handled = true;
         if (_totalPages <= 1) return;
 
         var page = _currentPage;
-        if (e.Delta < 0) page = Math.Min(_currentPage + 1, _totalPages - 1);
+        if (delta < 0) page = Math.Min(_currentPage + 1, _totalPages - 1);
         else page = Math.Max(_currentPage - 1, 0);
 
         if (page == _currentPage) return;
@@ -382,6 +427,49 @@ public partial class MainWindow : Window
         var anim = new DoubleAnimation(target, TimeSpan.FromMilliseconds(350));
         anim.EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut };
         BeginAnimation(ScrollOffsetProperty, anim);
+    }
+
+    private void InstallMouseHook()
+    {
+        _instance = this;
+        _mouseProc = MouseHookCallback;
+        var moduleHandle = GetModuleHandle(null);
+        _mouseHookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, moduleHandle, 0);
+    }
+
+    private void UninstallMouseHook()
+    {
+        if (_mouseHookId != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_mouseHookId);
+            _mouseHookId = IntPtr.Zero;
+        }
+        _mouseProc = null;
+        _instance = null;
+    }
+
+    private static IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0 && wParam.ToInt32() == WM_MOUSEWHEEL)
+        {
+            var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+            var instance = _instance;
+
+            if (instance?.IsVisible == true)
+            {
+                var ourHwnd = new WindowInteropHelper(instance).Handle;
+                var hwndUnderMouse = WindowFromPoint(hookStruct.pt);
+
+                if (hwndUnderMouse == ourHwnd || IsChild(ourHwnd, hwndUnderMouse))
+                {
+                    int delta = (short)(hookStruct.mouseData >> 16);
+                    instance.Dispatcher.BeginInvoke(new Action(() => instance.HandleMouseWheel(delta)));
+                    return new IntPtr(1);
+                }
+            }
+        }
+
+        return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
     }
 
     private static void HideFromAltTab(IntPtr hwnd)
@@ -498,11 +586,19 @@ public partial class MainWindow : Window
 
     private void ChangeWallpaper(WallpaperEntry entry)
     {
+        var current = GetCurrentWallpaper();
+        if (string.Equals(current, entry.FilePath, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _isChangingWallpaper = true;
+
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
         var hwnd = new WindowInteropHelper(this).Handle;
         RefreshBackdrop(hwnd);
+
+        _isChangingWallpaper = false;
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -537,6 +633,8 @@ public partial class MainWindow : Window
         }
         else if (msg == WM_SETTINGCHANGE)
         {
+            if (_isChangingWallpaper) return IntPtr.Zero;
+
             var area = Marshal.PtrToStringAuto(lParam);
             if (area == "Desk")
             {
@@ -549,6 +647,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        UninstallMouseHook();
         _watcher?.Dispose();
         _debounceTimer?.Stop();
         try
