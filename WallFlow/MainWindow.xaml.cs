@@ -37,7 +37,6 @@ public partial class MainWindow : Window
 
     private FileSystemWatcher? _watcher;
     private DispatcherTimer? _debounceTimer;
-    private bool _isChangingWallpaper;
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -75,33 +74,6 @@ public partial class MainWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(POINT pt);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
-
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
@@ -120,11 +92,6 @@ public partial class MainWindow : Window
     private const int MOD_ALT = 0x0001;
     private const int WM_HOTKEY = 0x0312;
     private const int WM_SETTINGCHANGE = 0x001A;
-    private const int WM_USER = 0x0400;
-    private const int WM_SHOW_APP = WM_USER + 100;
-
-    private const int WH_MOUSE_LL = 14;
-    private const int WM_MOUSEWHEEL = 0x020A;
 
     private enum AccentState
     {
@@ -156,32 +123,9 @@ public partial class MainWindow : Window
         WCA_ACCENT_POLICY = 19
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int x;
-        public int y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MSLLHOOKSTRUCT
-    {
-        public POINT pt;
-        public int mouseData;
-        public int flags;
-        public int time;
-        public IntPtr dwExtraInfo;
-    }
-
-    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
-
     private static readonly DependencyProperty ScrollOffsetProperty =
         DependencyProperty.Register("ScrollOffset", typeof(double), typeof(MainWindow),
             new PropertyMetadata(0.0, OnScrollOffsetChanged));
-
-    private static MainWindow? _instance;
-    private static IntPtr _mouseHookId;
-    private static LowLevelMouseProc? _mouseProc;
 
     private double ScrollOffset
     {
@@ -198,6 +142,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        PreviewMouseWheel += OnPreviewMouseWheel;
         _wallpaperDir = GetWallpaperDirectory();
         LoadWallpapers();
     }
@@ -211,8 +156,7 @@ public partial class MainWindow : Window
 
         HideFromAltTab(hwnd);
 
-        if (!RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57))
-            PreviewKeyDown += OnPreviewHotkeyFallback;
+        RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57);
         RegisterHotKey(hwnd, LAUNCHER_HOTKEY_ID, 0x0002, 0x20);
 
         RootBorder.SizeChanged += UpdateBorderClip;
@@ -259,14 +203,10 @@ public partial class MainWindow : Window
             if (IsVisible)
             {
                 var h = new WindowInteropHelper(this).Handle;
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    UpdateWindowRegion(h);
-                }), DispatcherPriority.Loaded);
+                RefreshBackdrop(h);
+                UpdateWindowRegion(h);
             }
         };
-
-        InstallMouseHook();
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
@@ -331,20 +271,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RefreshBackdrop(IntPtr hwnd)
+    private static void RefreshBackdrop(IntPtr hwnd)
     {
         ApplyAccent(hwnd, AccentState.ACCENT_DISABLED);
 
-        _ = Dispatcher.CurrentDispatcher.InvokeAsync(async () =>
+        Dispatcher.CurrentDispatcher.InvokeAsync(async () =>
         {
-            try
-            {
-                await Task.Delay(10);
-                ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
-                RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
-                    RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
-            }
-            catch { }
+            await Task.Delay(10);
+            ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
+            RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
+                RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
         });
     }
 
@@ -430,12 +366,13 @@ public partial class MainWindow : Window
         }), DispatcherPriority.Loaded);
     }
 
-    private void HandleMouseWheel(int delta)
+    private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        e.Handled = true;
         if (_totalPages <= 1) return;
 
         var page = _currentPage;
-        if (delta < 0) page = Math.Min(_currentPage + 1, _totalPages - 1);
+        if (e.Delta < 0) page = Math.Min(_currentPage + 1, _totalPages - 1);
         else page = Math.Max(_currentPage - 1, 0);
 
         if (page == _currentPage) return;
@@ -445,49 +382,6 @@ public partial class MainWindow : Window
         var anim = new DoubleAnimation(target, TimeSpan.FromMilliseconds(350));
         anim.EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut };
         BeginAnimation(ScrollOffsetProperty, anim);
-    }
-
-    private void InstallMouseHook()
-    {
-        _instance = this;
-        _mouseProc = MouseHookCallback;
-        var moduleHandle = GetModuleHandle(null);
-        _mouseHookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, moduleHandle, 0);
-    }
-
-    private void UninstallMouseHook()
-    {
-        if (_mouseHookId != IntPtr.Zero)
-        {
-            UnhookWindowsHookEx(_mouseHookId);
-            _mouseHookId = IntPtr.Zero;
-        }
-        _mouseProc = null;
-        _instance = null;
-    }
-
-    private static IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-    {
-        if (nCode >= 0 && wParam.ToInt32() == WM_MOUSEWHEEL)
-        {
-            var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-            var instance = _instance;
-
-            if (instance?.IsVisible == true)
-            {
-                var ourHwnd = new WindowInteropHelper(instance).Handle;
-                var hwndUnderMouse = WindowFromPoint(hookStruct.pt);
-
-                if (hwndUnderMouse == ourHwnd || IsChild(ourHwnd, hwndUnderMouse))
-                {
-                    int delta = (short)(hookStruct.mouseData >> 16);
-                    instance.Dispatcher.BeginInvoke(new Action(() => instance.HandleMouseWheel(delta)));
-                    return new IntPtr(1);
-                }
-            }
-        }
-
-        return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
     }
 
     private static void HideFromAltTab(IntPtr hwnd)
@@ -604,19 +498,11 @@ public partial class MainWindow : Window
 
     private void ChangeWallpaper(WallpaperEntry entry)
     {
-        var current = GetCurrentWallpaper();
-        if (string.Equals(current, entry.FilePath, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        _isChangingWallpaper = true;
-
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
         var hwnd = new WindowInteropHelper(this).Handle;
         RefreshBackdrop(hwnd);
-
-        _isChangingWallpaper = false;
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -638,14 +524,9 @@ public partial class MainWindow : Window
         {
             if (wParam.ToInt32() == HOTKEY_ID)
             {
-                if (Visibility == Visibility.Visible)
-                {
-                    Hide();
-                }
-                else
-                {
-                    PostMessage(hwnd, WM_SHOW_APP, IntPtr.Zero, IntPtr.Zero);
-                }
+                Visibility = Visibility == Visibility.Visible
+                    ? Visibility.Hidden
+                    : Visibility.Visible;
                 handled = true;
             }
             else if (wParam.ToInt32() == LAUNCHER_HOTKEY_ID)
@@ -654,17 +535,8 @@ public partial class MainWindow : Window
                 handled = true;
             }
         }
-        else if (msg == WM_SHOW_APP)
-        {
-            Show();
-            Activate();
-            SetForegroundWindow(hwnd);
-            handled = true;
-        }
         else if (msg == WM_SETTINGCHANGE)
         {
-            if (_isChangingWallpaper) return IntPtr.Zero;
-
             var area = Marshal.PtrToStringAuto(lParam);
             if (area == "Desk")
             {
@@ -675,26 +547,8 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
-    private void OnPreviewHotkeyFallback(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Alt)
-        {
-            if (Visibility == Visibility.Visible)
-            {
-                Hide();
-            }
-            else
-            {
-                var h = new WindowInteropHelper(this).Handle;
-                PostMessage(h, WM_SHOW_APP, IntPtr.Zero, IntPtr.Zero);
-            }
-            e.Handled = true;
-        }
-    }
-
     protected override void OnClosed(EventArgs e)
     {
-        UninstallMouseHook();
         _watcher?.Dispose();
         _debounceTimer?.Stop();
         try
