@@ -242,6 +242,15 @@ public partial class ContextMenuWindow : Window
         e.Handled = true;
     }
 
+    private void Gallery_Click(object sender, MouseButtonEventArgs e)
+    {
+        _closedByAction = true;
+        _openInstance = null;
+        var gallery = new Windows.OnlineGalleryWindow();
+        gallery.Show();
+        Close();
+    }
+
     private void Exit_Click(object sender, MouseButtonEventArgs e)
     {
         _closedByAction = true;

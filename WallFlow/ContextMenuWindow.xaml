@@ -47,6 +47,21 @@
                     </Border>
                 </Grid>
             </Border>
+            <!-- Online Gallery -->
+            <Border x:Name="GalleryBorder" Padding="10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="Gallery_Click"
+                    Cursor="Hand">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Galería online" Foreground="#FFFFFF"
+                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
             <Border Height="1" Background="#3F3F3F" Margin="6,6" />
             <!-- Auto wallpaper change -->
             <Border x:Name="AutoChangeBorder" Padding="10,8" CornerRadius="8"
