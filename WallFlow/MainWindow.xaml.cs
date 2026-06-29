@@ -319,15 +319,9 @@ public partial class MainWindow : Window
 
     private static void RefreshBackdrop(IntPtr hwnd)
     {
-        ApplyAccent(hwnd, AccentState.ACCENT_DISABLED);
-
-        Dispatcher.CurrentDispatcher.InvokeAsync(async () =>
-        {
-            await Task.Delay(10);
-            ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
-            RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
-                RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-        });
+        ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
+        RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
+            RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     }
 
     private static string GetCurrentWallpaper()
@@ -594,9 +588,6 @@ public partial class MainWindow : Window
 
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-
-        var hwnd = new WindowInteropHelper(this).Handle;
-        RefreshBackdrop(hwnd);
 
         _isChangingWallpaper = false;
     }
