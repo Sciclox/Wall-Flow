@@ -590,7 +590,11 @@ public partial class MainWindow : Window
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, releaseAnim);
         };
 
-        border.MouseLeftButtonUp += (_, _) => ChangeWallpaper(entry);
+        border.MouseLeftButtonUp += async (_, _) =>
+        {
+            await Task.Delay(120);
+            ChangeWallpaper(entry);
+        };
 
         return border;
     }
