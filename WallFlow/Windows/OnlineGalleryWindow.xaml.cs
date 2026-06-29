@@ -819,21 +819,27 @@ public partial class OnlineGalleryWindow : Window
             var key = GetSelectedResolutionKey();
 
             var cachedPreview = _service.GetPreviewCachePath(detail.Slug, key);
-            if (!string.IsNullOrEmpty(cachedPreview) && File.Exists(cachedPreview))
-            {
-                var brush = CreateImageBrush(cachedPreview, 800, 600);
-                PreviewBrush.ImageSource = brush.ImageSource;
-                StatusText.Text = "";
-                return;
-            }
+            var previewPath = !string.IsNullOrEmpty(cachedPreview) && File.Exists(cachedPreview)
+                ? cachedPreview
+                : await _service.DownloadPreviewAsync(previewUrl, detail.Slug, key, GetToken());
 
-            var downloaded = await _service.DownloadPreviewAsync(previewUrl, detail.Slug, key, GetToken());
-            if (!string.IsNullOrEmpty(downloaded) && File.Exists(downloaded))
+            if (!string.IsNullOrEmpty(previewPath) && File.Exists(previewPath))
             {
-                var brush = CreateImageBrush(downloaded, 800, 600);
+                var bytes = await Task.Run(() => File.ReadAllBytes(previewPath));
                 await Dispatcher.BeginInvoke(() =>
                 {
-                    PreviewBrush.ImageSource = brush.ImageSource;
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.StreamSource = new MemoryStream(bytes);
+                    bitmap.DecodePixelWidth = 800;
+                    bitmap.DecodePixelHeight = 600;
+                    bitmap.EndInit();
+                    if (bitmap.CanFreeze) bitmap.Freeze();
+                    PreviewBrush.ImageSource = bitmap;
+                    PreviewBorder.Opacity = 0;
+                    var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
+                    { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+                    PreviewBorder.BeginAnimation(Border.OpacityProperty, fadeIn);
                     StatusText.Text = "";
                 });
             }

@@ -124,6 +124,11 @@ public partial class UHDPaperService : IDisposable
             HtmlNodeCollection links;
             if (resolutions.Count == 0)
             {
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'img.uhdpaper.com/img/')]");
+                if (links != null) ParseResolutionLinks(links, resolutions);
+            }
+            if (resolutions.Count == 0)
+            {
                 links = doc.DocumentNode.SelectNodes("//a[contains(@href,'img.uhdpaper.com/wallpaper/')]");
                 if (links != null) ParseResolutionLinks(links, resolutions);
             }
@@ -141,7 +146,9 @@ public partial class UHDPaperService : IDisposable
             // Fallback: try <img> tags
             if (resolutions.Count == 0)
             {
-                var imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'img.uhdpaper.com/wallpaper/')]");
+                var imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'img.uhdpaper.com/img/')]");
+                if (imgs == null)
+                    imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'img.uhdpaper.com/wallpaper/')]");
                 if (imgs == null)
                     imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'uhdpaper.com') and contains(@src,'.jpg')]");
                 if (imgs == null)
@@ -152,9 +159,31 @@ public partial class UHDPaperService : IDisposable
                     foreach (var img in imgs)
                     {
                         var src = img.GetAttributeValue("src", "");
+                        if (!src.Contains(".jpg", StringComparison.OrdinalIgnoreCase))
+                            continue;
                         var clean = src.StartsWith("//") ? "https:" + src : src;
-                        if (clean.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !clean.Contains("thumb"))
+
+                        if (!clean.Contains("thumb"))
                         {
+                            // Try query-parameter-based detection first
+                            var qIdx = clean.IndexOf('?');
+                            if (qIdx >= 0)
+                            {
+                                var query = clean[(qIdx + 1)..];
+                                var parts = query.Split('&');
+                                foreach (var part in parts)
+                                {
+                                    var eqIdx = part.IndexOf('=');
+                                    if (eqIdx < 0) continue;
+                                    var key = part[..eqIdx];
+                                    var val = part[(eqIdx + 1)..];
+                                    if (key.Equals("url", StringComparison.OrdinalIgnoreCase) || key.Contains("url"))
+                                    {
+                                        clean = val.StartsWith("//") ? "https:" + val : val;
+                                        break;
+                                    }
+                                }
+                            }
                             resolutions["original"] = clean;
                             break;
                         }
@@ -181,12 +210,41 @@ public partial class UHDPaperService : IDisposable
         foreach (var link in links)
         {
             var href = link.GetAttributeValue("href", "");
-            if (!href.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+            if (!href.Contains(".jpg", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             if (href.StartsWith("//"))
                 href = "https:" + href;
 
+            // Try query-parameter-based resolution detection (current uhdpaper format)
+            var qIdx = href.IndexOf('?');
+            if (qIdx >= 0)
+            {
+                var query = href[(qIdx + 1)..];
+                var parts = query.Split('&');
+                foreach (var part in parts)
+                {
+                    var eqIdx = part.IndexOf('=');
+                    if (eqIdx < 0) continue;
+                    var key = part[..eqIdx];
+                    var val = part[(eqIdx + 1)..];
+
+                    foreach (var kv in ResolutionSuffixes)
+                    {
+                        if (key.Equals(kv.Value, StringComparison.OrdinalIgnoreCase)
+                            && !resolutions.ContainsKey(kv.Key))
+                        {
+                            var clean = val.StartsWith("//") ? "https:" + val : val;
+                            resolutions[kv.Key] = clean;
+                            break;
+                        }
+                    }
+                }
+                if (resolutions.Count > 0)
+                    continue;
+            }
+
+            // Fallback: match suffix in path (old format)
             foreach (var kv in ResolutionSuffixes)
             {
                 var suffix = $"-{kv.Value}.";
@@ -204,7 +262,28 @@ public partial class UHDPaperService : IDisposable
     public string GetCachedThumbPath(string slug)
     {
         var path = Path.Combine(_cacheDir, slug + ".jpg");
-        return File.Exists(path) ? path : "";
+        if (!File.Exists(path)) return "";
+        try
+        {
+            var header = new byte[4];
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+            if (fs.Read(header, 0, 4) == 4 && IsValidImageHeader(header))
+                return path;
+        }
+        catch { }
+        try { File.Delete(path); } catch { }
+        return "";
+    }
+
+    private static bool IsValidImageHeader(byte[] header)
+    {
+        if (header.Length < 3) return false;
+        if (header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF) return true;
+        if (header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47) return true;
+        if (header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x38) return true;
+        if (header[0] == 0x42 && header[1] == 0x4D) return true;
+        if (header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46) return true;
+        return false;
     }
 
     public string GetPreviewCachePath(string slug, string resolution)

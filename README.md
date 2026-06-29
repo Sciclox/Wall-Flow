@@ -61,6 +61,21 @@ Para usar un directorio personalizado, crea un archivo `wallflow.txt` junto al e
   <img src="assets/contextmenu.png" alt="Context Menu" width="600"/>
 </p>
 
+### 🌐 Galería Online
+
+Navega y descarga wallpapers directamente desde [uhdpaper.com](https://www.uhdpaper.com/) sin salir de la app.
+
+<p align="center">
+  <img src="assets/onlinegallery.png" alt="Online Gallery" width="800"/>
+</p>
+
+| | |
+|---|---|
+| 🔍 **Búsqueda** | Busca wallpapers por palabras clave |
+| 📥 **Descarga** | Descarga la resolución que prefieras (4K, 2K, HD) |
+| 💾 **Aplicar** | Aplica wallpapers online directamente al escritorio |
+| 📋 **Copiar URL** | Copia la URL del post o de la imagen al portapapeles |
+
 ---
 
 ## ⌨️ Uso
