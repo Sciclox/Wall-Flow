@@ -23,9 +23,8 @@ public partial class MainWindow : Window
     private const int GAP = 8;
     private const int PAD = 25;
     private const int HOTKEY_ID = 9001;
-    private const int LAUNCHER_HOTKEY_ID = 9002;
-
-    public static event Action? LauncherRequested;
+    public static event Action? RefreshRequested;
+    public static void NotifyRefreshRequested() => RefreshRequested?.Invoke();
 
     private readonly List<WallpaperEntry> _wallpapers = new();
     private readonly string _wallpaperDir;
@@ -206,6 +205,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _wallpaperDir = GetWallpaperDirectory();
         LoadWallpapers();
+        RefreshRequested += OnRefreshRequested;
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -218,7 +218,6 @@ public partial class MainWindow : Window
         HideFromAltTab(hwnd);
 
         RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57);
-        RegisterHotKey(hwnd, LAUNCHER_HOTKEY_ID, 0x0002, 0x20);
 
         RootBorder.SizeChanged += UpdateBorderClip;
 
@@ -336,6 +335,7 @@ public partial class MainWindow : Window
 
     private static void RefreshBackdrop(IntPtr hwnd)
     {
+        ApplyAccent(hwnd, AccentState.ACCENT_DISABLED);
         ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
         RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
             RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -350,7 +350,7 @@ public partial class MainWindow : Window
 
     private void StartWatching()
     {
-        if (!Directory.Exists(_wallpaperDir)) return;
+        Directory.CreateDirectory(_wallpaperDir);
 
         _watcher = new FileSystemWatcher(_wallpaperDir)
         {
@@ -519,8 +519,7 @@ public partial class MainWindow : Window
 
     private void LoadWallpapers()
     {
-        if (!Directory.Exists(_wallpaperDir))
-            return;
+        Directory.CreateDirectory(_wallpaperDir);
 
         var files = Directory.EnumerateFiles(_wallpaperDir, "*", SearchOption.AllDirectories)
             .Where(f => SupportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
@@ -635,11 +634,6 @@ public partial class MainWindow : Window
                 Visibility = Visibility == Visibility.Visible
                     ? Visibility.Hidden
                     : Visibility.Visible;
-                handled = true;
-            }
-            else if (wParam.ToInt32() == LAUNCHER_HOTKEY_ID)
-            {
-                LauncherRequested?.Invoke();
                 handled = true;
             }
         }
@@ -759,8 +753,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnRefreshRequested()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(RefreshWallpapers);
+            return;
+        }
+        RefreshWallpapers();
+    }
+
     protected override void OnClosed(EventArgs e)
     {
+        RefreshRequested -= OnRefreshRequested;
         _autoTimer?.Stop();
         UninstallMouseHook();
         _watcher?.Dispose();

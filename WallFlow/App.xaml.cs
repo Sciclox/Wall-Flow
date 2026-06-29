@@ -16,7 +16,6 @@ public partial class App : Application
 
         _mainWindow = new MainWindow();
         _mainWindow.Show();
-        WallFlow.MainWindow.LauncherRequested += ShowLauncher;
 
         var stream = Assembly.GetExecutingAssembly()
             .GetManifestResourceStream("WallFlow.logofondo.ico");
@@ -33,16 +32,6 @@ public partial class App : Application
         };
         _trayIcon.RightClick += ShowContextMenu;
         _trayIcon.Show();
-    }
-
-    private void ShowLauncher()
-    {
-        Dispatcher.BeginInvoke(() =>
-        {
-            var launcher = new LauncherWindow();
-            launcher.Show();
-            launcher.Activate();
-        });
     }
 
     private void ShowContextMenu()
