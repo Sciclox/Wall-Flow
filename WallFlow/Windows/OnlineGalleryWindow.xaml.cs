@@ -548,25 +548,8 @@ public partial class OnlineGalleryWindow : Window
         await _thumbnailThrottle.WaitAsync();
         try
         {
-            var cachedPath = _service.GetCachedThumbPath(wp.Slug);
-            byte[] bytes;
-            if (!string.IsNullOrEmpty(cachedPath))
-                bytes = await Task.Run(() => File.ReadAllBytes(cachedPath));
-            else if (!string.IsNullOrEmpty(wp.ThumbnailUrl))
-            {
-                var data = await _service.CacheThumbnailAsync(wp.ThumbnailUrl, wp.Slug, GetToken());
-                if (string.IsNullOrEmpty(data))
-                {
-                    System.Diagnostics.Debug.WriteLine($"Thumbnail cache failed for {wp.Slug}: {wp.ThumbnailUrl}");
-                    return;
-                }
-                bytes = await Task.Run(() => File.ReadAllBytes(data));
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine($"No thumbnail URL for {wp.Slug}");
-                return;
-            }
+            var bytes = await GetThumbnailBytesAsync(wp);
+            if (bytes == null) return;
 
             var bitmap = await Task.Run(() =>
             {
@@ -584,7 +567,7 @@ public partial class OnlineGalleryWindow : Window
                 }
                 catch
                 {
-                    System.Diagnostics.Debug.WriteLine($"Thumbnail decode failed for {wp.Slug}: {wp.ThumbnailUrl}");
+                    System.Diagnostics.Debug.WriteLine($"Thumbnail decode failed for {wp.Slug}");
                     return null;
                 }
             });
@@ -616,6 +599,46 @@ public partial class OnlineGalleryWindow : Window
         {
             _thumbnailThrottle.Release();
         }
+    }
+
+    private async Task<byte[]?> GetThumbnailBytesAsync(OnlineWallpaper wp)
+    {
+        // 1) Cached thumbnail
+        var cachedPath = _service.GetCachedThumbPath(wp.Slug);
+        if (!string.IsNullOrEmpty(cachedPath))
+            return await Task.Run(() => File.ReadAllBytes(cachedPath));
+
+        // 2) Try thumbnail URL
+        if (!string.IsNullOrEmpty(wp.ThumbnailUrl))
+        {
+            var path = await _service.CacheThumbnailAsync(wp.ThumbnailUrl, wp.Slug, GetToken());
+            if (!string.IsNullOrEmpty(path))
+                return await Task.Run(() => File.ReadAllBytes(path));
+            System.Diagnostics.Debug.WriteLine($"Thumbnail cache failed for {wp.Slug}: {wp.ThumbnailUrl}");
+        }
+
+        // 3) Fallback: use GetDetailAsync + CacheThumbnailAsync with a resolution URL
+        System.Diagnostics.Debug.WriteLine($"Thumbnail fallback for {wp.Slug}: fetching detail...");
+        try
+        {
+            var detail = await _service.GetDetailAsync(wp, GetToken());
+            if (detail?.Resolutions.Count > 0)
+            {
+                var url = detail.Resolutions.Values.First();
+                var path = await _service.CacheThumbnailAsync(url, wp.Slug, GetToken());
+                if (!string.IsNullOrEmpty(path))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Thumbnail fallback OK for {wp.Slug}");
+                    return await Task.Run(() => File.ReadAllBytes(path));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Thumbnail fallback failed for {wp.Slug}: {ex.Message}");
+        }
+
+        return null;
     }
 
     private Task LoadLocalThumbnailsAsync(List<WallpaperEntry> entries, List<Border> borders)

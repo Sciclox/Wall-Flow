@@ -120,38 +120,41 @@ public partial class UHDPaperService : IDisposable
 
             var resolutions = new Dictionary<string, string>();
 
-            var links = doc.DocumentNode.SelectNodes("//a[contains(@href,'img.uhdpaper.com/wallpaper/')]");
-            if (links != null)
+            // Try multiple XPath patterns for <a> links (flexible for domain changes)
+            HtmlNodeCollection links;
+            if (resolutions.Count == 0)
             {
-                foreach (var link in links)
-                {
-                    var href = link.GetAttributeValue("href", "");
-                    if (!href.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    foreach (var kv in ResolutionSuffixes)
-                    {
-                        var suffix = $"-{kv.Value}.";
-                        if (href.Contains(suffix) && !resolutions.ContainsKey(kv.Key))
-                        {
-                            resolutions[kv.Key] = href;
-                            break;
-                        }
-                    }
-                }
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'img.uhdpaper.com/wallpaper/')]");
+                if (links != null) ParseResolutionLinks(links, resolutions);
+            }
+            if (resolutions.Count == 0)
+            {
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'uhdpaper.com') and contains(@href,'.jpg')]");
+                if (links != null) ParseResolutionLinks(links, resolutions);
+            }
+            if (resolutions.Count == 0)
+            {
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'.jpg')]");
+                if (links != null) ParseResolutionLinks(links, resolutions);
             }
 
+            // Fallback: try <img> tags
             if (resolutions.Count == 0)
             {
                 var imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'img.uhdpaper.com/wallpaper/')]");
+                if (imgs == null)
+                    imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'uhdpaper.com') and contains(@src,'.jpg')]");
+                if (imgs == null)
+                    imgs = doc.DocumentNode.SelectNodes("//img[contains(@src,'.jpg')]");
+
                 if (imgs != null)
                 {
                     foreach (var img in imgs)
                     {
                         var src = img.GetAttributeValue("src", "");
-                        if (src.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !src.Contains("thumb"))
+                        var clean = src.StartsWith("//") ? "https:" + src : src;
+                        if (clean.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !clean.Contains("thumb"))
                         {
-                            var clean = src.StartsWith("//") ? "https:" + src : src;
                             resolutions["original"] = clean;
                             break;
                         }
@@ -170,6 +173,29 @@ public partial class UHDPaperService : IDisposable
         catch
         {
             return null;
+        }
+    }
+
+    private static void ParseResolutionLinks(HtmlNodeCollection links, Dictionary<string, string> resolutions)
+    {
+        foreach (var link in links)
+        {
+            var href = link.GetAttributeValue("href", "");
+            if (!href.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (href.StartsWith("//"))
+                href = "https:" + href;
+
+            foreach (var kv in ResolutionSuffixes)
+            {
+                var suffix = $"-{kv.Value}.";
+                if (href.Contains(suffix) && !resolutions.ContainsKey(kv.Key))
+                {
+                    resolutions[kv.Key] = href;
+                    break;
+                }
+            }
         }
     }
 
