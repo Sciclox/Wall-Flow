@@ -48,6 +48,80 @@
                 </Grid>
             </Border>
             <Border Height="1" Background="#3F3F3F" Margin="6,6" />
+            <!-- Auto wallpaper change -->
+            <Border x:Name="AutoChangeBorder" Padding="10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="AutoChange_Click"
+                    Cursor="Hand">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="Cambio automático" Foreground="#FFFFFF"
+                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                    <Border Grid.Column="2" Width="20" Height="20" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="AutoChangeCheck" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="14" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="Collapsed" />
+                    </Border>
+                </Grid>
+            </Border>
+            <!-- Sequential mode -->
+            <Border x:Name="SeqBorder" Padding="10,8,10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="Sequential_Click"
+                    Cursor="Hand"
+                    Visibility="Collapsed">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="16" Height="16" Margin="2,0,8,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="SeqRadio" Text="&#x2B24;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="12" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="SeqText" Grid.Column="1" Text="Secuencial" Foreground="#CCCCCC"
+                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
+                    <TextBlock x:Name="SeqSpeed" Grid.Column="2" Text="30s" Foreground="#888888"
+                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+            <!-- Random mode -->
+            <Border x:Name="RandBorder" Padding="10,8,10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="Random_Click"
+                    Cursor="Hand"
+                    Visibility="Collapsed">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="16" Height="16" Margin="2,0,8,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="RandRadio" Text="&#x25CB;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="14" Foreground="#888888" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="RandText" Grid.Column="1" Text="Aleatorio" Foreground="#888888"
+                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
+                    <TextBlock x:Name="RandSpeed" Grid.Column="2" Text="1m" Foreground="#666666"
+                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+            <Border Height="1" Background="#3F3F3F" Margin="6,6" />
             <!-- Exit -->
             <Border x:Name="ExitBorder" Padding="10,8" CornerRadius="8"
                     Background="Transparent"

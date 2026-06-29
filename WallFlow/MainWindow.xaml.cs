@@ -38,6 +38,22 @@ public partial class MainWindow : Window
     private FileSystemWatcher? _watcher;
     private DispatcherTimer? _debounceTimer;
     private bool _isChangingWallpaper;
+    private DispatcherTimer? _autoTimer;
+    private bool _autoChangeEnabled;
+    private bool _autoModeRandom;
+    private int _sequentialIntervalIndex;
+    private int _randomIntervalIndex;
+    private int _currentWallpaperIndex = -1;
+
+    private static readonly TimeSpan[] AutoIntervals =
+    [
+        TimeSpan.FromSeconds(30),
+        TimeSpan.FromMinutes(1),
+        TimeSpan.FromMinutes(5),
+        TimeSpan.FromMinutes(10),
+        TimeSpan.FromMinutes(30),
+        TimeSpan.FromHours(1),
+    ];
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -186,6 +202,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        _instance = this;
         InitializeComponent();
         _wallpaperDir = GetWallpaperDirectory();
         LoadWallpapers();
@@ -636,8 +653,111 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
+    public static bool IsAutoChangeEnabled() => _instance?._autoChangeEnabled ?? false;
+
+    public static string GetSequentialModeText()
+    {
+        if (_instance == null) return "Secuencial · 30s";
+        return $"Secuencial · {FormatInterval(AutoIntervals[_instance._sequentialIntervalIndex])}";
+    }
+
+    public static string GetRandomModeText()
+    {
+        if (_instance == null) return "Aleatorio · 30s";
+        return $"Aleatorio · {FormatInterval(AutoIntervals[_instance._randomIntervalIndex])}";
+    }
+
+    public static bool IsRandomMode() => _instance?._autoModeRandom ?? false;
+
+    public static void ToggleAutoChange() => _instance?.ToggleAutoChangeInternal();
+
+    public static void SelectSequentialMode() => _instance?.SelectModeInternal(false);
+
+    public static void SelectRandomMode() => _instance?.SelectModeInternal(true);
+
+    public static void CycleCurrentSpeed() => _instance?.CycleCurrentSpeedInternal();
+
+    private static string FormatInterval(TimeSpan ts)
+    {
+        if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h";
+        if (ts.TotalMinutes >= 1) return $"{(int)ts.TotalMinutes}m";
+        return $"{(int)ts.TotalSeconds}s";
+    }
+
+    private void ToggleAutoChangeInternal()
+    {
+        _autoChangeEnabled = !_autoChangeEnabled;
+        ApplyAutoChangeState();
+    }
+
+    private void SelectModeInternal(bool random)
+    {
+        _autoModeRandom = random;
+        if (_autoChangeEnabled)
+            ApplyAutoChangeState();
+    }
+
+    private void CycleCurrentSpeedInternal()
+    {
+        if (_autoModeRandom)
+            _randomIntervalIndex = (_randomIntervalIndex + 1) % AutoIntervals.Length;
+        else
+            _sequentialIntervalIndex = (_sequentialIntervalIndex + 1) % AutoIntervals.Length;
+
+        if (_autoChangeEnabled)
+            ApplyAutoChangeState();
+    }
+
+    private void ApplyAutoChangeState()
+    {
+        if (_autoChangeEnabled)
+        {
+            var interval = _autoModeRandom
+                ? AutoIntervals[_randomIntervalIndex]
+                : AutoIntervals[_sequentialIntervalIndex];
+
+            _autoTimer ??= new DispatcherTimer();
+            _autoTimer.Tick -= OnAutoTick;
+            _autoTimer.Tick += OnAutoTick;
+            _autoTimer.Interval = interval;
+            _autoTimer.Start();
+        }
+        else
+        {
+            if (_autoTimer != null)
+            {
+                _autoTimer.Tick -= OnAutoTick;
+                _autoTimer.Stop();
+            }
+        }
+    }
+
+    private void OnAutoTick(object? sender, EventArgs e)
+    {
+        NextWallpaper();
+    }
+
+    private void NextWallpaper()
+    {
+        if (_wallpapers.Count == 0) return;
+
+        if (_autoModeRandom)
+        {
+            var next = Random.Shared.Next(_wallpapers.Count);
+            ChangeWallpaper(_wallpapers[next]);
+        }
+        else
+        {
+            if (_currentWallpaperIndex >= _wallpapers.Count)
+                _currentWallpaperIndex = 0;
+            _currentWallpaperIndex = (_currentWallpaperIndex + 1) % _wallpapers.Count;
+            ChangeWallpaper(_wallpapers[_currentWallpaperIndex]);
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
+        _autoTimer?.Stop();
         UninstallMouseHook();
         _watcher?.Dispose();
         _debounceTimer?.Stop();

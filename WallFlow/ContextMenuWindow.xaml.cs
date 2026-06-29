@@ -14,6 +14,7 @@ public partial class ContextMenuWindow : Window
 {
     private static ContextMenuWindow? _openInstance;
     private bool _autoStartEnabled;
+    private bool _autoChangeEnabled;
     private bool _closedByAction;
     private bool _wasActivated;
     private DateTime _shownAt;
@@ -85,7 +86,9 @@ public partial class ContextMenuWindow : Window
         InitializeComponent();
         Activated += (_, _) => _wasActivated = true;
         _autoStartEnabled = IsAutoStartEnabled();
+        _autoChangeEnabled = MainWindow.IsAutoChangeEnabled();
         UpdateCheckState();
+        UpdateAutoChangeDisplay();
     }
 
     public void ShowAtCursor()
@@ -179,6 +182,40 @@ public partial class ContextMenuWindow : Window
         CheckMark.Visibility = _autoStartEnabled ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void UpdateAutoChangeDisplay()
+    {
+        AutoChangeCheck.Visibility = _autoChangeEnabled ? Visibility.Visible : Visibility.Collapsed;
+        SeqBorder.Visibility = _autoChangeEnabled ? Visibility.Visible : Visibility.Collapsed;
+        RandBorder.Visibility = _autoChangeEnabled ? Visibility.Visible : Visibility.Collapsed;
+        UpdateModeTexts();
+    }
+
+    private void UpdateModeTexts()
+    {
+        var isRandom = MainWindow.IsRandomMode();
+
+        SeqText.Text = MainWindow.GetSequentialModeText();
+        RandText.Text = MainWindow.GetRandomModeText();
+        SeqSpeed.Text = "";
+        RandSpeed.Text = "";
+
+        SeqRadio.Text = isRandom ? "\x25CB" : "\x2B24";
+        SeqRadio.Foreground = isRandom
+            ? new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88))
+            : new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
+        SeqText.Foreground = isRandom
+            ? new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88))
+            : new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
+
+        RandRadio.Text = isRandom ? "\x2B24" : "\x25CB";
+        RandRadio.Foreground = isRandom
+            ? new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF))
+            : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+        RandText.Foreground = isRandom
+            ? new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF))
+            : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+    }
+
     private void Item_MouseEnter(object sender, MouseEventArgs e)
     {
         if (sender is Border b)
@@ -210,6 +247,42 @@ public partial class ContextMenuWindow : Window
         _closedByAction = true;
         _openInstance = null;
         Application.Current.Shutdown();
+    }
+
+    private void AutoChange_Click(object sender, MouseButtonEventArgs e)
+    {
+        MainWindow.ToggleAutoChange();
+        _autoChangeEnabled = MainWindow.IsAutoChangeEnabled();
+        UpdateAutoChangeDisplay();
+        e.Handled = true;
+    }
+
+    private void Sequential_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (MainWindow.IsRandomMode())
+        {
+            MainWindow.SelectSequentialMode();
+        }
+        else
+        {
+            MainWindow.CycleCurrentSpeed();
+        }
+        UpdateModeTexts();
+        e.Handled = true;
+    }
+
+    private void Random_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (MainWindow.IsRandomMode())
+        {
+            MainWindow.CycleCurrentSpeed();
+        }
+        else
+        {
+            MainWindow.SelectRandomMode();
+        }
+        UpdateModeTexts();
+        e.Handled = true;
     }
 
     private void Window_Deactivated(object sender, EventArgs e)
