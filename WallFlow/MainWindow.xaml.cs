@@ -609,6 +609,9 @@ public partial class MainWindow : Window
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
+        var hwnd = new WindowInteropHelper(this).Handle;
+        RefreshBackdrop(hwnd);
+
         _isChangingWallpaper = false;
     }
 
