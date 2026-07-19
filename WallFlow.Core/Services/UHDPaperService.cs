@@ -52,6 +52,24 @@ public partial class UHDPaperService : IDisposable
         ["phone-hd"] = "phone-hd",
     };
 
+    private static readonly Dictionary<string, string[]> QueryKeyAliases = new()
+    {
+        ["4k"] = new[] { "pc-4k", "4k", "4K" },
+        ["2k"] = new[] { "pc-2k", "2k", "2K" },
+        ["hd"] = new[] { "pc-hd", "hd", "HD" },
+        ["phone-4k"] = new[] { "phone-4k", "4k-mobile", "4K-mobile", "4k-phone", "4K-phone" },
+        ["phone-hd"] = new[] { "phone-hd", "hd-mobile", "HD-mobile", "hd-phone", "HD-phone" }
+    };
+
+    private static readonly Dictionary<string, string[]> SuffixAliases = new()
+    {
+        ["4k"] = new[] { "-pc-4k.", "-4k.", "-4K." },
+        ["2k"] = new[] { "-pc-2k.", "-2k.", "-2K." },
+        ["hd"] = new[] { "-pc-hd.", "-hd.", "-HD.", "-wallpaper-hd." },
+        ["phone-4k"] = new[] { "-phone-4k.", "-mobile-4k.", "-phone-4k-mobile." },
+        ["phone-hd"] = new[] { "-phone-hd.", "-mobile-hd.", "-phone-hd-mobile." }
+    };
+
     public UHDPaperService()
     {
         var rng = Random.Shared.Next(UserAgents.Length);
@@ -63,23 +81,59 @@ public partial class UHDPaperService : IDisposable
         _cacheDir = Path.Combine(Path.GetTempPath(), "WallFlow", "cache", "uhdpaper");
         _previewCacheDir = Path.Combine(_cacheDir, "previews");
         Directory.CreateDirectory(_cacheDir);
+
+        LoadDiskCaches();
+        CleanupOldCache();
+    }
+
+    private void CleanupOldCache()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                if (Directory.Exists(_previewCacheDir))
+                {
+                    var dir = new DirectoryInfo(_previewCacheDir);
+                    var cutoff = DateTime.Now.AddDays(-14);
+                    foreach (var file in dir.GetFiles())
+                    {
+                        try
+                        {
+                            if (file.LastWriteTime < cutoff)
+                            {
+                                file.Delete();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+        });
     }
 
     // ---- Pagination ----
 
     public void ResetPagination() => _nextPageUrl = null;
 
-    public async Task<ListingResult> GetLatestAsync(CancellationToken ct = default)
+    public async Task<ListingResult> GetLatestAsync(string? urlOverride = null, CancellationToken ct = default)
     {
-        var url = _nextPageUrl ?? "https://www.uhdpaper.com/";
+        var url = urlOverride ?? _nextPageUrl ?? "https://www.uhdpaper.com/";
 
         if (_listingCache.TryGetValue(url, out var cached))
+        {
+            _nextPageUrl = cached.NextPageUrl;
             return cached;
+        }
 
         var result = await ParseListingAsync(url, ct);
 
         if (result.Items.Count > 0)
+        {
             _listingCache[url] = result;
+            SaveDiskCaches();
+        }
 
         return result;
     }
@@ -95,7 +149,10 @@ public partial class UHDPaperService : IDisposable
         var result = await ParseListingAsync(url, ct);
 
         if (result.Items.Count > 0)
+        {
             _listingCache[url] = result;
+            SaveDiskCaches();
+        }
 
         return result;
     }
@@ -134,12 +191,17 @@ public partial class UHDPaperService : IDisposable
             }
             if (resolutions.Count == 0)
             {
-                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'uhdpaper.com') and contains(@href,'.jpg')]");
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'img.uhdpaper.com/image/')]");
                 if (links != null) ParseResolutionLinks(links, resolutions);
             }
             if (resolutions.Count == 0)
             {
-                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'.jpg')]");
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'uhdpaper.com') and (contains(@href,'.jpg') or contains(@href,'.png') or contains(@href,'.jpeg'))]");
+                if (links != null) ParseResolutionLinks(links, resolutions);
+            }
+            if (resolutions.Count == 0)
+            {
+                links = doc.DocumentNode.SelectNodes("//a[contains(@href,'.jpg') or contains(@href,'.png') or contains(@href,'.jpeg')]");
                 if (links != null) ParseResolutionLinks(links, resolutions);
             }
 
@@ -193,6 +255,7 @@ public partial class UHDPaperService : IDisposable
 
             wallpaper.Resolutions = resolutions;
             _detailCache[wallpaper.PostUrl] = wallpaper;
+            SaveDiskCaches();
             return wallpaper;
         }
         catch (OperationCanceledException)
@@ -210,13 +273,16 @@ public partial class UHDPaperService : IDisposable
         foreach (var link in links)
         {
             var href = link.GetAttributeValue("href", "");
-            if (!href.Contains(".jpg", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(href)) continue;
+
+            var lowerHref = href.ToLowerInvariant();
+            if (!lowerHref.Contains(".jpg") && !lowerHref.Contains(".png") && !lowerHref.Contains(".jpeg") && !lowerHref.Contains(".webp"))
                 continue;
 
             if (href.StartsWith("//"))
                 href = "https:" + href;
 
-            // Try query-parameter-based resolution detection (current uhdpaper format)
+            // Try query-parameter-based resolution detection (current and legacy formats)
             var qIdx = href.IndexOf('?');
             if (qIdx >= 0)
             {
@@ -229,9 +295,9 @@ public partial class UHDPaperService : IDisposable
                     var key = part[..eqIdx];
                     var val = part[(eqIdx + 1)..];
 
-                    foreach (var kv in ResolutionSuffixes)
+                    foreach (var kv in QueryKeyAliases)
                     {
-                        if (key.Equals(kv.Value, StringComparison.OrdinalIgnoreCase)
+                        if (kv.Value.Contains(key, StringComparer.OrdinalIgnoreCase)
                             && !resolutions.ContainsKey(kv.Key))
                         {
                             var clean = val.StartsWith("//") ? "https:" + val : val;
@@ -244,14 +310,19 @@ public partial class UHDPaperService : IDisposable
                     continue;
             }
 
-            // Fallback: match suffix in path (old format)
-            foreach (var kv in ResolutionSuffixes)
+            // Fallback: match suffix in path (old and legacy formats)
+            foreach (var kv in SuffixAliases)
             {
-                var suffix = $"-{kv.Value}.";
-                if (href.Contains(suffix) && !resolutions.ContainsKey(kv.Key))
+                if (!resolutions.ContainsKey(kv.Key))
                 {
-                    resolutions[kv.Key] = href;
-                    break;
+                    foreach (var suffix in kv.Value)
+                    {
+                        if (href.Contains(suffix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            resolutions[kv.Key] = href;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -493,6 +564,60 @@ public partial class UHDPaperService : IDisposable
     {
         _listingCache.Clear();
         _detailCache.Clear();
+        try
+        {
+            var listingPath = Path.Combine(_cacheDir, "listing_cache.json");
+            if (File.Exists(listingPath)) File.Delete(listingPath);
+
+            var detailPath = Path.Combine(_cacheDir, "detail_cache.json");
+            if (File.Exists(detailPath)) File.Delete(detailPath);
+        }
+        catch { }
+    }
+
+    private void LoadDiskCaches()
+    {
+        try
+        {
+            var listingPath = Path.Combine(_cacheDir, "listing_cache.json");
+            if (File.Exists(listingPath))
+            {
+                var json = File.ReadAllText(listingPath);
+                var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, ListingResult>>(json);
+                if (data != null)
+                {
+                    foreach (var kvp in data) _listingCache[kvp.Key] = kvp.Value;
+                }
+            }
+
+            var detailPath = Path.Combine(_cacheDir, "detail_cache.json");
+            if (File.Exists(detailPath))
+            {
+                var json = File.ReadAllText(detailPath);
+                var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, OnlineWallpaper>>(json);
+                if (data != null)
+                {
+                    foreach (var kvp in data) _detailCache[kvp.Key] = kvp.Value;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void SaveDiskCaches()
+    {
+        try
+        {
+            Directory.CreateDirectory(_cacheDir);
+            var listingPath = Path.Combine(_cacheDir, "listing_cache.json");
+            var jsonListing = System.Text.Json.JsonSerializer.Serialize(_listingCache);
+            File.WriteAllText(listingPath, jsonListing);
+
+            var detailPath = Path.Combine(_cacheDir, "detail_cache.json");
+            var jsonDetail = System.Text.Json.JsonSerializer.Serialize(_detailCache);
+            File.WriteAllText(detailPath, jsonDetail);
+        }
+        catch { }
     }
 
     public void Dispose()

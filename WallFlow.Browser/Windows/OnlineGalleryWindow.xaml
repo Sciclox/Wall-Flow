@@ -2,47 +2,44 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        WindowStyle="None"
+        WindowStyle="None" AllowsTransparency="True"
         ShowInTaskbar="False" Topmost="True"
-        Background="#1A1A1A"
+        Background="Transparent"
         Width="860" Height="620"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
+        UseLayoutRounding="True"
         Loaded="Window_Loaded"
         Deactivated="Window_Deactivated"
-        PreviewKeyDown="Window_PreviewKeyDown">
-    <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome GlassFrameThickness="0"
-                            CornerRadius="12"
-                            ResizeBorderThickness="0"
-                            UseAeroCaptionButtons="False" />
-    </shell:WindowChrome.WindowChrome>
+        PreviewKeyDown="Window_PreviewKeyDown"
+        FontFamily="{DynamicResource AppFontFamily}">
+
 
     <Window.Resources>
         <!-- Colors -->
-        <Color x:Key="Accent">#5B7FB5</Color>
-        <Color x:Key="AccentHover">#6D91C7</Color>
-        <Color x:Key="Surface">#252525</Color>
-        <Color x:Key="SurfaceAlt">#1E1E1E</Color>
-        <Color x:Key="Border">#333333</Color>
+        <Color x:Key="Accent">#0A84FF</Color>
+        <Color x:Key="AccentHover">#409CFF</Color>
+        <Color x:Key="Surface">#2C2C2E</Color>
+        <Color x:Key="SurfaceAlt">#1C1C1E</Color>
+        <Color x:Key="Border">#3A3A3C</Color>
         <Color x:Key="TextPrimary">White</Color>
-        <Color x:Key="TextSecondary">#999999</Color>
-        <Color x:Key="TextMuted">#666666</Color>
-        <Color x:Key="Danger">#C74B4B</Color>
-
+        <Color x:Key="TextSecondary">#CCCCCC</Color>
+        <Color x:Key="TextMuted">#888888</Color>
+        <Color x:Key="Danger">#FF453A</Color>
+ 
         <!-- Brushes -->
-        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource Accent}" />
-        <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHover}" />
-        <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource Surface}" />
-        <SolidColorBrush x:Key="SurfaceAltBrush" Color="{StaticResource SurfaceAlt}" />
-        <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource Border}" />
+        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+        <SolidColorBrush x:Key="AccentHoverBrush" Color="{DynamicResource AccentHoverColor}" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#502C2C2E" />
+        <SolidColorBrush x:Key="SurfaceAltBrush" Color="#301C1C1E" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#1EFFFFFF" />
         <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}" />
         <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}" />
         <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}" />
-
+ 
         <!-- Shadows -->
-        <DropShadowEffect x:Key="TileShadow" BlurRadius="8" Opacity="0.35" ShadowDepth="2" Color="Black" />
-        <DropShadowEffect x:Key="ElevatedShadow" BlurRadius="16" Opacity="0.4" ShadowDepth="4" Color="Black" />
+        <DropShadowEffect x:Key="TileShadow" BlurRadius="12" Opacity="0.45" ShadowDepth="3" Color="Black" />
+        <DropShadowEffect x:Key="ElevatedShadow" BlurRadius="20" Opacity="0.5" ShadowDepth="5" Color="Black" />
 
         <!-- ComboBox toggle button (transparent full-area background) -->
         <ControlTemplate x:Key="DarkComboToggleButton" TargetType="ToggleButton">
@@ -100,10 +97,119 @@
                 </Popup>
             </Grid>
         </ControlTemplate>
+        <!-- Search box border premium style with focus visual states -->
+        <Style x:Key="SearchBoxBorderStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="#181818" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Height" Value="32" />
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="0" Color="{DynamicResource AccentColor}" />
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Premium Custom Vertical ScrollBar Style -->
+        <Style x:Key="PremiumVerticalScrollBar" TargetType="ScrollBar">
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid x:Name="Bg" Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="true">
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border CornerRadius="4" Background="#1DFFFFFF"
+                                                        x:Name="ThumbBorder" Width="5" HorizontalAlignment="Center" />
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="ThumbBorder" Property="Background" Value="#45FFFFFF" />
+                                                        <Setter TargetName="ThumbBorder" Property="Width" Value="6" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Apply button premium style with gradient and hover glow -->
+        <Style x:Key="ApplyButtonStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="{DynamicResource AccentHoverColor}" Offset="0.0" />
+                        <GradientStop Color="{DynamicResource AccentColor}" Offset="1.0" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="{DynamicResource AccentHoverColor}" Offset="0.0" />
+                                <GradientStop Color="{DynamicResource AccentColor}" Offset="1.0" />
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect BlurRadius="6" Opacity="0.3" ShadowDepth="0" Color="{DynamicResource AccentColor}" />
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Secondary button premium style with glass hover effect -->
+        <Style x:Key="SecondaryButtonStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="BorderBrush" Value="#12FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2DFFFFFF" />
+                    <Setter Property="BorderBrush" Value="#22FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
     </Window.Resources>
 
-    <Border CornerRadius="12" Background="#1A1A1A" BorderBrush="#2A2A2A" BorderThickness="1">
+    <Border x:Name="RootBorder" CornerRadius="8" BorderThickness="1">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#95202022" Offset="0.0" />
+                <GradientStop Color="#650F0F11" Offset="1.0" />
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.BorderBrush>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#38FFFFFF" Offset="0.0" />
+                <GradientStop Color="#12FFFFFF" Offset="1.0" />
+            </LinearGradientBrush>
+        </Border.BorderBrush>
         <Grid Margin="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -115,16 +221,21 @@
             <Border Grid.Row="0" CornerRadius="8" Background="{StaticResource SurfaceBrush}"
                     BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8">
                 <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <!-- Source toggle -->
-                    <Border Grid.Column="0" x:Name="SourceToggle" CornerRadius="6" Background="#2D2D2D"
+                    <Border Grid.Column="0" x:Name="SourceToggle" CornerRadius="7" Background="#141416"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                            Padding="3" Margin="4,0,12,0" Cursor="Hand"
+                            Padding="2" Margin="4,0,12,0" Cursor="Hand"
                             MouseLeftButtonUp="SourceToggle_Click">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -132,21 +243,23 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <!-- Local tab -->
-                            <Border Grid.Column="0" x:Name="LocalTab" CornerRadius="4" Padding="12,5" Background="#3D3D3D" Margin="1">
-                                <TextBlock x:Name="LocalText" Text="Local" FontFamily="Segoe UI" FontSize="13"
+                            <Border Grid.Column="0" x:Name="LocalTab" CornerRadius="5" Padding="12,5" Background="#636366" Margin="1">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="4" Opacity="0.2" ShadowDepth="1.5" Color="Black" />
+                                </Border.Effect>
+                                <TextBlock x:Name="LocalText" Text="Local" FontSize="13"
                                            FontWeight="SemiBold" Foreground="White" />
                             </Border>
                             <!-- Online tab -->
-                            <Border Grid.Column="1" x:Name="OnlineTab" CornerRadius="4" Padding="12,5" Background="Transparent" Margin="1">
-                                <TextBlock x:Name="OnlineText" Text="Online" FontFamily="Segoe UI" FontSize="13"
-                                           FontWeight="Normal" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <Border Grid.Column="1" x:Name="OnlineTab" CornerRadius="5" Padding="12,5" Background="Transparent" Margin="1">
+                                <TextBlock x:Name="OnlineText" Text="Online" FontSize="13"
+                                           FontWeight="Normal" Foreground="#98989D" />
                             </Border>
                         </Grid>
                     </Border>
 
                     <!-- Search box -->
-                    <Border Grid.Column="1" CornerRadius="6" Background="#181818"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,12,0">
+                    <Border Grid.Column="1" Style="{StaticResource SearchBoxBorderStyle}" Margin="0,0,12,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -155,9 +268,10 @@
                             <TextBlock Grid.Column="0" Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            <TextBox Grid.Column="0" x:Name="SearchBox" FontFamily="Segoe UI" FontSize="13" Foreground="White"
-                                     Background="Transparent" BorderThickness="0" Padding="28,5,6,5"
+                            <TextBox Grid.Column="0" x:Name="SearchBox" FontSize="13" Foreground="White"
+                                     Background="Transparent" BorderThickness="0" Padding="28,6,6,6"
                                      CaretBrush="White" IsTabStop="False"
+                                     VerticalAlignment="Stretch" VerticalContentAlignment="Center"
                                      TextChanged="SearchBox_TextChanged" />
                             <Border Grid.Column="1" x:Name="SearchClearBtn" Width="24" Height="24" CornerRadius="4"
                                     Background="Transparent" Cursor="Hand" Visibility="Collapsed"
@@ -170,14 +284,48 @@
                         </Grid>
                     </Border>
 
+                    <!-- Folder button -->
+                    <Border Grid.Column="2" x:Name="FolderBtn" Width="30" Height="30" CornerRadius="6" Background="Transparent"
+                            Cursor="Hand" MouseLeftButtonUp="FolderBtn_Click" Margin="0,0,6,0"
+                            MouseEnter="FolderBtn_MouseEnter" MouseLeave="FolderBtn_MouseLeave"
+                            ToolTip="Cambiar carpeta de wallpapers">
+                        <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
                     <!-- Close button -->
-                    <Border Grid.Column="2" x:Name="CloseBtn" Width="30" Height="30" CornerRadius="6" Background="Transparent"
+                    <Border Grid.Column="3" x:Name="CloseBtn" Width="30" Height="30" CornerRadius="6" Background="Transparent"
                             Cursor="Hand" MouseLeftButtonUp="CloseBtn_Click"
                             MouseEnter="CloseBtn_MouseEnter" MouseLeave="CloseBtn_MouseLeave">
                         <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
+
+                    <!-- Suggested Category Badges -->
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="6,6,0,2">
+                        <TextBlock Text="Sugeridos:" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        
+                        <Border CornerRadius="10" Background="#1AFFFFFF" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonUp="Category_Click">
+                            <TextBlock Text="Cyberpunk" FontSize="11" Foreground="White" />
+                        </Border>
+                        <Border CornerRadius="10" Background="#1AFFFFFF" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonUp="Category_Click">
+                            <TextBlock Text="Anime" FontSize="11" Foreground="White" />
+                        </Border>
+                        <Border CornerRadius="10" Background="#1AFFFFFF" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonUp="Category_Click">
+                            <TextBlock Text="Minimalista" FontSize="11" Foreground="White" />
+                        </Border>
+                        <Border CornerRadius="10" Background="#1AFFFFFF" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonUp="Category_Click">
+                            <TextBlock Text="Naturaleza" FontSize="11" Foreground="White" />
+                        </Border>
+                        <Border CornerRadius="10" Background="#1AFFFFFF" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonUp="Category_Click">
+                            <TextBlock Text="Espacio" FontSize="11" Foreground="White" />
+                        </Border>
+                        <Border CornerRadius="10" Background="#1AFFFFFF" Padding="8,3" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonUp="Category_Click">
+                            <TextBlock Text="Abstracto" FontSize="11" Foreground="White" />
+                        </Border>
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -185,12 +333,18 @@
             <Grid Grid.Row="1">
                 <!-- Gallery view -->
                 <Grid x:Name="GalleryView" Visibility="Visible">
+                    <Grid.RenderTransform>
+                        <TranslateTransform X="0" Y="0" />
+                    </Grid.RenderTransform>
                     <Grid>
                         <ListBox x:Name="WallpaperListBox" Background="Transparent" BorderThickness="0"
                                  VirtualizingPanel.IsVirtualizing="True"
                                  VirtualizingPanel.VirtualizationMode="Standard"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.Resources>
+                                <Style TargetType="ScrollBar" BasedOn="{StaticResource PremiumVerticalScrollBar}" />
+                            </ListBox.Resources>
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <VirtualizingStackPanel />
@@ -220,7 +374,7 @@
                                 <ProgressBar x:Name="Spinner" IsIndeterminate="True" Width="180" Height="3"
                                              Foreground="{StaticResource AccentBrush}" Background="#333333"
                                              BorderThickness="0" Margin="0,0,0,14" />
-                                <TextBlock Text="Cargando..." FontFamily="Segoe UI" FontSize="14"
+                                <TextBlock Text="Cargando..." FontSize="14"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            HorizontalAlignment="Center" />
                             </StackPanel>
@@ -232,7 +386,7 @@
                                 <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="44"
                                            Foreground="#444444" HorizontalAlignment="Center" Margin="0,0,0,14" />
                                 <TextBlock x:Name="EmptyText" Text="No se encontraron wallpapers"
-                                           FontFamily="Segoe UI" FontSize="15"
+                                           FontSize="15"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            HorizontalAlignment="Center" />
                             </StackPanel>
@@ -241,7 +395,10 @@
                 </Grid>
 
                 <!-- Detail view -->
-                <Grid x:Name="DetailView" Visibility="Collapsed">
+                <Grid x:Name="DetailView" Visibility="Collapsed" Opacity="0">
+                    <Grid.RenderTransform>
+                        <TranslateTransform X="150" Y="0" />
+                    </Grid.RenderTransform>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -256,31 +413,29 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" x:Name="BackBtn" CornerRadius="6" Padding="10,6"
-                                Background="#2D2D2D" Cursor="Hand"
+                        <Border Grid.Column="0" x:Name="BackBtn" Style="{StaticResource SecondaryButtonStyle}"
                                 MouseLeftButtonUp="BackBtn_Click" Margin="0,0,12,0">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock Text="Volver" FontFamily="Segoe UI" FontSize="13"
+                                <TextBlock Text="Volver" FontSize="13"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Grid.Column="1" x:Name="DetailTitle" FontFamily="Segoe UI" FontSize="15"
+                        <TextBlock Grid.Column="1" x:Name="DetailTitle" FontSize="15"
                                    FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" />
 
-                        <Border Grid.Column="2" x:Name="ViewOnlineBtn" CornerRadius="6" Padding="10,6"
-                                Background="#2D2D2D" Cursor="Hand"
+                        <Border Grid.Column="2" x:Name="ViewOnlineBtn" Style="{StaticResource SecondaryButtonStyle}"
                                 MouseLeftButtonUp="ViewOnline_Click">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock Text="Ver online" FontFamily="Segoe UI" FontSize="13"
+                                <TextBlock Text="Ver online" FontSize="13"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            VerticalAlignment="Center" />
                             </StackPanel>
@@ -306,7 +461,7 @@
                                 </Border>
                             </Grid>
                         </Border>
-                        <TextBlock x:Name="LoadingText" Text="Cargando..." FontFamily="Segoe UI" FontSize="14"
+                        <TextBlock x:Name="LoadingText" Text="Cargando..." FontSize="14"
                                    Foreground="{StaticResource TextMutedBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Visibility="Collapsed" />
@@ -325,7 +480,7 @@
                             </Grid.ColumnDefinitions>
 
                             <!-- Resolution selector -->
-                            <ComboBox x:Name="ResolutionCombo" FontFamily="Segoe UI" FontSize="13" Foreground="White"
+                            <ComboBox x:Name="ResolutionCombo" FontSize="13" Foreground="White"
                                       Background="Transparent" BorderBrush="#333333" BorderThickness="1"
                                       MinWidth="100" SelectedIndex="0"
                                       Template="{StaticResource DarkComboBoxTemplate}">
@@ -360,31 +515,29 @@
                             </ComboBox>
 
                             <!-- Apply button -->
-                            <Border Grid.Column="1" x:Name="ApplyBtn" CornerRadius="6" Padding="14,7"
-                                    Background="{StaticResource AccentBrush}" Cursor="Hand"
+                            <Border Grid.Column="1" x:Name="ApplyBtn" Style="{StaticResource ApplyButtonStyle}"
                                     MouseLeftButtonUp="ApplyBtn_Click" Margin="8,0,8,0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="White"
                                                VerticalAlignment="Center" Margin="0,0,6,0" />
-                                    <TextBlock Text="Aplicar" FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                                    <TextBlock Text="Aplicar" FontSize="13" FontWeight="SemiBold"
                                                Foreground="White" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Border>
 
                             <!-- Save button -->
-                            <Border Grid.Column="2" x:Name="SaveBtn" CornerRadius="6" Padding="14,7"
-                                    Background="#2D2D2D" Cursor="Hand"
+                            <Border Grid.Column="2" x:Name="SaveBtn" Style="{StaticResource SecondaryButtonStyle}" Padding="14,7"
                                     MouseLeftButtonUp="SaveBtn_Click" Margin="0,0,8,0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="White"
                                                VerticalAlignment="Center" Margin="0,0,6,0" />
-                                    <TextBlock Text="Guardar" FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                                    <TextBlock Text="Guardar" FontSize="13" FontWeight="SemiBold"
                                                Foreground="White" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Border>
 
                             <!-- Status text (right-aligned via star spacer) -->
-                            <TextBlock Grid.Column="4" x:Name="StatusText" FontFamily="Segoe UI" FontSize="12"
+                            <TextBlock Grid.Column="4" x:Name="StatusText" FontSize="12"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        VerticalAlignment="Center" TextAlignment="Right" />
                         </Grid>
@@ -404,12 +557,11 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- Sort dropdown -->
-                    <ComboBox x:Name="SortCombo" FontFamily="Segoe UI" FontSize="13" Foreground="White"
-                              Background="Transparent" BorderBrush="#333333" BorderThickness="1"
-                              MinWidth="120" Margin="0,0,12,0"
-                              SelectionChanged="SortCombo_SelectionChanged"
-                              Template="{StaticResource DarkComboBoxTemplate}">
+                    <ComboBox x:Name="SortCombo" FontSize="13" Foreground="White"
+                               Background="Transparent" BorderBrush="#333333" BorderThickness="1"
+                               MinWidth="160" Margin="0,0,12,0" SelectedIndex="0"
+                               SelectionChanged="SortCombo_SelectionChanged"
+                               Template="{StaticResource DarkComboBoxTemplate}">
                         <ComboBox.Resources>
                             <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#252525" />
                             <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#CCCCCC" />
@@ -432,12 +584,13 @@
                             </Style>
                         </ComboBox.ItemContainerStyle>
                         <ComboBox.Items>
-                            <ComboBoxItem Content="Nombre &#x2191;" Tag="name-asc" />
-                            <ComboBoxItem Content="Nombre &#x2193;" Tag="name-desc" />
-                            <ComboBoxItem Content="Fecha &#x2191;" Tag="date-asc" />
-                            <ComboBoxItem Content="Fecha &#x2193;" Tag="date-desc" />
-                            <ComboBoxItem Content="Tamaño &#x2191;" Tag="size-asc" />
-                            <ComboBoxItem Content="Tamaño &#x2193;" Tag="size-desc" />
+                            <ComboBoxItem Content="Ordenar por..." Tag="" IsEnabled="False" Visibility="Collapsed" />
+                            <ComboBoxItem Content="Nombre (A-Z)" Tag="name-asc" />
+                            <ComboBoxItem Content="Nombre (Z-A)" Tag="name-desc" />
+                            <ComboBoxItem Content="Más nuevos primero" Tag="date-desc" />
+                            <ComboBoxItem Content="Más antiguos primero" Tag="date-asc" />
+                            <ComboBoxItem Content="Tamaño (Menor a Mayor)" Tag="size-asc" />
+                            <ComboBoxItem Content="Tamaño (Mayor a Menor)" Tag="size-desc" />
                         </ComboBox.Items>
                     </ComboBox>
 
@@ -461,17 +614,11 @@
                                            VerticalAlignment="Center" />
                             </Border>
 
-                            <!-- Separator -->
-                            <Rectangle Grid.Column="1" Width="1" Fill="{StaticResource BorderBrush}" Margin="0,4" />
-
                             <!-- Page text -->
                             <TextBlock Grid.Column="1" x:Name="PageText" Text="Página 1 de 1"
-                                       FontFamily="Segoe UI" FontSize="12"
+                                       FontSize="12"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        VerticalAlignment="Center" Padding="10,4" />
-
-                            <!-- Separator -->
-                            <Rectangle Grid.Column="2" Width="1" Fill="{StaticResource BorderBrush}" Margin="0,4" />
 
                             <!-- Next -->
                             <Border Grid.Column="2" x:Name="NextBtn" Padding="10,4" Background="Transparent"
@@ -484,7 +631,7 @@
                         </Grid>
                     </Border>
 
-                    <TextBlock Grid.Column="4" x:Name="FooterStatus" FontFamily="Segoe UI" FontSize="12"
+                    <TextBlock Grid.Column="4" x:Name="FooterStatus" FontSize="12"
                                Foreground="{StaticResource TextMutedBrush}"
                                VerticalAlignment="Center" />
                 </Grid>

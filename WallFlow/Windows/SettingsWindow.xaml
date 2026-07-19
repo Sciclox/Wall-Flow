@@ -1,0 +1,2293 @@
+<Window x:Class="WallFlow.Windows.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True"
+        ShowInTaskbar="False" Topmost="True"
+        Background="Transparent"
+        FontFamily="{DynamicResource AppFontFamily}"
+        Width="800" Height="580"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        UseLayoutRounding="True"
+        Opacity="0"
+        Loaded="Window_Loaded"
+        Deactivated="Window_Deactivated"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <Color x:Key="Surface">#2C2C2E</Color>
+        <Color x:Key="Border">#3A3A3C</Color>
+        <Color x:Key="TextSecondary">#CCCCCC</Color>
+        <Color x:Key="TextMuted">#888888</Color>
+
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#502C2C2E" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#1EFFFFFF" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}" />
+        <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}" />
+
+        <!-- Storyboard to rotate the preview gradient -->
+        <Storyboard x:Key="RotateGradientPreview" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="PreviewGradientRotation"
+                             Storyboard.TargetProperty="Angle"
+                             From="0" To="360" Duration="0:0:6" />
+        </Storyboard>
+
+        <!-- Custom Dark TextBox Style -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#15FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#25FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="CaretBrush" Value="White" />
+            <Setter Property="SelectionBrush" Value="#80AF52DE" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="false"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          VerticalAlignment="Center" Margin="4,2"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#40FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsFocused" Value="true">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#AF52DE"/>
+                                <Setter TargetName="border" Property="Background" Value="#20FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="false">
+                                <Setter TargetName="border" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Reusable Action Button Style -->
+        <Style x:Key="SettingsActionButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#20FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="btnBorder" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="btnBorder" Property="Background" Value="#30FFFFFF" />
+                                <Setter TargetName="btnBorder" Property="BorderBrush" Value="#50FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="btnBorder" Property="Background" Value="#45FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom Dark CheckBox Style -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid x:Name="templateRoot" Background="Transparent" SnapsToDevicePixels="True">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="checkBoxBorder"
+                                    Background="#15FFFFFF"
+                                    BorderBrush="#25FFFFFF"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Width="16" Height="16" Margin="0,0,8,0">
+                                <Grid x:Name="markGrid">
+                                    <TextBlock x:Name="optionMark"
+                                               Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="10" FontWeight="Bold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+                            <ContentPresenter Grid.Column="1" x:Name="contentPresenter"
+                                              Focusable="False"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              Margin="{TemplateBinding Padding}"
+                                              RecognizesAccessKey="True"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="true">
+                                <Setter TargetName="checkBoxBorder" Property="Background" Value="#AF52DE"/>
+                                <Setter TargetName="checkBoxBorder" Property="BorderBrush" Value="#AF52DE"/>
+                                <Setter TargetName="optionMark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter TargetName="checkBoxBorder" Property="BorderBrush" Value="#80FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="false">
+                                <Setter TargetName="templateRoot" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom Dark ComboBox Style -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#15FFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#25FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid x:Name="templateRoot" SnapsToDevicePixels="true">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition MinWidth="0" SharedSizeGroup="ComboBoxButton" Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ToggleButton x:Name="toggleButton" Grid.ColumnSpan="2"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Focusable="false" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="toggleRoot"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="6" SnapsToDevicePixels="true">
+                                            <Border x:Name="splitBorder" BorderBrush="Transparent"
+                                                    BorderThickness="1" HorizontalAlignment="Right"
+                                                    Margin="0" SnapsToDevicePixels="true" Width="0"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              IsHitTestVisible="false" Margin="{TemplateBinding Padding}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            <Grid Grid.Column="1" SnapsToDevicePixels="True" Margin="0,0,10,0">
+                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="10" Foreground="White"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Popup x:Name="PART_Popup" AllowsTransparency="true" Grid.ColumnSpan="2"
+                                   Placement="Bottom" Margin="1"
+                                   IsOpen="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <Border x:Name="dropDownBorder" Background="#2C2C2E"
+                                        BorderBrush="#3A3A3C" BorderThickness="1" CornerRadius="6"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        MinWidth="{Binding ActualWidth, ElementName=templateRoot}">
+                                    <ScrollViewer x:Name="TemplatesScrollViewer" SnapsToDevicePixels="true">
+                                        <Grid RenderOptions.ClearTypeHint="Enabled">
+                                            <Canvas x:Name="canvas" HorizontalAlignment="Left" Height="0" VerticalAlignment="Top" Width="0"/>
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"
+                                                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                        </Grid>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom Dark ComboBoxItem Style -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="#2C2C2E" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#AF52DE" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#AF52DE" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom TabControl Style with Hidden Headers -->
+        <Style x:Key="HiddenHeadersTabControl" TargetType="TabControl">
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="TabItem">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <!-- Sidebar Navigation Button Style -->
+        <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#CCFFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Theme Preset Button Style -->
+        <Style x:Key="ThemeButtonStyle" TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="MinWidth" Value="78" />
+        </Style>
+
+        <!-- Hotkey Label Style -->
+        <Style x:Key="HotkeyLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="None" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+        </Style>
+
+        <!-- Hotkey TextBox Style -->
+        <Style x:Key="HotkeyTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#25FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Width" Value="130" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="false"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          VerticalAlignment="Center" Margin="6,4"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#40FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsFocused" Value="true">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#AF52DE"/>
+                                <Setter TargetName="border" Property="Background" Value="#20FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Hotkey Action Button Style -->
+        <Style x:Key="HotkeyActionBtnStyle" TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Height" Value="30" />
+        </Style>
+
+        <!-- Hotkey Clear Button Style -->
+        <Style x:Key="HotkeysClearBtnStyle" TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Background" Value="#AF52DE" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="RootBorder" CornerRadius="8" BorderThickness="1">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#95202022" Offset="0.0" />
+                <GradientStop Color="#650F0F11" Offset="1.0" />
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.BorderBrush>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#38FFFFFF" Offset="0.0" />
+                <GradientStop Color="#12FFFFFF" Offset="1.0" />
+            </LinearGradientBrush>
+        </Border.BorderBrush>
+        <Grid Margin="8">
+            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+            <!-- ═══════ Top bar ═══════ -->
+            <Border Grid.Row="0" CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Ajustes de Interfaz"
+                               FontFamily="{DynamicResource AppFontFamily}"
+                               FontSize="15" FontWeight="SemiBold"
+                               Foreground="White" VerticalAlignment="Center" Margin="10,0,0,0" />
+                    <Border Grid.Column="1" x:Name="CloseBtn" Width="30" Height="30" CornerRadius="6"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                            MouseLeftButtonUp="CloseBtn_Click"
+                            MouseEnter="CloseBtn_MouseEnter"
+                            MouseLeave="CloseBtn_MouseLeave">
+                        <TextBlock Text="&#xE10A;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="11" Foreground="#CCFFFFFF"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ═══════ Scrollable content area ═══════ -->
+            <Grid Grid.Row="2" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Sidebar -->
+                <Border Grid.Column="0" CornerRadius="8" Background="#401A1A1C"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,8,0">
+                    <StackPanel Margin="4,8">
+                        <Button x:Name="TabBtn0" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xE790;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Apariencia" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="TabBtn1" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xE9A1;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Dock" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="TabBtn2" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xF1AD;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Elementos" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="TabBtn3" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Sistema" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="TabBtn4" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xE765;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Atajos" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="TabBtn5" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Navegador" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="TabBtn6" Style="{StaticResource SidebarNavButtonStyle}"
+                                Click="TabBtn_Click" Margin="0,2">
+                            <StackPanel Orientation="Horizontal" Margin="6,0">
+                                <TextBlock Text="&#xE752;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Spotlight" FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <!-- Right TabControl -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalOnly">
+                    <TabControl x:Name="SettingsTabControl"
+                                Style="{StaticResource HiddenHeadersTabControl}">
+
+                    <!-- ═══ TabItem 0: Apariencia ═══ -->
+                    <TabItem>
+                            <StackPanel Margin="0,0,4,0">
+                                <!-- Section: Color de Hover y Widgets -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Color de Hover y Widgets"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Se utiliza para el resaltado de botones y fondo de widgets."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <CheckBox x:Name="UseWallpaperHoverCheck"
+                                                   Content="Usar color del wallpaper"
+                                                   Checked="UseWallpaperHover_Changed"
+                                                   Unchecked="UseWallpaperHover_Changed" />
+
+                                        <TextBlock Text="Paleta de colores rápidos:" Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11" Margin="0,8,0,0" />
+                                        <WrapPanel x:Name="ColorPaletteGrid" Margin="0,4,0,4">
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#FF453A" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Rojo" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#FF9F0A" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Naranja" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#FFD60A" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Amarillo" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#30D158" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Verde" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#64D2FF" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Celeste" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#0A84FF" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Azul" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#5E5CE6" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Índigo" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#D946EF" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Fucsia" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#E5E7EB" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Plata" BorderThickness="1.5" BorderBrush="Transparent" />
+                                            <Border Width="20" Height="20" CornerRadius="10" Margin="2" Background="#9CA3AF" Cursor="Hand"
+                                                    MouseLeftButtonUp="PaletteColor_Click" MouseEnter="PaletteColor_MouseEnter"
+                                                    MouseLeave="PaletteColor_MouseLeave" ToolTip="Gris" BorderThickness="1.5" BorderBrush="Transparent" />
+                                        </WrapPanel>
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Color Hex:" Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBox x:Name="AccentHexBox" Grid.Column="1"
+                                                     MaxLength="9" TextChanged="AccentColor_Changed" />
+                                            <Border x:Name="AccentPreview" Grid.Column="2"
+                                                    Width="26" Height="26" CornerRadius="5"
+                                                    Background="#AF52DE"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                    Margin="8,0,0,0" />
+                                        </Grid>
+
+                                        <CheckBox x:Name="UseDefaultDockBgCheck"
+                                                  Content="Usar fondo predeterminado del dock"
+                                                  Checked="UseDefaultDockBg_Changed"
+                                                  Unchecked="UseDefaultDockBg_Changed"
+                                                  Margin="0,10,0,4" />
+
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Fondo Dock Hex:" Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBox x:Name="DockBgHexBox" Grid.Column="1"
+                                                     MaxLength="9" TextChanged="DockBgColor_Changed" />
+                                            <Border x:Name="DockBgPreview" Grid.Column="2"
+                                                    Width="26" Height="26" CornerRadius="5"
+                                                    Background="#B40B0B0B"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                    Margin="8,0,0,0" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Temas de color -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Temas de Color Rápidos"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Selecciona un preset para cambiar colores de acento, borde y dock al instante."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+                                        <WrapPanel>
+                                            <Button Content="Cyberpunk" Click="ThemePreset_Click" Tag="cyberpunk" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Dracula" Click="ThemePreset_Click" Tag="dracula" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Tokyo Night" Click="ThemePreset_Click" Tag="tokyo_night" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Nord Frost" Click="ThemePreset_Click" Tag="nord_frost" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Rose Pine" Click="ThemePreset_Click" Tag="rose_pine" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Vaporwave" Click="ThemePreset_Click" Tag="vaporwave" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Glass Light" Click="ThemePreset_Click" Tag="glass_light" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Emerald" Click="ThemePreset_Click" Tag="emerald" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Aero Sunset" Click="ThemePreset_Click" Tag="sunset" Style="{StaticResource ThemeButtonStyle}" />
+                                            <Button Content="Solarized" Click="ThemePreset_Click" Tag="solarized" Style="{StaticResource ThemeButtonStyle}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Color del Borde Animado -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Color del Borde Animado"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Gradiente animado de 3 paradas para el borde del dock."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <CheckBox x:Name="UseWallpaperBorderCheck"
+                                                   Content="Usar colores del wallpaper"
+                                                   Checked="UseWallpaperBorder_Changed"
+                                                   Unchecked="UseWallpaperBorder_Changed" />
+
+                                        <TextBlock Text="Temas de gradiente rápidos:" Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11" Margin="0,8,0,0" />
+                                        <WrapPanel x:Name="GradientPresetsGrid" Margin="0,4,0,4">
+                                            <Border Width="68" Height="22" CornerRadius="11" Margin="2" Cursor="Hand" ToolTip="Gradiente Ocean"
+                                                    MouseLeftButtonUp="GradientPreset_Click" MouseEnter="Preset_MouseEnter"
+                                                    MouseLeave="Preset_MouseLeave" Tag="#007AFF,#5856D6,#AF52DE"
+                                                    BorderThickness="1" BorderBrush="#30FFFFFF">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#007AFF" Offset="0" />
+                                                        <GradientStop Color="#5856D6" Offset="0.5" />
+                                                        <GradientStop Color="#AF52DE" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="Ocean" Foreground="White" FontSize="9" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <Border Width="68" Height="22" CornerRadius="11" Margin="2" Cursor="Hand" ToolTip="Gradiente Sunset"
+                                                    MouseLeftButtonUp="GradientPreset_Click" MouseEnter="Preset_MouseEnter"
+                                                    MouseLeave="Preset_MouseLeave" Tag="#FF6B35,#FF2D87,#D946EF"
+                                                    BorderThickness="1" BorderBrush="#30FFFFFF">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#FF6B35" Offset="0" />
+                                                        <GradientStop Color="#FF2D87" Offset="0.5" />
+                                                        <GradientStop Color="#D946EF" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="Sunset" Foreground="White" FontSize="9" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <Border Width="68" Height="22" CornerRadius="11" Margin="2" Cursor="Hand" ToolTip="Gradiente Aurora"
+                                                    MouseLeftButtonUp="GradientPreset_Click" MouseEnter="Preset_MouseEnter"
+                                                    MouseLeave="Preset_MouseLeave" Tag="#06D6A0,#118AB2,#7B2FF7"
+                                                    BorderThickness="1" BorderBrush="#30FFFFFF">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#06D6A0" Offset="0" />
+                                                        <GradientStop Color="#118AB2" Offset="0.5" />
+                                                        <GradientStop Color="#7B2FF7" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="Aurora" Foreground="White" FontSize="9" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <Border Width="68" Height="22" CornerRadius="11" Margin="2" Cursor="Hand" ToolTip="Gradiente Neon"
+                                                    MouseLeftButtonUp="GradientPreset_Click" MouseEnter="Preset_MouseEnter"
+                                                    MouseLeave="Preset_MouseLeave" Tag="#00F5FF,#BF00FF,#FF006E"
+                                                    BorderThickness="1" BorderBrush="#30FFFFFF">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#00F5FF" Offset="0" />
+                                                        <GradientStop Color="#BF00FF" Offset="0.5" />
+                                                        <GradientStop Color="#FF006E" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="Neon" Foreground="White" FontSize="9" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <Border Width="68" Height="22" CornerRadius="11" Margin="2" Cursor="Hand" ToolTip="Gradiente Lava"
+                                                    MouseLeftButtonUp="GradientPreset_Click" MouseEnter="Preset_MouseEnter"
+                                                    MouseLeave="Preset_MouseLeave" Tag="#FF4500,#FF0080,#7B00FF"
+                                                    BorderThickness="1" BorderBrush="#30FFFFFF">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#FF4500" Offset="0" />
+                                                        <GradientStop Color="#FF0080" Offset="0.5" />
+                                                        <GradientStop Color="#7B00FF" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="Lava" Foreground="White" FontSize="9" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <Border Width="68" Height="22" CornerRadius="11" Margin="2" Cursor="Hand" ToolTip="Gradiente Pastel"
+                                                    MouseLeftButtonUp="GradientPreset_Click" MouseEnter="Preset_MouseEnter"
+                                                    MouseLeave="Preset_MouseLeave" Tag="#A78BFA,#F472B6,#FB923C"
+                                                    BorderThickness="1" BorderBrush="#30FFFFFF">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#A78BFA" Offset="0" />
+                                                        <GradientStop Color="#F472B6" Offset="0.5" />
+                                                        <GradientStop Color="#FB923C" Offset="1" />
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="Pastel" Foreground="White" FontSize="9" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </WrapPanel>
+
+                                        <StackPanel Margin="0,6,0,0">
+                                            <Grid Margin="0,0,0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="65" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Inicio:" Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="12" VerticalAlignment="Center" />
+                                                <TextBox x:Name="BorderHex1" Grid.Column="1"
+                                                         MaxLength="9" TextChanged="BorderColor_Changed" />
+                                                <Border x:Name="BorderPreview1" Grid.Column="2"
+                                                        Width="22" Height="22" CornerRadius="5"
+                                                        Background="#007AFF" BorderBrush="{StaticResource BorderBrush}"
+                                                        BorderThickness="1" Margin="8,0,0,0" />
+                                            </Grid>
+                                            <Grid Margin="0,0,0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="65" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Centro:" Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="12" VerticalAlignment="Center" />
+                                                <TextBox x:Name="BorderHex2" Grid.Column="1"
+                                                         MaxLength="9" TextChanged="BorderColor_Changed" />
+                                                <Border x:Name="BorderPreview2" Grid.Column="2"
+                                                        Width="22" Height="22" CornerRadius="5"
+                                                        Background="#5856D6" BorderBrush="{StaticResource BorderBrush}"
+                                                        BorderThickness="1" Margin="8,0,0,0" />
+                                            </Grid>
+                                            <Grid Margin="0,0,0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="65" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Final:" Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="12" VerticalAlignment="Center" />
+                                                <TextBox x:Name="BorderHex3" Grid.Column="1"
+                                                         MaxLength="9" TextChanged="BorderColor_Changed" />
+                                                <Border x:Name="BorderPreview3" Grid.Column="2"
+                                                        Width="22" Height="22" CornerRadius="5"
+                                                        Background="#AF52DE" BorderBrush="{StaticResource BorderBrush}"
+                                                        BorderThickness="1" Margin="8,0,0,0" />
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Animated gradient preview bar -->
+                                        <Border x:Name="BorderGradientPreview" Margin="0,8,0,0" Height="28" CornerRadius="6"
+                                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                                            <Border.Background>
+                                                <LinearGradientBrush x:Name="PreviewGradientBrush" StartPoint="0,0" EndPoint="1,1">
+                                                    <LinearGradientBrush.RelativeTransform>
+                                                        <RotateTransform x:Name="PreviewGradientRotation" Angle="0" CenterX="0.5" CenterY="0.5" />
+                                                    </LinearGradientBrush.RelativeTransform>
+                                                    <GradientStop Color="#007AFF" Offset="0" />
+                                                    <GradientStop Color="#5856D6" Offset="0.5" />
+                                                    <GradientStop Color="#AF52DE" Offset="1" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Efectos de Fondo de Pantalla -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Efectos de Fondo de Pantalla"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Personaliza las animaciones de partículas y su comportamiento."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <TextBlock Text="Efecto activo:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,0,0,4" />
+                                        <ComboBox x:Name="WeatherEffectCombo" Margin="0,0,0,10" Height="28"
+                                                  Foreground="White" BorderBrush="#30FFFFFF"
+                                                  SelectionChanged="WeatherEffectCombo_SelectionChanged">
+                                            <ComboBoxItem Content="Ninguno" />
+                                            <ComboBoxItem Content="Lluvia" />
+                                            <ComboBoxItem Content="Nieve" />
+                                            <ComboBoxItem Content="Estrellas" />
+                                            <ComboBoxItem Content="Hojas de Cerezo" />
+                                            <ComboBoxItem Content="Luciérnagas" />
+                                            <ComboBoxItem Content="Burbujas" />
+                                            <ComboBoxItem Content="Aurora Boreal" />
+                                            <ComboBoxItem Content="Hojas de Otoño" />
+                                            <ComboBoxItem Content="Partículas de Energía" />
+                                            <ComboBoxItem Content="Tormenta Eléctrica" />
+                                        </ComboBox>
+
+                                        <!-- Speed Slider -->
+                                        <Grid Margin="0,4,0,8">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Velocidad del efecto:"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="EffectSpeedValueText" Text="1.0x"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="EffectSpeedSlider"
+                                                    Minimum="0.2" Maximum="3.0" Value="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,4,0,0"
+                                                    ValueChanged="EffectSpeedSlider_ValueChanged" />
+                                        </Grid>
+
+                                        <!-- Size Slider -->
+                                        <Grid Margin="0,4,0,8">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Tamaño de las partículas:"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="EffectSizeValueText" Text="1.0x"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="EffectSizeSlider"
+                                                    Minimum="0.2" Maximum="3.0" Value="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,4,0,0"
+                                                    ValueChanged="EffectSizeSlider_ValueChanged" />
+                                        </Grid>
+
+                                        <!-- Density Slider -->
+                                        <Grid Margin="0,4,0,8">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Cantidad de partículas:"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="EffectDensityValueText" Text="100%"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="EffectDensitySlider"
+                                                    Minimum="20" Maximum="200" Value="100" TickFrequency="10" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,4,0,0"
+                                                    ValueChanged="EffectDensitySlider_ValueChanged" />
+                                        </Grid>
+
+                                        <CheckBox x:Name="MouseInteractionCheck"
+                                                  Content="Interactuar con el mouse (repeler/atraer)"
+                                                  Margin="0,4,0,4" />
+
+                                        <!-- Section: Colores de los Efectos -->
+                                        <StackPanel x:Name="EffectColorsSectionPanel" Visibility="Collapsed" Margin="0,4,0,0">
+                                            <Border Height="1" Background="#1FFFFFFF" Margin="0,8,0,12" />
+                                            <TextBlock Text="Colores del Efecto Activo"
+                                                       FontFamily="{DynamicResource AppFontFamily}"
+                                                       FontSize="14" FontWeight="SemiBold"
+                                                       Foreground="White" Margin="0,0,0,2" />
+                                            <TextBlock Text="Personaliza el gradiente de color del efecto de fondo actualmente seleccionado."
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" />
+
+                                            <!-- Panel Lluvia -->
+                                            <StackPanel x:Name="ColorPanel_Rain" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Lluvia Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Rain_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Rain_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Lluvia Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Rain2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Rain2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Nieve -->
+                                            <StackPanel x:Name="ColorPanel_Snow" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Nieve Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Snow_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Snow_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Nieve Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Snow2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Snow2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Burbujas -->
+                                            <StackPanel x:Name="ColorPanel_Fog" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Burbujas Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Fog_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Fog_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Burbujas Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Fog2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Fog2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Luciérnagas -->
+                                            <StackPanel x:Name="ColorPanel_Fireflies" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Luciérnagas Col 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Fireflies_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Fireflies_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Luciérnagas Col 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Fireflies2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Fireflies2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Tormenta -->
+                                            <StackPanel x:Name="ColorPanel_Thunderstorm" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Tormenta Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Thunderstorm_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Thunderstorm_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Tormenta Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Thunderstorm2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Thunderstorm2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Estrellas -->
+                                            <StackPanel x:Name="ColorPanel_Stars" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Estrellas Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Stars_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Stars_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Estrellas Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Stars2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Stars2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Aurora Boreal -->
+                                            <StackPanel x:Name="ColorPanel_Aurora" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Aurora Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Aurora_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Aurora_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Aurora Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Aurora2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Aurora2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Cerezo -->
+                                            <StackPanel x:Name="ColorPanel_Sakura" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Sakura Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Sakura_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Sakura_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Sakura Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Sakura2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Sakura2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Hojas de Otoño -->
+                                            <StackPanel x:Name="ColorPanel_Leaves" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Hojas Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Leaves_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Leaves_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Hojas Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Leaves2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Leaves2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Panel Partículas de Energía -->
+                                            <StackPanel x:Name="ColorPanel_Energy" Visibility="Collapsed">
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Energía Color 1 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Energy_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Energy_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                                </Grid>
+                                                <Grid Margin="0,4,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Energía Color 2 Hex:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox x:Name="EffectColor_Energy2_Hex" Grid.Column="1" MaxLength="9" TextChanged="EffectColor_TextChanged" />
+                                                    <Border x:Name="EffectColor_Energy2_Preview" Grid.Column="2" Width="26" Height="26" CornerRadius="5" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                        </Grid>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══ TabItem 1: Dock ═══ -->
+                    <TabItem>
+                            <StackPanel Margin="0,0,4,0">
+                                <!-- Section: Comportamiento y Dimensiones -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Comportamiento y Dimensiones"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Ajusta el comportamiento de ocultación y grosor del dock."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <CheckBox x:Name="StartWithWindowsCheck"
+                                                  Content="Iniciar WallFlow con Windows"
+                                                  Margin="0,0,0,10" />
+                                        <CheckBox x:Name="AutoHideCheck"
+                                                  Content="Ocultar el dock automáticamente"
+                                                  Margin="0,0,0,10" />
+                                        <CheckBox x:Name="HideTaskbarCheck"
+                                                  Content="Ocultar la barra de tareas de Windows"
+                                                  Margin="0,0,0,10" />
+
+                                        <TextBlock Text="Posición del dock:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,0,0,4" />
+                                        <ComboBox x:Name="DockPositionCombo" Margin="0,0,0,10" Height="28"
+                                                  Foreground="White" BorderBrush="#30FFFFFF">
+                                            <ComboBoxItem Content="Arriba" Tag="Top" />
+                                            <ComboBoxItem Content="Abajo" Tag="Bottom" />
+                                        </ComboBox>
+
+                                        <TextBlock Text="Fuente de la aplicación:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,0,0,4" />
+                                        <ComboBox x:Name="AppFontCombo" Margin="0,0,0,10" Height="28"
+                                                  Foreground="White" BorderBrush="#30FFFFFF">
+                                            <ComboBoxItem Content="Outfit" />
+                                            <ComboBoxItem Content="Share Tech Mono" />
+                                            <ComboBoxItem Content="Orbitron" />
+                                            <ComboBoxItem Content="Lobster Two" />
+                                            <ComboBoxItem Content="Dancing Script" />
+                                            <ComboBoxItem Content="Pacifico" />
+                                            <ComboBoxItem Content="Cinzel" />
+                                            <ComboBoxItem Content="Montserrat" />
+                                            <ComboBoxItem Content="Playfair Display" />
+                                            <ComboBoxItem Content="Comfortaa" />
+                                            <ComboBoxItem Content="Caveat" />
+                                            <ComboBoxItem Content="Roboto Mono" />
+                                        </ComboBox>
+
+                                        <!-- Border Thickness -->
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Grosor del borde animado:"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ThicknessValueText" Text="3.8 px"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="ThicknessSlider"
+                                                    Minimum="1.0" Maximum="8.0" Value="3.8" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,6,0,0"
+                                                    ValueChanged="ThicknessSlider_ValueChanged" />
+                                        </Grid>
+
+                                        <!-- Dock Height -->
+                                        <Grid Margin="0,10,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Altura del Dock (escala):"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="DockHeightValueText" Text="56 px"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="DockHeightSlider"
+                                                    Minimum="40" Maximum="80" Value="56" TickFrequency="1" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,6,0,0"
+                                                    ValueChanged="DockHeightSlider_ValueChanged" />
+                                        </Grid>
+
+                                        <!-- Monitor Selection -->
+                                        <TextBlock Text="Monitor de visualización:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,10,0,4" />
+                                        <ComboBox x:Name="MonitorCombo" Margin="0,0,0,10" Height="28"
+                                                  Foreground="White" BorderBrush="#30FFFFFF" />
+
+                                        <!-- Auto-Hide Duration -->
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Duración de animación de ocultar:"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="AutoHideDurationValueText" Text="200 ms"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="AutoHideDurationSlider"
+                                                    Minimum="100" Maximum="1000" Value="200" TickFrequency="50" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,6,0,0"
+                                                    ValueChanged="AutoHideDurationSlider_ValueChanged" />
+                                        </Grid>
+
+                                        <!-- Auto-Hide Delay -->
+                                        <Grid Margin="0,10,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Retraso antes de ocultar:"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" x:Name="AutoHideDelayValueText" Text="0 ms"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="AutoHideDelaySlider"
+                                                    Minimum="0" Maximum="2000" Value="0" TickFrequency="100" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,6,0,0"
+                                                    ValueChanged="AutoHideDelaySlider_ValueChanged" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Efectos de Sonido -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Efectos de Sonido de Interfaz"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Personaliza y activa los sonidos al interactuar con el dock y los widgets."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <CheckBox x:Name="SoundEnabledCheck"
+                                                  Content="Activar efectos de sonido"
+                                                  Checked="SoundEnabledCheck_Changed"
+                                                  Unchecked="SoundEnabledCheck_Changed"
+                                                  Margin="0,0,0,8" />
+
+                                        <StackPanel x:Name="SoundOptionsPanel" Margin="0,0,0,4">
+                                            <Grid Margin="0,4,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Volumen de Sonido:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="11" />
+                                                <TextBlock Grid.Column="1" x:Name="SoundVolumeText" Text="50%"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11" FontWeight="SemiBold" />
+                                            </Grid>
+                                            <Slider x:Name="SoundVolumeSlider" Height="28"
+                                                    Minimum="0" Maximum="100" Value="50" TickFrequency="5" IsSnapToTickEnabled="True"
+                                                    Foreground="#AF52DE" Background="#15FFFFFF"
+                                                    ValueChanged="SoundVolumeSlider_ValueChanged" />
+
+                                            <TextBlock Text="Perfil de sonido:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="11" Margin="0,8,0,4" />
+                                            <ComboBox x:Name="SoundProfileCombo" Height="28"
+                                                      SelectionChanged="SoundProfileCombo_SelectionChanged">
+                                                <ComboBoxItem Content="Zen" Tag="Zen" />
+                                                <ComboBoxItem Content="Cyberpunk" Tag="Cyberpunk" />
+                                                <ComboBoxItem Content="Holographic" Tag="Holographic" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══ TabItem 2: Elementos ═══ -->
+                    <TabItem>
+                            <StackPanel Margin="0,0,4,0">
+                                <!-- Section: Elementos Visibles del Dock -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Elementos Visibles del Dock"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Selecciona qué widgets o elementos mostrar u ocultar en el dock principal."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <CheckBox x:Name="ShowClockCheck" Grid.Row="0" Grid.Column="0"
+                                                      Content="Fecha y Reloj" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowWeatherCheck" Grid.Row="0" Grid.Column="1"
+                                                      Content="Widget del Clima" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowMediaCheck" Grid.Row="1" Grid.Column="0"
+                                                      Content="Reproductor de Música" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowCpuCheck" Grid.Row="1" Grid.Column="1"
+                                                      Content="Rendimiento: CPU" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowRamCheck" Grid.Row="2" Grid.Column="0"
+                                                      Content="Rendimiento: RAM" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowNetCheck" Grid.Row="2" Grid.Column="1"
+                                                      Content="Rendimiento: Red" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="Use24HourCheck" Grid.Row="3" Grid.Column="0"
+                                                      Content="Formato de 24 horas" Margin="0,0,0,8" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Iconos del Dock -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,6,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Iconos del Dock"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Selecciona qué botones mostrar u ocultar en la barra de herramientas principal."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <CheckBox x:Name="ShowIconPinnedAppsCheck" Grid.Row="0" Grid.Column="0"
+                                                      Content="Aplicaciones Fijadas" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconLocalGalleryCheck" Grid.Row="0" Grid.Column="1"
+                                                      Content="Galería Local" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconOnlineGalleryCheck" Grid.Row="1" Grid.Column="0"
+                                                      Content="Galería Online" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconYouTubeMusicCheck" Grid.Row="1" Grid.Column="1"
+                                                      Content="YouTube Music" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconWebBrowserCheck" Grid.Row="2" Grid.Column="0"
+                                                      Content="Navegador Web" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconSettingsCheck" Grid.Row="2" Grid.Column="1"
+                                                      Content="Ajustes" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconVolumeCheck" Grid.Row="3" Grid.Column="0"
+                                                      Content="Volumen" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconNotificationsCheck" Grid.Row="3" Grid.Column="1"
+                                                      Content="Notificaciones" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconRecycleBinCheck" Grid.Row="4" Grid.Column="0"
+                                                      Content="Papelera" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconShowDesktopCheck" Grid.Row="4" Grid.Column="1"
+                                                      Content="Mostrar Escritorio" Margin="0,0,0,8" />
+                                            <CheckBox x:Name="ShowIconPowerCheck" Grid.Row="5" Grid.Column="0"
+                                                      Content="Apagar" Margin="0,0,0,8" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Ubicación para el Clima -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,6,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Ubicación para el Clima"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Escribe una ciudad o coordenadas (ej. -12.04,-77.03) para el pronóstico."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="WeatherCityBox" Height="28"
+                                                     VerticalContentAlignment="Center" Margin="0,0,8,0" Padding="6,2" />
+                                            <Border Grid.Column="1" x:Name="DetectWeatherLocationBtn" CornerRadius="6"
+                                                    Background="#1AFFFFFF" BorderBrush="{StaticResource BorderBrush}"
+                                                    BorderThickness="1" Padding="12,5" Cursor="Hand"
+                                                    MouseLeftButtonUp="DetectWeatherLocation_Click"
+                                                    MouseEnter="DetectLocationBtn_MouseEnter"
+                                                    MouseLeave="DetectLocationBtn_MouseLeave">
+                                                <TextBlock Text="Autodetectar" FontSize="11"
+                                                           Foreground="White" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Rotación Automática -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,6,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Rotación Automática de Fondos"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Cambia el fondo de pantalla automáticamente a intervalos."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                        <CheckBox x:Name="AutoChangeCheck"
+                                                  Content="Activar rotación automática"
+                                                  Margin="0,0,0,10"
+                                                  Checked="AutoChangeCheck_Changed"
+                                                  Unchecked="AutoChangeCheck_Changed" />
+
+                                        <Grid x:Name="AutoChangeOptionsPanel" Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                                                <TextBlock Text="Modo de Selección:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="11" Margin="0,0,0,4" />
+                                                <ComboBox x:Name="AutoModeCombo" Height="28" FontSize="12"
+                                                          Background="#15FFFFFF" Foreground="White" BorderBrush="#25FFFFFF"
+                                                          SelectionChanged="AutoModeCombo_SelectionChanged">
+                                                    <ComboBoxItem Content="Secuencial" />
+                                                    <ComboBoxItem Content="Aleatorio" />
+                                                </ComboBox>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="6,0,0,0">
+                                                <TextBlock Text="Intervalo de Tiempo:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="11" Margin="0,0,0,4" />
+                                                <ComboBox x:Name="AutoIntervalCombo" Height="28" FontSize="12"
+                                                          Background="#15FFFFFF" Foreground="White" BorderBrush="#25FFFFFF"
+                                                          SelectionChanged="AutoIntervalCombo_SelectionChanged">
+                                                    <ComboBoxItem Content="30 segundos" />
+                                                    <ComboBoxItem Content="1 minuto" />
+                                                    <ComboBoxItem Content="5 minutos" />
+                                                    <ComboBoxItem Content="10 minutos" />
+                                                    <ComboBoxItem Content="30 minutos" />
+                                                    <ComboBoxItem Content="1 hora" />
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══ TabItem 3: Sistema ═══ -->
+                    <TabItem>
+                            <StackPanel Margin="0,0,4,0">
+                                <!-- Section: Navegador Predeterminado -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Navegador Web Predeterminado"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Registra WallFlow como navegador web en Windows para abrir enlaces desde la búsqueda Spotlight."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
+
+                                        <TextBlock x:Name="DefaultBrowserStatusText" Text="Estado: No registrado"
+                                                   FontSize="12"
+                                                   Foreground="#8A8A8F" Margin="0,0,0,8" />
+
+                                        <Border x:Name="RegisterBrowserBtn" CornerRadius="6"
+                                                Background="#1AFFFFFF" BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="1" Padding="14,7" Cursor="Hand"
+                                                MouseLeftButtonUp="RegisterBrowser_Click"
+                                                MouseEnter="RegisterBrowserBtn_MouseEnter"
+                                                MouseLeave="RegisterBrowserBtn_MouseLeave">
+                                            <TextBlock Text="Registrar como Navegador" FontSize="13" Foreground="White" />
+                                        </Border>
+
+                                        <Border x:Name="OpenSystemDefaultAppsBtn" CornerRadius="6"
+                                                Background="#AF52DE" Padding="14,7" Cursor="Hand"
+                                                Margin="0,8,0,0"
+                                                MouseLeftButtonUp="OpenSystemDefaultApps_Click"
+                                                MouseEnter="OpenSettingsBtn_MouseEnter"
+                                                MouseLeave="OpenSettingsBtn_MouseLeave">
+                                            <TextBlock Text="Abrir Configuración de Windows" FontSize="13" FontWeight="SemiBold" Foreground="White" />
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Fuentes -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Fuentes Personalizadas"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Sube tus propios archivos de fuente (.ttf / .otf) para usarlos en la interfaz."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
+
+                                        <Button x:Name="UploadFontBtn" Style="{StaticResource SettingsActionButtonStyle}"
+                                                FontSize="13"
+                                                Content="Subir Fuente"
+                                                Click="UploadFontBtn_Click" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══ TabItem 4: Atajos ═══ -->
+                    <TabItem>
+                            <StackPanel Margin="0,0,4,0">
+                                <TextBlock Text="Atajos de Teclado Globales"
+                                           FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="White" Margin="0,0,0,8" />
+                                <TextBlock Text="Configura combinaciones de teclas para abrir/cerrar ventanas. Haz clic en Capturar y presiona las teclas deseadas."
+                                           FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                           Margin="0,0,0,12" TextWrapping="Wrap" />
+
+                                <!-- Section: Widgets -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Widgets"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,10" />
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Aplicaciones Fijadas" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="0" Grid.Column="3" x:Name="Hotkey_PinnedApps_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="0" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="PinnedApps" />
+                                            <Button Grid.Row="0" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="PinnedApps" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Clima" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="2" Grid.Column="3" x:Name="Hotkey_Weather_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="2" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="Weather" />
+                                            <Button Grid.Row="2" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="Weather" />
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Calendario" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="4" Grid.Column="3" x:Name="Hotkey_Calendar_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="4" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="Calendar" />
+                                            <Button Grid.Row="4" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="Calendar" />
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Controles Multimedia" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="6" Grid.Column="3" x:Name="Hotkey_Media_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="6" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="Media" />
+                                            <Button Grid.Row="6" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="Media" />
+
+                                            <TextBlock Grid.Row="8" Grid.Column="0" Text="Centro de Portapapeles" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="8" Grid.Column="3" x:Name="Hotkey_Clipboard_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="8" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="Clipboard" />
+                                            <Button Grid.Row="8" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="Clipboard" />
+
+                                            <TextBlock Grid.Row="10" Grid.Column="0" Text="Reproductor de YouTube" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="10" Grid.Column="3" x:Name="Hotkey_YouTube_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="10" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="YouTube" />
+                                            <Button Grid.Row="10" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="YouTube" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Navegación -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Navegación"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,10" />
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Galería Local" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="0" Grid.Column="3" x:Name="Hotkey_LocalGallery_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="0" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="LocalGallery" />
+                                            <Button Grid.Row="0" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="LocalGallery" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Galería Online" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="2" Grid.Column="3" x:Name="Hotkey_OnlineGallery_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="2" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="OnlineGallery" />
+                                            <Button Grid.Row="2" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="OnlineGallery" />
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Siguiente Fondo" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="4" Grid.Column="3" x:Name="Hotkey_NextWallpaper_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="4" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="NextWallpaper" />
+                                            <Button Grid.Row="4" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="NextWallpaper" />
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Fondo Anterior" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="6" Grid.Column="3" x:Name="Hotkey_PrevWallpaper_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="6" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="PrevWallpaper" />
+                                            <Button Grid.Row="6" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="PrevWallpaper" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Sistema -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Sistema"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,10" />
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Opciones de Energía" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="0" Grid.Column="3" x:Name="Hotkey_Power_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="0" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="Power" />
+                                            <Button Grid.Row="0" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="Power" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Ajustes" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="2" Grid.Column="3" x:Name="Hotkey_Settings_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="2" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="Settings" />
+                                            <Button Grid.Row="2" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="Settings" />
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Navegador Web" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="4" Grid.Column="3" x:Name="Hotkey_WebBrowser_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="4" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="WebBrowser" />
+                                            <Button Grid.Row="4" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="WebBrowser" />
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Mostrar/Ocultar Dock" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="6" Grid.Column="3" x:Name="Hotkey_ToggleDock_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="6" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="ToggleDock" />
+                                            <Button Grid.Row="6" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="ToggleDock" />
+
+                                            <TextBlock Grid.Row="8" Grid.Column="0" Text="Anclar/Desanclar App en Spotlight" Style="{StaticResource HotkeyLabelStyle}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="8" Grid.Column="3" x:Name="Hotkey_TogglePinApp_Text" Style="{StaticResource HotkeyTextBoxStyle}" />
+                                            <Button Grid.Row="8" Grid.Column="5" Content="Capturar" Style="{StaticResource HotkeyActionBtnStyle}" Click="CaptureHotkey_Click" Tag="TogglePinApp" />
+                                            <Button Grid.Row="8" Grid.Column="7" Content="&#xE10A;" Style="{StaticResource HotkeysClearBtnStyle}" Click="ClearHotkey_Click" Tag="TogglePinApp" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══ TabItem 5: Navegador ═══ -->
+                    <TabItem>
+                        <TabItem.Header>
+                            <TextBlock Text="Navegador" FontFamily="{DynamicResource AppFontFamily}" FontSize="13" />
+                        </TabItem.Header>
+                            <StackPanel Margin="0,0,4,0">
+                                <!-- Section: Colores del Navegador -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Colores del Navegador Web"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Personaliza los colores del navegador integrado. Puedes heredar los colores del Dock o definir colores personalizados."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
+
+                                        <CheckBox x:Name="BrowserUseDockColorsCheck"
+                                                  Content="Heredar colores del Dock"
+                                                  Checked="BrowserUseDockColors_Changed"
+                                                  Unchecked="BrowserUseDockColors_Changed"
+                                                  Margin="0,0,0,12" />
+
+                                        <Grid x:Name="BrowserColorsGrid">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Fondo Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                             <TextBox Grid.Row="0" Grid.Column="1" x:Name="BrowserBgHexBox"
+                                                      MaxLength="9" TextChanged="BrowserBgHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="0" Grid.Column="2" x:Name="BrowserBgPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                             <Border Grid.Row="0" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="BrowserBgHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Acento Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                             <TextBox Grid.Row="2" Grid.Column="1" x:Name="BrowserAccentHexBox"
+                                                      MaxLength="9" TextChanged="BrowserAccentHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="2" Grid.Column="2" x:Name="BrowserAccentPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                             <Border Grid.Row="2" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="BrowserAccentHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Borde Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                             <TextBox Grid.Row="4" Grid.Column="1" x:Name="BrowserBorderHexBox"
+                                                      MaxLength="9" TextChanged="BrowserBorderHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="4" Grid.Column="2" x:Name="BrowserBorderPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                             <Border Grid.Row="4" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="BrowserBorderHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Section: Temas Predefinidos -->
+                                        <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,12,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="Temas Predefinidos"
+                                                           FontFamily="{DynamicResource AppFontFamily}"
+                                                           FontSize="14" FontWeight="SemiBold"
+                                                           Foreground="White" Margin="0,0,0,2" />
+                                                <TextBlock Text="Selecciona un tema para personalizar los colores del navegador."
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                                <UniformGrid x:Name="BrowserThemeGrid" Columns="5" HorizontalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+
+                    <!-- ═══ TabItem 6: Spotlight ═══ -->
+                    <TabItem>
+                            <StackPanel Margin="0,0,4,0">
+                                <!-- Section: Configuración de Spotlight -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Configuración del Buscador Spotlight"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Personaliza el buscador de aplicaciones y archivos estilo macOS."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
+
+                                        <CheckBox x:Name="SpotlightShowFavoritesCheck"
+                                                  Content="Mostrar aplicaciones favoritas"
+                                                  Margin="0,0,0,8" />
+                                        <TextBlock Text="Tema de Spotlight:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,0,0,4" />
+                                        <ComboBox x:Name="SpotlightThemeModeCombo" Margin="0,0,0,12" Height="28"
+                                                  Background="#15FFFFFF" Foreground="White" BorderBrush="#25FFFFFF"
+                                                  SelectionChanged="SpotlightThemeMode_SelectionChanged">
+                                            <ComboBoxItem Content="Heredado del Dock" Tag="Dock" />
+                                            <ComboBoxItem Content="Oscuro estilo macOS" Tag="Oscuro" />
+                                            <ComboBoxItem Content="Claro estilo macOS" Tag="Claro" />
+                                            <ComboBoxItem Content="Personalizado" Tag="Personalizado" />
+                                            <ComboBoxItem Content="Medianoche" Tag="Midnight" />
+                                            <ComboBoxItem Content="Océano" Tag="Ocean" />
+                                            <ComboBoxItem Content="Bosque" Tag="Forest" />
+                                            <ComboBoxItem Content="Atardecer" Tag="Sunset" />
+                                            <ComboBoxItem Content="Carmesí" Tag="Crimson" />
+                                            <ComboBoxItem Content="Verde Agua" Tag="Teal" />
+                                            <ComboBoxItem Content="Ámbar" Tag="Warm" />
+                                            <ComboBoxItem Content="Rosa" Tag="Rose" />
+                                            <ComboBoxItem Content="Pizarra" Tag="Slate" />
+                                            <ComboBoxItem Content="Violeta" Tag="Violet" />
+                                        </ComboBox>
+
+                                        <!-- Apps per row -->
+                                        <TextBlock Text="Aplicaciones por fila:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,0,0,4" />
+                                        <ComboBox x:Name="SpotlightAppsPerRowCombo" Margin="0,0,0,12" Height="28"
+                                                  Background="#15FFFFFF" Foreground="White" BorderBrush="#25FFFFFF">
+                                            <ComboBoxItem Content="Automático (Ajustar a la pantalla)" Tag="0" />
+                                            <ComboBoxItem Content="4 aplicaciones" Tag="4" />
+                                            <ComboBoxItem Content="5 aplicaciones" Tag="5" />
+                                            <ComboBoxItem Content="6 aplicaciones" Tag="6" />
+                                            <ComboBoxItem Content="8 aplicaciones" Tag="8" />
+                                            <ComboBoxItem Content="10 aplicaciones" Tag="10" />
+                                            <ComboBoxItem Content="12 aplicaciones" Tag="12" />
+                                            <ComboBoxItem Content="15 aplicaciones" Tag="15" />
+                                        </ComboBox>
+
+                                        <!-- Spotlight Width -->
+                                        <Grid Margin="0,4,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="40" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Ancho del buscador (px):"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ElementName=SpotlightWidthSlider, Path=Value, StringFormat={}{0:0}}"
+                                                       Foreground="White" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="SpotlightWidthSlider"
+                                                    Minimum="400" Maximum="1000" IsSnapToTickEnabled="True" TickFrequency="10"
+                                                    Value="600" Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,4,0,0" />
+                                        </Grid>
+
+                                        <!-- Spotlight Corner Radius -->
+                                        <Grid Margin="0,4,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="40" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Radio de esquinas (px):"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ElementName=SpotlightCornerRadiusSlider, Path=Value, StringFormat={}{0:0}}"
+                                                       Foreground="White" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="SpotlightCornerRadiusSlider"
+                                                    Minimum="0" Maximum="27" IsSnapToTickEnabled="True" TickFrequency="1"
+                                                    Value="27" Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,4,0,0" />
+                                        </Grid>
+
+                                        <!-- Spotlight Border Thickness -->
+                                        <Grid Margin="0,4,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="40" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Grosor del borde (px):"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ElementName=SpotlightBorderThicknessSlider, Path=Value, StringFormat={}{0:0}}"
+                                                       Foreground="White" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <Slider Grid.Row="1" Grid.ColumnSpan="2" x:Name="SpotlightBorderThicknessSlider"
+                                                    Minimum="0" Maximum="6" IsSnapToTickEnabled="True" TickFrequency="0.5"
+                                                    Value="0" Foreground="#AF52DE" Background="#15FFFFFF" Margin="0,4,0,0" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Section: Colores de Spotlight -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,6,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="Colores Personalizados"
+                                                   FontFamily="{DynamicResource AppFontFamily}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,2" />
+                                        <TextBlock Text="Define colores a medida para cada elemento visual del buscador. Deja los campos en blanco para usar la transparencia y colores por defecto."
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
+
+                                         <Grid x:Name="SpotlightColorsGrid">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                             <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="8" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Fondo Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="0" Grid.Column="1" x:Name="SpotlightBgHexBox"
+                                                       MaxLength="9" TextChanged="SpotlightBgHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="0" Grid.Column="2" x:Name="SpotlightBgPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                             <Border Grid.Row="0" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightBgHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Borde Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="2" Grid.Column="1" x:Name="SpotlightBorderHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightBorderHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="2" Grid.Column="2" x:Name="SpotlightBorderPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="2" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightBorderHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Texto Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="4" Grid.Column="1" x:Name="SpotlightTextHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightTextHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="4" Grid.Column="2" x:Name="SpotlightTextPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="4" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightTextHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Placeholder Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="6" Grid.Column="1" x:Name="SpotlightPlaceholderHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightPlaceholderHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="6" Grid.Column="2" x:Name="SpotlightPlaceholderPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="6" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightPlaceholderHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="8" Grid.Column="0" Text="Icono Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="8" Grid.Column="1" x:Name="SpotlightIconHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightIconHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="8" Grid.Column="2" x:Name="SpotlightIconPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="8" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightIconHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="10" Grid.Column="0" Text="Acento Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="10" Grid.Column="1" x:Name="SpotlightAccentHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightAccentHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="10" Grid.Column="2" x:Name="SpotlightAccentPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="10" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightAccentHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <!-- New customization fields -->
+                                            <TextBlock Grid.Row="12" Grid.Column="0" Text="Hover Fondo Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="12" Grid.Column="1" x:Name="SpotlightHoverBgHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightHoverBgHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="12" Grid.Column="2" x:Name="SpotlightHoverBgPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="12" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightHoverBgHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="14" Grid.Column="0" Text="Hover Borde Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="14" Grid.Column="1" x:Name="SpotlightHoverBorderHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightHoverBorderHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="14" Grid.Column="2" x:Name="SpotlightHoverBorderPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="14" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightHoverBorderHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="16" Grid.Column="0" Text="Icono Fondo Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="16" Grid.Column="1" x:Name="SpotlightItemBgHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightItemBgHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="16" Grid.Column="2" x:Name="SpotlightItemBgPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="16" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightItemBgHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="18" Grid.Column="0" Text="Icono Texto Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="18" Grid.Column="1" x:Name="SpotlightItemFgHexBox"
+                                                      MaxLength="9" TextChanged="SpotlightItemFgHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                             <Border Grid.Row="18" Grid.Column="2" x:Name="SpotlightItemFgPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="18" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightItemFgHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="20" Grid.Column="0" Text="Texto Secundario Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="20" Grid.Column="1" x:Name="SpotlightSecondaryTextHexBox"
+                                                       MaxLength="9" TextChanged="SpotlightSecondaryTextHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                              <Border Grid.Row="20" Grid.Column="2" x:Name="SpotlightSecondaryTextPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="20" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightSecondaryTextHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="22" Grid.Column="0" Text="Separador Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="22" Grid.Column="1" x:Name="SpotlightSeparatorHexBox"
+                                                       MaxLength="9" TextChanged="SpotlightSeparatorHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                              <Border Grid.Row="22" Grid.Column="2" x:Name="SpotlightSeparatorPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="22" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightSeparatorHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+
+                                            <TextBlock Grid.Row="24" Grid.Column="0" Text="Foco Búsqueda Hex:" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                              <TextBox Grid.Row="24" Grid.Column="1" x:Name="SpotlightFocusHexBox"
+                                                       MaxLength="9" TextChanged="SpotlightFocusHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
+                                              <Border Grid.Row="24" Grid.Column="2" x:Name="SpotlightFocusPreview"
+                                                    Width="24" Height="24" CornerRadius="4"
+                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
+                                            <Border Grid.Row="24" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
+                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
+                                                    Cursor="Hand" Tag="SpotlightFocusHexBox" Margin="4,0,0,0"
+                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                    </TabItem>
+                </TabControl>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ═══════ Footer: action buttons ═══════ -->
+            <Border Grid.Row="4" CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="1" x:Name="ResetBtn" CornerRadius="6"
+                            Background="#1AFFFFFF" BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1" Padding="14,7" Cursor="Hand"
+                            MouseLeftButtonUp="Reset_Click"
+                            MouseEnter="ResetBtn_MouseEnter" MouseLeave="ResetBtn_MouseLeave">
+                        <TextBlock Text="Restablecer" FontSize="13"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                    </Border>
+                    <Border Grid.Column="3" x:Name="SaveBtn" CornerRadius="6"
+                            Padding="20,7" Cursor="Hand"
+                            MouseLeftButtonUp="Save_Click"
+                            MouseEnter="SaveBtn_MouseEnter" MouseLeave="SaveBtn_MouseLeave"
+                            Background="#AF52DE">
+                        <TextBlock Text="Guardar" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="White" />
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

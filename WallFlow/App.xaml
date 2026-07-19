@@ -6,6 +6,17 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <FontFamily x:Key="AppFontFamily">pack://application:,,,/Fonts/#Outfit</FontFamily>
+            <FontFamily x:Key="MaterialIconsFont">pack://application:,,,/Fonts/#Material Symbols Outlined</FontFamily>
+
+            <Color x:Key="AccentColor">#AF52DE</Color>
+            <Color x:Key="AccentHoverColor">#C57BFA</Color>
+            <SolidColorBrush x:Key="AccentBrush" Color="#AF52DE" />
+            <SolidColorBrush x:Key="AccentHoverBrush" Color="#C57BFA" />
+            <SolidColorBrush x:Key="AccentGlowBrush" Color="#18AF52DE" />
+            <SolidColorBrush x:Key="AccentActiveBrush" Color="#65AF52DE" />
+            <SolidColorBrush x:Key="AccentGroupBrush" Color="#30AF52DE" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

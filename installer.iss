@@ -21,6 +21,8 @@ SolidCompression=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
 DisableWelcomePage=no
 DisableFinishedPage=no
+AppMutex=Global\WallFlow_SingleInstance_Mutex
+CloseApplications=yes
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"

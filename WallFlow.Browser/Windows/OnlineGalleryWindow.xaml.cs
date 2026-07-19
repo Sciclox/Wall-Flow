@@ -23,10 +23,12 @@ namespace WallFlow.Windows;
 public partial class OnlineGalleryWindow : Window
 {
     private readonly UHDPaperService _service = new();
-    private readonly string _wallpaperDir;
+    private string _wallpaperDir;
     private readonly ObservableCollection<StackPanel> _rows = new();
     private readonly SemaphoreSlim _thumbnailThrottle = new(2, 2);
     private readonly ConcurrentDictionary<string, (long Size, DateTime LastWrite)> _fileInfoCache = new();
+    private ListingResult? _currentListingResult;
+    private readonly List<string> _onlinePageHistory = new();
 
     private bool _isOnline;
     private string _currentQuery = "";
@@ -51,6 +53,7 @@ public partial class OnlineGalleryWindow : Window
     private const int SPI_SETDESKWALLPAPER = 20;
     private const int SPIF_UPDATEINIFILE = 0x01;
     private const int SPIF_SENDCHANGE = 0x02;
+    private const int WM_SETTINGCHANGE = 0x001A;
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -61,9 +64,10 @@ public partial class OnlineGalleryWindow : Window
     public OnlineGalleryWindow()
     {
         InitializeComponent();
-        _wallpaperDir = GetWallpaperDirectory();
+        _wallpaperDir = SettingsService.Instance.WallpaperDirectory;
         WallpaperListBox.ItemsSource = _rows;
         InitSearchDebounce();
+        ApplicationEvents.RefreshRequested += OnMainWindowRefreshRequested;
     }
 
     private void InitSearchDebounce()
@@ -81,6 +85,10 @@ public partial class OnlineGalleryWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        Services.BackdropHelper.ApplyAcrylic(this);
+        RootBorder.SizeChanged += UpdateBorderClip;
+        UpdateBorderClip(null, null);
+
         _listBoxScrollViewer = FindScrollViewer(WallpaperListBox);
 
         var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
@@ -96,7 +104,38 @@ public partial class OnlineGalleryWindow : Window
         }
     }
 
+    private void UpdateBorderClip(object? sender, RoutedEventArgs? e)
+    {
+        if (RootBorder == null) return;
+        var w = RootBorder.ActualWidth;
+        var h = RootBorder.ActualHeight;
+        RootBorder.Clip = new RectangleGeometry(new Rect(0, 0, w, h), 8, 8);
+        Clip = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight), 8, 8);
+        Services.BackdropHelper.UpdateWindowRegion(this, 8);
+    }
+
     private void Window_Deactivated(object sender, EventArgs e) { }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var source = PresentationSource.FromVisual(this) as HwndSource;
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_SETTINGCHANGE)
+        {
+            var area = Marshal.PtrToStringAuto(lParam);
+            if (area == "Desk")
+            {
+                Services.BackdropHelper.RefreshBackdrop(this);
+                handled = true;
+            }
+        }
+        return IntPtr.Zero;
+    }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -166,12 +205,24 @@ public partial class OnlineGalleryWindow : Window
 
     private void UpdateSourceToggle()
     {
+        var activeBg = new SolidColorBrush(Color.FromRgb(0x63, 0x63, 0x66));
+        var inactiveText = new SolidColorBrush(Color.FromRgb(0x98, 0x98, 0x9D));
+        var shadow = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            BlurRadius = 4,
+            Opacity = 0.2,
+            ShadowDepth = 1.5,
+            Color = Colors.Black
+        };
+
         if (_isOnline)
         {
             LocalTab.Background = Brushes.Transparent;
-            LocalText.Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+            LocalTab.Effect = null;
+            LocalText.Foreground = inactiveText;
             LocalText.FontWeight = FontWeights.Normal;
-            OnlineTab.Background = new SolidColorBrush(Color.FromRgb(0x3D, 0x3D, 0x3D));
+            OnlineTab.Background = activeBg;
+            OnlineTab.Effect = shadow;
             OnlineText.Foreground = Brushes.White;
             OnlineText.FontWeight = FontWeights.SemiBold;
             SortCombo.Visibility = Visibility.Collapsed;
@@ -179,9 +230,11 @@ public partial class OnlineGalleryWindow : Window
         else
         {
             OnlineTab.Background = Brushes.Transparent;
-            OnlineText.Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+            OnlineTab.Effect = null;
+            OnlineText.Foreground = inactiveText;
             OnlineText.FontWeight = FontWeights.Normal;
-            LocalTab.Background = new SolidColorBrush(Color.FromRgb(0x3D, 0x3D, 0x3D));
+            LocalTab.Background = activeBg;
+            LocalTab.Effect = shadow;
             LocalText.Foreground = Brushes.White;
             LocalText.FontWeight = FontWeights.SemiBold;
             SortCombo.Visibility = Visibility.Visible;
@@ -232,7 +285,12 @@ public partial class OnlineGalleryWindow : Window
         ShowLoading(true);
         try
         {
-            var result = await _service.GetLatestAsync(GetToken());
+            var initialUrl = "https://www.uhdpaper.com/";
+            var result = await _service.GetLatestAsync(initialUrl, GetToken());
+            _currentListingResult = result;
+            _onlinePageHistory.Clear();
+            _onlinePageHistory.Add(initialUrl);
+
             _filteredWallpapers = result.Items;
             RenderWallpapers(result.Items);
             UpdatePagination();
@@ -250,7 +308,13 @@ public partial class OnlineGalleryWindow : Window
         ShowLoading(true);
         try
         {
-            var result = await _service.SearchAsync(query, GetToken());
+            var encoded = System.Net.WebUtility.UrlEncode(query);
+            var initialUrl = $"https://www.uhdpaper.com/search?q={encoded}&by-date=true&max-results=20";
+            var result = await _service.GetLatestAsync(initialUrl, GetToken());
+            _currentListingResult = result;
+            _onlinePageHistory.Clear();
+            _onlinePageHistory.Add(initialUrl);
+
             _filteredWallpapers = result.Items;
             RenderWallpapers(result.Items);
             UpdatePagination();
@@ -395,7 +459,6 @@ public partial class OnlineGalleryWindow : Window
 
     // ---- Tile creation ----
 
-    private static readonly SolidColorBrush AccentGlow = new(Color.FromRgb(0x5B, 0x7F, 0xB5));
     private static readonly DropShadowEffect TileShadow = new()
     { BlurRadius = 8, Opacity = 0.35, ShadowDepth = 2, Color = Colors.Black };
 
@@ -494,7 +557,10 @@ public partial class OnlineGalleryWindow : Window
     private static void AddTileHover(Border border)
     {
         border.MouseEnter += (_, _) =>
-            border.BorderBrush = AccentGlow;
+        {
+            var brush = Application.Current.TryFindResource("AccentBrush") as Brush ?? Brushes.CornflowerBlue;
+            border.BorderBrush = brush;
+        };
         border.MouseLeave += (_, _) =>
             border.BorderBrush = Brushes.Transparent;
     }
@@ -653,14 +719,13 @@ public partial class OnlineGalleryWindow : Window
         await _thumbnailThrottle.WaitAsync();
         try
         {
-            byte[] bytes = await Task.Run(() => File.ReadAllBytes(entry.FilePath));
             var bitmap = await Task.Run(() =>
             {
                 try
                 {
                     var b = new BitmapImage();
                     b.BeginInit();
-                    b.StreamSource = new MemoryStream(bytes);
+                    b.UriSource = new Uri(entry.FilePath);
                     b.DecodePixelWidth = 380;
                     b.DecodePixelHeight = 280;
                     b.CacheOption = BitmapCacheOption.OnLoad;
@@ -707,14 +772,31 @@ public partial class OnlineGalleryWindow : Window
 
         if (_isOnline)
         {
+            if (_onlinePageHistory.Count < 2) return;
             CancelPending();
-            _currentPage = 1;
-            _service.ResetPagination();
-            _rows.Clear();
-            _listBoxScrollViewer?.ScrollToTop();
-            await (string.IsNullOrEmpty(_currentQuery)
-                ? LoadOnlineAsync()
-                : SearchOnlineAsync(_currentQuery));
+            ShowLoading(true);
+            try
+            {
+                var prevUrl = _onlinePageHistory[_currentPage - 2];
+                var result = await _service.GetLatestAsync(prevUrl, GetToken());
+                if (result.Items.Count > 0)
+                {
+                    _currentPage--;
+                    _onlinePageHistory.RemoveAt(_onlinePageHistory.Count - 1);
+                    _currentListingResult = result;
+                    _filteredWallpapers = result.Items;
+                    _rows.Clear();
+                    _listBoxScrollViewer?.ScrollToTop();
+                    RenderWallpapers(result.Items);
+                    UpdatePagination();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch { }
+            finally
+            {
+                ShowLoading(false);
+            }
         }
         else
         {
@@ -727,15 +809,22 @@ public partial class OnlineGalleryWindow : Window
     {
         if (_isOnline)
         {
+            var nextUrl = _currentListingResult?.NextPageUrl;
+            if (string.IsNullOrEmpty(nextUrl)) return;
+
             CancelPending();
             try
             {
                 ShowLoading(true);
-                var result = await _service.GetLatestAsync(GetToken());
+                var result = await _service.GetLatestAsync(nextUrl, GetToken());
                 if (result.Items.Count > 0)
                 {
                     _currentPage++;
+                    _onlinePageHistory.Add(nextUrl);
+                    _currentListingResult = result;
                     _filteredWallpapers = result.Items;
+                    _rows.Clear();
+                    _listBoxScrollViewer?.ScrollToTop();
                     RenderWallpapers(result.Items);
                     UpdatePagination();
                 }
@@ -787,9 +876,7 @@ public partial class OnlineGalleryWindow : Window
             _savedScrollOffset = _listBoxScrollViewer?.VerticalOffset ?? 0;
             _selectedWallpaper = wp;
             _isDetailOpen = true;
-            GalleryView.Visibility = Visibility.Collapsed;
-            DetailView.Visibility = Visibility.Visible;
-            FooterBar.Visibility = Visibility.Collapsed;
+            AnimateDetailTransition(true);
             DetailTitle.Text = wp.Title;
             StatusText.Text = "Cargando resolución...";
             PreviewBrush.ImageSource = null;
@@ -826,22 +913,42 @@ public partial class OnlineGalleryWindow : Window
             if (!string.IsNullOrEmpty(previewPath) && File.Exists(previewPath))
             {
                 var bytes = await Task.Run(() => File.ReadAllBytes(previewPath));
-                await Dispatcher.BeginInvoke(() =>
+                var bitmap = await Task.Run(() =>
                 {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.StreamSource = new MemoryStream(bytes);
-                    bitmap.DecodePixelWidth = 800;
-                    bitmap.DecodePixelHeight = 600;
-                    bitmap.EndInit();
-                    if (bitmap.CanFreeze) bitmap.Freeze();
-                    PreviewBrush.ImageSource = bitmap;
-                    PreviewBorder.Opacity = 0;
-                    var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
-                    { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-                    PreviewBorder.BeginAnimation(Border.OpacityProperty, fadeIn);
-                    StatusText.Text = "";
+                    try
+                    {
+                        var b = new BitmapImage();
+                        b.BeginInit();
+                        b.StreamSource = new MemoryStream(bytes);
+                        b.DecodePixelWidth = 800;
+                        b.DecodePixelHeight = 600;
+                        b.CacheOption = BitmapCacheOption.OnLoad;
+                        b.EndInit();
+                        b.Freeze();
+                        return b;
+                    }
+                    catch
+                    {
+                        return null;
+                    }
                 });
+
+                if (bitmap != null)
+                {
+                    await Dispatcher.BeginInvoke(() =>
+                    {
+                        PreviewBrush.ImageSource = bitmap;
+                        PreviewBorder.Opacity = 0;
+                        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
+                        { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+                        PreviewBorder.BeginAnimation(Border.OpacityProperty, fadeIn);
+                        StatusText.Text = "";
+                    });
+                }
+                else
+                {
+                    await Dispatcher.BeginInvoke(() => { StatusText.Text = "Error al cargar vista previa"; });
+                }
             }
             else
                 await Dispatcher.BeginInvoke(() => { StatusText.Text = "Error al cargar vista previa"; });
@@ -910,6 +1017,9 @@ public partial class OnlineGalleryWindow : Window
             SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, downloaded,
                 SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             StatusText.Text = "¡Aplicado como wallpaper!";
+            Services.BackdropHelper.RefreshBackdrop(this);
+            if (((System.Windows.Window)ApplicationHost.Instance) != null)
+                Services.BackdropHelper.RefreshBackdrop(((System.Windows.Window)ApplicationHost.Instance));
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -938,7 +1048,7 @@ public partial class OnlineGalleryWindow : Window
             if (string.IsNullOrEmpty(path)) { StatusText.Text = "Error al guardar"; return; }
 
             StatusText.Text = "¡Guardado en la biblioteca local!";
-            MainWindow.NotifyRefreshRequested();
+            ApplicationEvents.NotifyRefreshRequested();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -958,13 +1068,106 @@ public partial class OnlineGalleryWindow : Window
     {
         _isDetailOpen = false;
         _selectedWallpaper = null;
-        DetailView.Visibility = Visibility.Collapsed;
-        GalleryView.Visibility = Visibility.Visible;
-        FooterBar.Visibility = Visibility.Visible;
+        AnimateDetailTransition(false);
         StatusText.Text = "";
         Dispatcher.BeginInvoke(new Action(() =>
             _listBoxScrollViewer?.ScrollToVerticalOffset(_savedScrollOffset)),
             DispatcherPriority.Background);
+    }
+
+    private void AnimateDetailTransition(bool toDetail)
+    {
+        var duration = TimeSpan.FromMilliseconds(200);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var opacityAnim = new DoubleAnimation
+        {
+            Duration = duration,
+            EasingFunction = ease
+        };
+
+        var slideAnim = new DoubleAnimation
+        {
+            Duration = duration,
+            EasingFunction = ease
+        };
+
+        var galleryTransform = GalleryView.RenderTransform as TranslateTransform;
+        var detailTransform = DetailView.RenderTransform as TranslateTransform;
+
+        if (toDetail)
+        {
+            DetailView.Visibility = Visibility.Visible;
+            DetailView.IsHitTestVisible = true;
+            GalleryView.IsHitTestVisible = false;
+
+            opacityAnim.From = GalleryView.Opacity;
+            opacityAnim.To = 0;
+            GalleryView.BeginAnimation(OpacityProperty, opacityAnim);
+
+            if (galleryTransform != null)
+            {
+                slideAnim.From = galleryTransform.X;
+                slideAnim.To = -150;
+                galleryTransform.BeginAnimation(TranslateTransform.XProperty, slideAnim);
+            }
+
+            opacityAnim.From = DetailView.Opacity;
+            opacityAnim.To = 1;
+            DetailView.BeginAnimation(OpacityProperty, opacityAnim);
+
+            if (detailTransform != null)
+            {
+                slideAnim.From = detailTransform.X;
+                slideAnim.To = 0;
+                detailTransform.BeginAnimation(TranslateTransform.XProperty, slideAnim);
+            }
+
+            var footerOpacity = new DoubleAnimation(FooterBar.Opacity, 0, duration) { EasingFunction = ease };
+            footerOpacity.Completed += (s, ev) => FooterBar.Visibility = Visibility.Collapsed;
+            FooterBar.BeginAnimation(OpacityProperty, footerOpacity);
+
+            opacityAnim.Completed += (s, ev) =>
+            {
+                GalleryView.Visibility = Visibility.Collapsed;
+            };
+        }
+        else
+        {
+            GalleryView.Visibility = Visibility.Visible;
+            GalleryView.IsHitTestVisible = true;
+            DetailView.IsHitTestVisible = false;
+
+            opacityAnim.From = DetailView.Opacity;
+            opacityAnim.To = 0;
+            DetailView.BeginAnimation(OpacityProperty, opacityAnim);
+
+            if (detailTransform != null)
+            {
+                slideAnim.From = detailTransform.X;
+                slideAnim.To = 150;
+                detailTransform.BeginAnimation(TranslateTransform.XProperty, slideAnim);
+            }
+
+            opacityAnim.From = GalleryView.Opacity;
+            opacityAnim.To = 1;
+            GalleryView.BeginAnimation(OpacityProperty, opacityAnim);
+
+            if (galleryTransform != null)
+            {
+                slideAnim.From = galleryTransform.X;
+                slideAnim.To = 0;
+                galleryTransform.BeginAnimation(TranslateTransform.XProperty, slideAnim);
+            }
+
+            FooterBar.Visibility = Visibility.Visible;
+            FooterBar.BeginAnimation(OpacityProperty, new DoubleAnimation(FooterBar.Opacity, 1, duration) { EasingFunction = ease });
+
+            opacityAnim.Completed += (s, ev) =>
+            {
+                DetailView.Visibility = Visibility.Collapsed;
+            };
+        }
     }
 
     private static void OpenInBrowser(string url)
@@ -990,12 +1193,16 @@ public partial class OnlineGalleryWindow : Window
         SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
             SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
         StatusText.Text = $"Aplicado: {entry.FileName}";
+        Services.BackdropHelper.RefreshBackdrop(this);
+        if (((System.Windows.Window)ApplicationHost.Instance) != null)
+            Services.BackdropHelper.RefreshBackdrop(((System.Windows.Window)ApplicationHost.Instance));
     }
 
     // ---- Sort ----
 
     private void SortCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!_loaded) return;
         if (_isOnline) return;
         ApplySort();
         _currentPage = 1;
@@ -1054,25 +1261,7 @@ public partial class OnlineGalleryWindow : Window
         }
     }
 
-    private static string GetWallpaperDirectory()
-    {
-        var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wallflow.txt");
-        if (File.Exists(configPath))
-        {
-            var dir = File.ReadAllText(configPath).Trim();
-            if (Directory.Exists(dir))
-                return dir;
-        }
 
-        var defaultDir = @"C:\Users\Lenovo\OneDrive\Imágenes\Wallpapers";
-        if (!Directory.Exists(defaultDir))
-        {
-            var picturesDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-            if (Directory.Exists(picturesDir))
-                return picturesDir;
-        }
-        return defaultDir;
-    }
 
     private void CloseBtn_Click(object sender, MouseButtonEventArgs e) => CloseWithAnimation();
 
@@ -1094,13 +1283,108 @@ public partial class OnlineGalleryWindow : Window
         BeginAnimation(OpacityProperty, fadeOut);
     }
 
+    private void FolderBtn_Click(object sender, MouseButtonEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Seleccionar carpeta de Wallpapers",
+            InitialDirectory = SettingsService.Instance.WallpaperDirectory
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var selectedPath = dialog.FolderName;
+            if (!string.IsNullOrEmpty(selectedPath) && Directory.Exists(selectedPath))
+            {
+                ApplicationEvents.NotifyDirectoryChanged(selectedPath);
+                _wallpaperDir = selectedPath;
+                ApplicationEvents.NotifyRefreshRequested();
+                
+                if (!_isOnline)
+                {
+                    _ = LoadLocalWallpapersAsync();
+                }
+            }
+        }
+    }
+
+    private void FolderBtn_MouseEnter(object sender, MouseEventArgs e)
+    {
+        FolderBtn.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
+    }
+
+    private void FolderBtn_MouseLeave(object sender, MouseEventArgs e)
+    {
+        FolderBtn.Background = Brushes.Transparent;
+    }
+
     protected override void OnClosed(EventArgs e)
     {
+        ApplicationEvents.RefreshRequested -= OnMainWindowRefreshRequested;
         CancelPending();
         _cts?.Dispose();
         _searchDebounce?.Stop();
         _thumbnailThrottle.Dispose();
         _service.Dispose();
         base.OnClosed(e);
+
+        // Force garbage collection to immediately free up downloaded/cached thumbnail image memory
+        GC.Collect();
+        GC.Collect(2, GCCollectionMode.Forced, true, true);
+        GC.WaitForPendingFinalizers();
+    }
+
+    private void Category_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Border border && border.Child is TextBlock textBlock)
+        {
+            SearchBox.Text = textBlock.Text;
+            SearchBox.Focus();
+        }
+    }
+
+    private void OnMainWindowRefreshRequested()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(OnMainWindowRefreshRequested);
+            return;
+        }
+
+        _wallpaperDir = SettingsService.Instance.WallpaperDirectory;
+
+        if (!_isOnline)
+        {
+            _ = LoadLocalWallpapersAsync();
+        }
+        else
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var files = Directory.EnumerateFiles(_wallpaperDir, "*", SearchOption.AllDirectories)
+                        .Where(f => SupportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                        .OrderBy(f => f)
+                        .ToList();
+
+                    var list = new List<WallpaperEntry>();
+                    foreach (var file in files)
+                    {
+                        list.Add(new WallpaperEntry
+                        {
+                            FilePath = file,
+                            FileName = Path.GetFileNameWithoutExtension(file)
+                        });
+                    }
+
+                    await Dispatcher.BeginInvoke(() =>
+                    {
+                        _localWallpapers = list;
+                    });
+                }
+                catch { }
+            });
+        }
     }
 }

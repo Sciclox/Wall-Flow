@@ -1,0 +1,19 @@
+<Window x:Class="WallFlow.Windows.WeatherEffectsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource WallFlowWindow}"
+        Title="Weather Effects"
+        WindowState="Maximized"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="False"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded">
+    
+    <Grid>
+        <!-- Canvas for particle system -->
+        <Canvas x:Name="ParticleCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+    </Grid>
+</Window>

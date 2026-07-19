@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -17,7 +17,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WallFlow.Core\WallFlow.Core.csproj" />
+    <ProjectReference Include="..\WallFlow.Browser\WallFlow.Browser.csproj" />
+    <ProjectReference Include="..\WallFlow.Spotlight\WallFlow.Spotlight.csproj" />
   </ItemGroup>
 
 </Project>

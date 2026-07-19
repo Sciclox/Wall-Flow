@@ -1,0 +1,212 @@
+<Window x:Class="WallFlow.Windows.PowerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource WallFlowWindow}"
+        Title="Power Options"
+        WindowState="Normal"
+        WindowStartupLocation="Manual"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Opacity="0"
+        Topmost="True"
+        ShowInTaskbar="False"
+        Loaded="Window_Loaded"
+        KeyDown="Window_KeyDown">
+
+    <Window.Resources>
+        <!-- Custom Large Power Card Button Style -->
+        <Style x:Key="LargePowerCardStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1CFFFFFF" /> <!-- Glassy white -->
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+            <Setter Property="BorderBrush" Value="#25FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Width" Value="160" />
+            <Setter Property="Height" Value="160" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Margin" Value="16" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="16" 
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="#40FFFFFF" />
+                                <Setter TargetName="Border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="20" ShadowDepth="0" Opacity="0.6" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource AccentActiveBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <!-- Smooth Zoom on Hover -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.06" Duration="0:0:0.15">
+                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.06" Duration="0:0:0.15">
+                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.15">
+                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.15">
+                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Custom Cancel Pill Button Style -->
+        <Style x:Key="CancelPillButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#1CFFFFFF" />
+            <Setter Property="Foreground" Value="#CCFFFFFF" />
+            <Setter Property="BorderBrush" Value="#20FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Width" Value="544" />
+            <Setter Property="Height" Value="56" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Margin" Value="24" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="16" 
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="#40FFFFFF" />
+                                <Setter TargetName="Border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="15" ShadowDepth="0" Opacity="0.5" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource AccentActiveBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <!-- Subtle Scale on Hover -->
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.015" Duration="0:0:0.12" />
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.015" Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.12" />
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <!-- Dark overlay to dim the screen behind the acrylic blur -->
+        <Border Background="#45000000" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <!-- Centered Power Dashboard -->
+        <StackPanel x:Name="MainPanel" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <!-- Large Options Row -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <!-- Apagar -->
+                <Button Style="{StaticResource LargePowerCardStyle}" Click="Shutdown_Click">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Apagar" FontFamily="{DynamicResource AppFontFamily}" FontSize="16" FontWeight="Medium" Foreground="White" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Reiniciar -->
+                <Button Style="{StaticResource LargePowerCardStyle}" Click="Restart_Click">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Reiniciar" FontFamily="{DynamicResource AppFontFamily}" FontSize="16" FontWeight="Medium" Foreground="White" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Cerrar Sesión -->
+                <Button Style="{StaticResource LargePowerCardStyle}" Click="Logoff_Click">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE89F;" FontFamily="Segoe MDL2 Assets" FontSize="46" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Cerrar Sesión" FontFamily="{DynamicResource AppFontFamily}" FontSize="16" FontWeight="Medium" Foreground="White" Margin="0,16,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!-- Cancel Button Container -->
+            <Button Style="{StaticResource CancelPillButtonStyle}"
+                    Click="Cancel_Click"
+                    HorizontalAlignment="Center"
+                    Margin="0,16,0,0">
+                <TextBlock Text="C A N C E L A R" 
+                           FontFamily="{DynamicResource AppFontFamily}" 
+                           FontSize="14" 
+                           FontWeight="Bold" 
+                           Foreground="White" 
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center" />
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

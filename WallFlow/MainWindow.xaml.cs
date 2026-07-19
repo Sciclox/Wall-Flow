@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using WallFlow.Services;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -22,12 +23,11 @@ public partial class MainWindow : Window
     private const int IMG_H = 430;
     private const int GAP = 8;
     private const int PAD = 25;
-    private const int HOTKEY_ID = 9001;
     public static event Action? RefreshRequested;
     public static void NotifyRefreshRequested() => RefreshRequested?.Invoke();
 
     private readonly List<WallpaperEntry> _wallpapers = new();
-    private readonly string _wallpaperDir;
+    private string _wallpaperDir;
     private static readonly string[] SupportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp" };
 
     private int _visibleCount;
@@ -36,13 +36,16 @@ public partial class MainWindow : Window
 
     private FileSystemWatcher? _watcher;
     private DispatcherTimer? _debounceTimer;
-    private bool _isChangingWallpaper;
+    private DispatcherTimer? _backdropRefreshTimer;
     private DispatcherTimer? _autoTimer;
     private bool _autoChangeEnabled;
     private bool _autoModeRandom;
     private int _sequentialIntervalIndex;
     private int _randomIntervalIndex;
     private int _currentWallpaperIndex = -1;
+    private uint _activateMsgId;
+
+    private readonly System.Threading.SemaphoreSlim _thumbnailThrottle = new(4, 4);
 
     private static readonly TimeSpan[] AutoIntervals =
     [
@@ -68,12 +71,6 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern int SetWindowLong(IntPtr hwnd, int index, int dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [DllImport("user32.dll")]
     private static extern bool RedrawWindow(IntPtr hwnd, IntPtr rcUpdate, IntPtr hrgnUpdate, uint flags);
@@ -102,6 +99,9 @@ public partial class MainWindow : Window
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    private static extern uint RegisterWindowMessage(string lpString);
+
     [DllImport("user32.dll")]
     private static extern IntPtr WindowFromPoint(POINT pt);
 
@@ -126,9 +126,16 @@ public partial class MainWindow : Window
 
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
-    private const int MOD_ALT = 0x0001;
-    private const int WM_HOTKEY = 0x0312;
     private const int WM_SETTINGCHANGE = 0x001A;
+    private const int WM_COPYDATA = 0x004A;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct COPYDATASTRUCT
+    {
+        public IntPtr dwData;
+        public int cbData;
+        public IntPtr lpData;
+    }
 
     private enum AccentState
     {
@@ -184,6 +191,7 @@ public partial class MainWindow : Window
             new PropertyMetadata(0.0, OnScrollOffsetChanged));
 
     private static MainWindow? _instance;
+    public static MainWindow? Instance => _instance;
     private static IntPtr _mouseHookId;
     private static LowLevelMouseProc? _mouseProc;
 
@@ -203,29 +211,32 @@ public partial class MainWindow : Window
     {
         _instance = this;
         InitializeComponent();
-        _wallpaperDir = GetWallpaperDirectory();
+        Visibility = Visibility.Hidden;
+        Services.SettingsService.Load();
+        _wallpaperDir = Services.SettingsService.Instance.WallpaperDirectory;
         LoadWallpapers();
         RefreshRequested += OnRefreshRequested;
+        ApplicationEvents.RefreshRequested += OnRefreshRequested;
+        ApplicationEvents.DirectoryChanged += ChangeDirectory;
+
+        // Load AutoChange settings
+        var s = Services.SettingsService.Instance;
+        _autoChangeEnabled = s.AutoChangeEnabled;
+        _autoModeRandom = s.AutoModeRandom;
+        _sequentialIntervalIndex = Math.Clamp(s.SequentialIntervalIndex, 0, AutoIntervals.Length - 1);
+        _randomIntervalIndex = Math.Clamp(s.RandomIntervalIndex, 0, AutoIntervals.Length - 1);
+        ApplyAutoChangeState();
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
-
-        int preference = DWMWCP_ROUND;
-        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int));
-
-        HideFromAltTab(hwnd);
-
-        RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT, 0x57);
-
         RootBorder.SizeChanged += UpdateBorderClip;
 
         StartWatching();
 
-        var screenW = SystemParameters.PrimaryScreenWidth;
-        var screenH = SystemParameters.PrimaryScreenHeight;
-        var maxW = screenW - 30;
+        var workArea = SystemParameters.WorkArea;
+        var maxW = workArea.Width - 30;
 
         _visibleCount = Math.Max(1, (int)((maxW - PAD * 2 - 2 + GAP) / (IMG_W + GAP)));
         _totalPages = (int)Math.Ceiling((double)_wallpapers.Count / _visibleCount);
@@ -238,8 +249,8 @@ public partial class MainWindow : Window
         );
         var h = IMG_H + PAD * 2 + 8 + 2;
 
-        Left = (screenW - w) / 2;
-        Top = (screenH - h) / 2;
+        Left = workArea.Left + (workArea.Width - w) / 2;
+        Top = workArea.Top + (workArea.Height - h) / 2;
         Width = w;
         Height = h;
 
@@ -293,6 +304,28 @@ public partial class MainWindow : Window
         UpdateWindowRegion(hwnd);
     }
 
+    public static void ChangeDirectory(string newDir)
+    {
+        if (_instance == null) return;
+        _instance.Dispatcher.BeginInvoke(() => _instance.ChangeDirectoryInternal(newDir));
+    }
+
+    private void ChangeDirectoryInternal(string newDir)
+    {
+        if (_watcher != null)
+        {
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Dispose();
+            _watcher = null;
+        }
+
+        Services.SettingsService.UpdateWallpaperDirectory(newDir);
+        _wallpaperDir = newDir;
+
+        StartWatching();
+        RefreshWallpapers();
+    }
+
     private void UpdateWindowRegion(IntPtr hwnd)
     {
         var dpi = VisualTreeHelper.GetDpi(this);
@@ -341,7 +374,41 @@ public partial class MainWindow : Window
             RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     }
 
-    private static string GetCurrentWallpaper()
+    public static void RefreshAllBackdrops()
+    {
+        if (!Application.Current.Dispatcher.CheckAccess())
+        {
+            Application.Current.Dispatcher.BeginInvoke(new Action(RefreshAllBackdrops));
+            return;
+        }
+
+        // 1. Refresh MainWindow
+        if (_instance != null)
+        {
+            var hwnd = new WindowInteropHelper(_instance).Handle;
+            if (hwnd != IntPtr.Zero)
+                RefreshBackdrop(hwnd);
+        }
+
+        // 2. Refresh DockWindow
+        if (DockWindow.Instance != null)
+        {
+            Services.BackdropHelper.RefreshBackdrop(DockWindow.Instance);
+            DockWindow.Instance.UpdateAccentColorFromWallpaper();
+        }
+
+        // 3. Refresh any other open transparent windows
+        foreach (Window window in Application.Current.Windows)
+        {
+            var name = window.GetType().Name;
+            if (name == "OnlineGalleryWindow" || name == "CalendarWindow" || name == "MediaFlyoutWindow" || name == "PowerWindow")
+            {
+                Services.BackdropHelper.RefreshBackdrop(window);
+            }
+        }
+    }
+
+    public static string GetCurrentWallpaper()
     {
         var sb = new StringBuilder(260);
         SystemParametersInfo(SPI_GETDESKWALLPAPER, sb.Capacity, sb, 0);
@@ -396,31 +463,46 @@ public partial class MainWindow : Window
         var offset = ScrollOffset;
         var page = _currentPage;
 
-        _wallpapers.Clear();
-
-        var files = Directory.EnumerateFiles(_wallpaperDir, "*", SearchOption.AllDirectories)
-            .Where(f => SupportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-            .OrderBy(f => f)
-            .ToList();
-
-        foreach (var file in files)
+        Task.Run(() =>
         {
-            _wallpapers.Add(new WallpaperEntry
+            try
             {
-                FilePath = file,
-                FileName = Path.GetFileNameWithoutExtension(file)
-            });
-        }
+                var files = Directory.EnumerateFiles(_wallpaperDir, "*", SearchOption.AllDirectories)
+                    .Where(f => SupportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .OrderBy(f => f)
+                    .ToList();
 
-        _totalPages = (int)Math.Ceiling((double)_wallpapers.Count / _visibleCount);
-        _currentPage = Math.Min(page, Math.Max(0, _totalPages - 1));
+                var temp = new List<WallpaperEntry>();
+                foreach (var file in files)
+                {
+                    temp.Add(new WallpaperEntry
+                    {
+                        FilePath = file,
+                        FileName = Path.GetFileNameWithoutExtension(file)
+                    });
+                }
 
-        WallpaperList.ItemsSource = _wallpapers.Select(CreateTile).ToList();
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _wallpapers.Clear();
+                    GC.Collect();
+                    GC.Collect(2, GCCollectionMode.Forced, true, true);
+                    GC.WaitForPendingFinalizers();
+                    foreach (var entry in temp)
+                    {
+                        _wallpapers.Add(entry);
+                    }
 
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            ScrollOffset = Math.Min(offset, _currentPage * _visibleCount * (IMG_W + GAP));
-        }), DispatcherPriority.Loaded);
+                    _totalPages = (int)Math.Ceiling((double)_wallpapers.Count / _visibleCount);
+                    _currentPage = Math.Min(page, Math.Max(0, _totalPages - 1));
+
+                    WallpaperList.ItemsSource = _wallpapers.Select(CreateTile).ToList();
+
+                    ScrollOffset = Math.Min(offset, _currentPage * _visibleCount * (IMG_W + GAP));
+                }), DispatcherPriority.Background);
+            }
+            catch { }
+        });
     }
 
     private void HandleMouseWheel(int delta)
@@ -540,14 +622,6 @@ public partial class MainWindow : Window
 
     private Border CreateTile(WallpaperEntry entry)
     {
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.UriSource = new Uri(entry.FilePath);
-        bitmap.DecodePixelWidth = IMG_W * 2;
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.EndInit();
-        bitmap.Freeze();
-
         var scale = new ScaleTransform(1, 1);
 
         var border = new Border
@@ -559,13 +633,54 @@ public partial class MainWindow : Window
             RenderTransform = scale,
             RenderTransformOrigin = new Point(0.5, 0.5),
             CornerRadius = new CornerRadius(8),
-            Background = new ImageBrush(bitmap)
-            {
-                Stretch = Stretch.UniformToFill,
-                AlignmentX = AlignmentX.Center,
-                AlignmentY = AlignmentY.Center
-            }
+            Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20))
         };
+
+        // Load image entirely on background threads (using SemaphoreSlim to throttle concurrent disk/CPU load)
+        Task.Run(async () =>
+        {
+            await _thumbnailThrottle.WaitAsync();
+            try
+            {
+                if (!File.Exists(entry.FilePath)) return;
+                byte[] bytes = File.ReadAllBytes(entry.FilePath);
+
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                using (var ms = new MemoryStream(bytes))
+                {
+                    bmp.StreamSource = ms;
+                    bmp.DecodePixelWidth = IMG_W * 2;
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.EndInit();
+                }
+                bmp.Freeze();
+
+                _ = Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    border.Background = new ImageBrush(bmp)
+                    {
+                        Stretch = Stretch.UniformToFill,
+                        AlignmentX = AlignmentX.Center,
+                        AlignmentY = AlignmentY.Center
+                    };
+                }), DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow", "error_log.txt");
+                    Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                    File.AppendAllText(logPath, $"Error loading {entry.FilePath}: {ex.Message}\n{ex.StackTrace}\n\n");
+                }
+                catch { }
+            }
+            finally
+            {
+                _thumbnailThrottle.Release();
+            }
+        });
 
         var pressAnim = new DoubleAnimation(0.93, TimeSpan.FromMilliseconds(80));
         var releaseAnim = new DoubleAnimation(1, TimeSpan.FromMilliseconds(120))
@@ -604,50 +719,88 @@ public partial class MainWindow : Window
         if (string.Equals(current, entry.FilePath, StringComparison.OrdinalIgnoreCase))
             return;
 
-        _isChangingWallpaper = true;
+        // Run SystemParametersInfo on a background thread so the UI thread doesn't lag while Windows broadcasts WM_SETTINGCHANGE
+        Task.Run(() =>
+        {
+            SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
+                SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        });
 
-        SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
-            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        // Sync index when wallpaper is manually changed
+        _currentWallpaperIndex = _wallpapers.IndexOf(entry);
 
-        var hwnd = new WindowInteropHelper(this).Handle;
-        RefreshBackdrop(hwnd);
-
-        _isChangingWallpaper = false;
+        // Sync Dock accent color instantly
+        if (DockWindow.Instance != null)
+        {
+            DockWindow.Instance.UpdateAccentColorFromWallpaper(entry.FilePath);
+        }
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
-            Close();
+            Visibility = Visibility.Hidden;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        _activateMsgId = RegisterWindowMessage("WallFlow_Activate_Instance");
+
+        int preference = DWMWCP_ROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int));
+
+        HideFromAltTab(hwnd);
+
         var source = PresentationSource.FromVisual(this) as HwndSource;
         source?.AddHook(WndProc);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY)
+        if (msg == _activateMsgId && _activateMsgId != 0)
         {
-            if (wParam.ToInt32() == HOTKEY_ID)
+            Visibility = Visibility.Visible;
+            try { Activate(); } catch { }
+            handled = true;
+        }
+        else if (msg == WM_COPYDATA)
+        {
+            try
             {
-                Visibility = Visibility == Visibility.Visible
-                    ? Visibility.Hidden
-                    : Visibility.Visible;
-                handled = true;
+                var cds = (COPYDATASTRUCT)Marshal.PtrToStructure(lParam, typeof(COPYDATASTRUCT))!;
+                string? url = Marshal.PtrToStringUni(cds.lpData);
+                if (!string.IsNullOrEmpty(url))
+                {
+                    App.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (DockWindow.Instance != null)
+                        {
+                            DockWindow.Instance.OpenNewBrowserWindow(url);
+                        }
+                    }));
+                }
             }
+            catch { }
+            handled = true;
+            return IntPtr.Zero;
         }
         else if (msg == WM_SETTINGCHANGE)
         {
-            if (_isChangingWallpaper) return IntPtr.Zero;
-
             var area = Marshal.PtrToStringAuto(lParam);
-            if (area == "Desk")
+            if (area == "Desk" || wParam.ToInt32() == SPI_SETDESKWALLPAPER || string.IsNullOrEmpty(area))
             {
-                RefreshBackdrop(hwnd);
+                // Debounce and delay refresh to allow Windows to complete drawing the new background
+                _backdropRefreshTimer?.Stop();
+                _backdropRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+                _backdropRefreshTimer.Tick += (s, args) =>
+                {
+                    _backdropRefreshTimer?.Stop();
+                    RefreshAllBackdrops();
+                };
+                _backdropRefreshTimer.Start();
                 handled = true;
             }
         }
@@ -655,6 +808,38 @@ public partial class MainWindow : Window
     }
 
     public static bool IsAutoChangeEnabled() => _instance?._autoChangeEnabled ?? false;
+
+    public static void SetAutoChangeEnabled(bool enabled)
+    {
+        if (_instance == null) return;
+        if (_instance._autoChangeEnabled != enabled)
+        {
+            _instance._autoChangeEnabled = enabled;
+            _instance.ApplyAutoChangeState();
+        }
+    }
+
+    public static int GetCurrentSpeedIndex()
+    {
+        if (_instance == null) return 0;
+        return _instance._autoModeRandom ? _instance._randomIntervalIndex : _instance._sequentialIntervalIndex;
+    }
+
+    public static void SetCurrentSpeedIndex(int index)
+    {
+        if (_instance == null) return;
+        if (index < 0 || index >= AutoIntervals.Length) return;
+        
+        if (_instance._autoModeRandom)
+            _instance._randomIntervalIndex = index;
+        else
+            _instance._sequentialIntervalIndex = index;
+
+        if (_instance._autoChangeEnabled)
+            _instance.ApplyAutoChangeState();
+        else
+            _instance.SaveAutoChangeSettings();
+    }
 
     public static string GetSequentialModeText()
     {
@@ -685,6 +870,16 @@ public partial class MainWindow : Window
         return $"{(int)ts.TotalSeconds}s";
     }
 
+    private void SaveAutoChangeSettings()
+    {
+        var s = Services.SettingsService.Instance;
+        s.AutoChangeEnabled = _autoChangeEnabled;
+        s.AutoModeRandom = _autoModeRandom;
+        s.SequentialIntervalIndex = _sequentialIntervalIndex;
+        s.RandomIntervalIndex = _randomIntervalIndex;
+        Services.SettingsService.Save();
+    }
+
     private void ToggleAutoChangeInternal()
     {
         _autoChangeEnabled = !_autoChangeEnabled;
@@ -696,6 +891,8 @@ public partial class MainWindow : Window
         _autoModeRandom = random;
         if (_autoChangeEnabled)
             ApplyAutoChangeState();
+        else
+            SaveAutoChangeSettings();
     }
 
     private void CycleCurrentSpeedInternal()
@@ -707,6 +904,8 @@ public partial class MainWindow : Window
 
         if (_autoChangeEnabled)
             ApplyAutoChangeState();
+        else
+            SaveAutoChangeSettings();
     }
 
     private void ApplyAutoChangeState()
@@ -731,6 +930,7 @@ public partial class MainWindow : Window
                 _autoTimer.Stop();
             }
         }
+        SaveAutoChangeSettings();
     }
 
     private void OnAutoTick(object? sender, EventArgs e)
@@ -756,6 +956,39 @@ public partial class MainWindow : Window
         }
     }
 
+    private void PrevWallpaper()
+    {
+        if (_wallpapers.Count == 0) return;
+
+        if (_currentWallpaperIndex < 0)
+        {
+            var currentPath = GetCurrentWallpaper();
+            _currentWallpaperIndex = _wallpapers.FindIndex(w => string.Equals(w.FilePath, currentPath, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (_currentWallpaperIndex <= 0)
+            _currentWallpaperIndex = _wallpapers.Count - 1;
+        else
+            _currentWallpaperIndex--;
+
+        ChangeWallpaper(_wallpapers[_currentWallpaperIndex]);
+    }
+
+    public void PreviousWallpaperExternal()
+    {
+        PrevWallpaper();
+    }
+
+    public void NextWallpaperExternal()
+    {
+        if (_currentWallpaperIndex < 0)
+        {
+            var currentPath = GetCurrentWallpaper();
+            _currentWallpaperIndex = _wallpapers.FindIndex(w => string.Equals(w.FilePath, currentPath, StringComparison.OrdinalIgnoreCase));
+        }
+        NextWallpaper();
+    }
+
     private void OnRefreshRequested()
     {
         if (!Dispatcher.CheckAccess())
@@ -769,22 +1002,13 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         RefreshRequested -= OnRefreshRequested;
+        ApplicationEvents.RefreshRequested -= OnRefreshRequested;
+        ApplicationEvents.DirectoryChanged -= ChangeDirectory;
         _autoTimer?.Stop();
         UninstallMouseHook();
         _watcher?.Dispose();
         _debounceTimer?.Stop();
-        try
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            UnregisterHotKey(hwnd, HOTKEY_ID);
-        }
-        catch { }
         base.OnClosed(e);
     }
 }
 
-public class WallpaperEntry
-{
-    public string FilePath { get; set; } = "";
-    public string FileName { get; set; } = "";
-}

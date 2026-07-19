@@ -163,6 +163,13 @@ public partial class ContextMenuWindow : Window
 
         Top = Math.Max(0, _cursorTopDips - ActualHeight);
 
+        // Adjust Left to keep it on-screen and open to the left if it overflows the right edge
+        var screenRight = SystemParameters.WorkArea.Right;
+        if (Left + ActualWidth > screenRight)
+        {
+            Left = Math.Max(0, Left - ActualWidth);
+        }
+
         var duration = TimeSpan.FromMilliseconds(200);
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
@@ -199,7 +206,7 @@ public partial class ContextMenuWindow : Window
         SeqSpeed.Text = "";
         RandSpeed.Text = "";
 
-        SeqRadio.Text = isRandom ? "\x25CB" : "\x2B24";
+        SeqRadio.Text = isRandom ? "\x25A1" : "\x25A0";
         SeqRadio.Foreground = isRandom
             ? new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88))
             : new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
@@ -207,7 +214,7 @@ public partial class ContextMenuWindow : Window
             ? new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88))
             : new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
 
-        RandRadio.Text = isRandom ? "\x2B24" : "\x25CB";
+        RandRadio.Text = isRandom ? "\x25A0" : "\x25A1";
         RandRadio.Foreground = isRandom
             ? new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF))
             : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
@@ -339,7 +346,7 @@ public partial class ContextMenuWindow : Window
         }
     }
 
-    private static bool IsAutoStartEnabled()
+    internal static bool IsAutoStartEnabled()
     {
         var shortcutPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.Startup),
@@ -347,29 +354,79 @@ public partial class ContextMenuWindow : Window
         return File.Exists(shortcutPath);
     }
 
-    private static void ToggleAutoStart()
+    internal static void SetAutoStart(bool enable)
     {
         var startupFolder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
         var shortcutPath = Path.Combine(startupFolder, "WallFlow.lnk");
 
-        if (File.Exists(shortcutPath))
+        try
         {
-            File.Delete(shortcutPath);
-        }
-        else
-        {
-            var shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType == null) return;
+            if (File.Exists(shortcutPath))
+            {
+                File.Delete(shortcutPath);
+            }
 
-            dynamic shell = Activator.CreateInstance(shellType)!;
-            dynamic shortcut = shell.CreateShortcut(shortcutPath);
-            shortcut.TargetPath = Environment.ProcessPath;
-            shortcut.IconLocation = Environment.ProcessPath + ", 0";
-            shortcut.Description = "WallFlow - Visor de fondos de pantalla";
-            shortcut.WorkingDirectory = Path.GetDirectoryName(Environment.ProcessPath);
-            shortcut.Save();
-            Marshal.FinalReleaseComObject(shortcut);
-            Marshal.FinalReleaseComObject(shell);
+            if (enable)
+            {
+                var shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null) return;
+
+                dynamic shell = Activator.CreateInstance(shellType)!;
+                dynamic shortcut = shell.CreateShortcut(shortcutPath);
+                shortcut.TargetPath = Environment.ProcessPath;
+                shortcut.Arguments = "--startup";
+                shortcut.IconLocation = Environment.ProcessPath + ", 0";
+                shortcut.Description = "WallFlow - Visor de fondos de pantalla";
+                shortcut.WorkingDirectory = Path.GetDirectoryName(Environment.ProcessPath);
+                shortcut.Save();
+                Marshal.FinalReleaseComObject(shortcut);
+                Marshal.FinalReleaseComObject(shell);
+            }
+        }
+        catch { }
+    }
+
+    private static void ToggleAutoStart()
+    {
+        SetAutoStart(!IsAutoStartEnabled());
+    }
+
+    private void Colors_Click(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            _closedByAction = true;
+            _openInstance = null;
+            var settings = new Windows.SettingsWindow();
+            settings.Show();
+            Close();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error al abrir configuración: {ex.Message}", "WallFlow");
+        }
+    }
+
+    private void Folder_Click(object sender, MouseButtonEventArgs e)
+    {
+        _closedByAction = true;
+        _openInstance = null;
+        Close();
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Seleccionar carpeta de Wallpapers",
+            InitialDirectory = Services.SettingsService.Instance.WallpaperDirectory
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var selectedPath = dialog.FolderName;
+            if (!string.IsNullOrEmpty(selectedPath) && Directory.Exists(selectedPath))
+            {
+                MainWindow.ChangeDirectory(selectedPath);
+                MainWindow.NotifyRefreshRequested();
+            }
         }
     }
 }

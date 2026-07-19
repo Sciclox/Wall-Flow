@@ -7,6 +7,7 @@
         SizeToContent="WidthAndHeight"
         ResizeMode="NoResize"
         Width="240"
+        FontFamily="{DynamicResource AppFontFamily}"
         Opacity="0"
         RenderTransformOrigin="0.5,0.5"
         Deactivated="Window_Deactivated"
@@ -39,7 +40,7 @@
                                    FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock Grid.Column="1" Text="Autoarranque" Foreground="#FFFFFF"
-                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                               FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
                     <Border Grid.Column="2" Width="20" Height="20" Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock x:Name="CheckMark" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets"
                                    FontSize="14" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -59,7 +60,22 @@
                                    FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock Text="Galería online" Foreground="#FFFFFF"
-                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                               FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <!-- Color Settings -->
+            <Border x:Name="ColorsBorder" Padding="10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="Colors_Click"
+                    Cursor="Hand">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Ajustes de Interfaz" Foreground="#FFFFFF"
+                               FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
             <Border Height="1" Background="#3F3F3F" Margin="6,6" />
@@ -80,7 +96,7 @@
                                    FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock Grid.Column="1" Text="Cambio automático" Foreground="#FFFFFF"
-                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                               FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
                     <Border Grid.Column="2" Width="20" Height="20" Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock x:Name="AutoChangeCheck" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets"
                                    FontSize="14" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -102,13 +118,13 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="16" Height="16" Margin="2,0,8,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="SeqRadio" Text="&#x2B24;" FontFamily="Segoe MDL2 Assets"
+                        <TextBlock x:Name="SeqRadio" Text="&#x25A0;"
                                    FontSize="12" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock x:Name="SeqText" Grid.Column="1" Text="Secuencial" Foreground="#CCCCCC"
-                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
+                               FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
                     <TextBlock x:Name="SeqSpeed" Grid.Column="2" Text="30s" Foreground="#888888"
-                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal"
+                               FontSize="13" FontWeight="Normal"
                                HorizontalAlignment="Right" VerticalAlignment="Center" />
                 </Grid>
             </Border>
@@ -126,17 +142,32 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="16" Height="16" Margin="2,0,8,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="RandRadio" Text="&#x25CB;" FontFamily="Segoe MDL2 Assets"
-                                   FontSize="14" Foreground="#888888" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <TextBlock x:Name="RandRadio" Text="&#x25A1;"
+                                   FontSize="12" Foreground="#888888" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock x:Name="RandText" Grid.Column="1" Text="Aleatorio" Foreground="#888888"
-                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
+                               FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
                     <TextBlock x:Name="RandSpeed" Grid.Column="2" Text="1m" Foreground="#666666"
-                               FontFamily="Segoe UI" FontSize="13" FontWeight="Normal"
+                               FontSize="13" FontWeight="Normal"
                                HorizontalAlignment="Right" VerticalAlignment="Center" />
                 </Grid>
             </Border>
             <Border Height="1" Background="#3F3F3F" Margin="6,6" />
+            <!-- Select folder -->
+            <Border x:Name="FolderBorder" Padding="10,8" CornerRadius="8"
+                    Background="Transparent"
+                    MouseEnter="Item_MouseEnter" MouseLeave="Item_MouseLeave"
+                    MouseLeftButtonUp="Folder_Click"
+                    Cursor="Hand">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Cambiar carpeta..." Foreground="#FFFFFF"
+                               FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
             <!-- Exit -->
             <Border x:Name="ExitBorder" Padding="10,8" CornerRadius="8"
                     Background="Transparent"
@@ -149,7 +180,7 @@
                                    FontSize="16" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock Text="Salir" Foreground="#FFFFFF"
-                               FontFamily="Segoe UI" FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
+                               FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
         </StackPanel>
