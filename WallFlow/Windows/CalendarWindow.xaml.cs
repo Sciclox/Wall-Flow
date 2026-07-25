@@ -9,8 +9,11 @@ using WallFlow.Services;
 
 namespace WallFlow.Windows;
 
-public partial class CalendarWindow : Window
+public partial class CalendarWindow : Window, IWidget
 {
+    string IWidget.Name => "Calendar";
+    public void Open() { Show(); Activate(); }
+    public bool IsOpen => IsLoaded && IsVisible;
     private DateTime _displayMonth;
 
     private readonly double _targetLeft;

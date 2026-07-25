@@ -78,6 +78,7 @@
                                FontSize="15" FontWeight="Normal" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
+
             <Border Height="1" Background="#3F3F3F" Margin="6,6" />
             <!-- Auto wallpaper change -->
             <Border x:Name="AutoChangeBorder" Padding="10,8" CornerRadius="8"

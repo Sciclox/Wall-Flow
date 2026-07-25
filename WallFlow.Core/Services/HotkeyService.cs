@@ -11,6 +11,8 @@ public class HotkeyService
     private static HotkeyService? _instance;
     public static HotkeyService Instance => _instance ??= new HotkeyService();
 
+    public bool IsPaused { get; set; } = false;
+
     private const int WM_HOTKEY = 0x0312;
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -89,6 +91,11 @@ public class HotkeyService
     {
         if (msg == WM_HOTKEY)
         {
+            if (IsPaused)
+            {
+                handled = true;
+                return IntPtr.Zero;
+            }
             int id = wParam.ToInt32();
             if (_hotkeyActions.TryGetValue(id, out var action))
             {

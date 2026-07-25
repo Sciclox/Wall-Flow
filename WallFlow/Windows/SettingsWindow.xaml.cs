@@ -6,11 +6,16 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using WallFlow.Services;
+using WallFlow.ViewModels;
 
 namespace WallFlow.Windows;
 
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : Window, IWidget
 {
+    string IWidget.Name => "Settings";
+    public void Open() { Show(); Activate(); }
+    public void CloseWidget() { Close(); }
+    public bool IsOpen => IsLoaded && IsVisible;
     private bool _loading;
     private bool _isCapturingHotkey = false;
     private TextBox? _activeCaptureTextBox;
@@ -18,8 +23,12 @@ public partial class SettingsWindow : Window
 
     public static SettingsWindow? Instance { get; private set; }
 
-    public SettingsWindow()
+    private readonly SettingsViewModel _viewModel;
+
+    public SettingsWindow(SettingsViewModel viewModel)
     {
+        _viewModel = viewModel;
+        DataContext = _viewModel;
         Instance = this;
         InitializeComponent();
     }
@@ -48,8 +57,7 @@ public partial class SettingsWindow : Window
             try { LoadSettings(); }
             catch (Exception ex) { LogCrash(ex); }
 
-            try { PopulateBrowserThemes(); }
-            catch (Exception ex) { LogCrash(ex); }
+
 
             try { UpdateTabSelection(0); }
             catch (Exception ex) { LogCrash(ex); }
@@ -84,10 +92,13 @@ public partial class SettingsWindow : Window
     private void UpdateBorderClip(object? sender, RoutedEventArgs? e)
     {
         if (RootBorder == null) return;
-        var w = RootBorder.ActualWidth;
-        var h = RootBorder.ActualHeight;
+        var w = RootBorder.ActualWidth > 0 ? RootBorder.ActualWidth : Width;
+        var h = RootBorder.ActualHeight > 0 ? RootBorder.ActualHeight : Height;
+        if (w <= 0 || h <= 0) return;
         RootBorder.Clip = new RectangleGeometry(new Rect(0, 0, w, h), 8, 8);
-        Clip = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight), 8, 8);
+        var actualW = ActualWidth > 0 ? ActualWidth : Width;
+        var actualH = ActualHeight > 0 ? ActualHeight : Height;
+        Clip = new RectangleGeometry(new Rect(0, 0, actualW, actualH), 8, 8);
         BackdropHelper.UpdateWindowRegion(this, 8);
     }
 
@@ -225,18 +236,16 @@ public partial class SettingsWindow : Window
         MouseInteractionCheck.IsChecked = s.WeatherEffectMouseInteraction;
 
         // Auto Change Settings
-        AutoChangeCheck.IsChecked = MainWindow.IsAutoChangeEnabled();
-        AutoModeCombo.SelectedIndex = MainWindow.IsRandomMode() ? 1 : 0;
-        AutoIntervalCombo.SelectedIndex = MainWindow.GetCurrentSpeedIndex();
+        AutoChangeCheck.IsChecked = LocalGalleryWindow.IsAutoChangeEnabled();
+        AutoModeCombo.SelectedIndex = LocalGalleryWindow.IsRandomMode() ? 1 : 0;
+        AutoIntervalCombo.SelectedIndex = LocalGalleryWindow.GetCurrentSpeedIndex();
         UpdateAutoChangePanelState();
 
         ShowClockCheck.IsChecked = s.ShowClock;
         Use24HourCheck.IsChecked = s.Use24HourFormat;
         ShowWeatherCheck.IsChecked = s.ShowWeather;
         ShowMediaCheck.IsChecked = s.ShowMediaPlayer;
-        ShowCpuCheck.IsChecked = s.ShowPerfCpu;
-        ShowRamCheck.IsChecked = s.ShowPerfRam;
-        ShowNetCheck.IsChecked = s.ShowPerfNet;
+
 
         WeatherCityBox.Text = s.WeatherCity ?? "";
 
@@ -305,11 +314,9 @@ public partial class SettingsWindow : Window
         ShowIconLocalGalleryCheck.IsChecked = s.ShowIconLocalGallery;
         ShowIconOnlineGalleryCheck.IsChecked = s.ShowIconOnlineGallery;
         ShowIconYouTubeMusicCheck.IsChecked = s.ShowIconYouTubeMusic;
-        ShowIconWebBrowserCheck.IsChecked = s.ShowIconWebBrowser;
         ShowIconSettingsCheck.IsChecked = s.ShowIconSettings;
         ShowIconVolumeCheck.IsChecked = s.ShowIconVolume;
         ShowIconNotificationsCheck.IsChecked = s.ShowIconNotifications;
-        ShowIconRecycleBinCheck.IsChecked = s.ShowIconRecycleBin;
         ShowIconShowDesktopCheck.IsChecked = s.ShowIconShowDesktop;
         ShowIconPowerCheck.IsChecked = s.ShowIconPower;
 
@@ -370,19 +377,221 @@ public partial class SettingsWindow : Window
             if (!found) SpotlightAppsPerRowCombo.SelectedIndex = 0;
         }
 
+        if (GeminiApiKeyBox != null)
+        {
+            GeminiApiKeyBox.Password = s.GeminiApiKey ?? "";
+        }
+
         UpdateSpotlightColorPreviews();
 
-        // Load Browser settings
-        BrowserUseDockColorsCheck.IsChecked = s.BrowserUseDockColors;
-        BrowserBgHexBox.Text = s.BrowserBackgroundColor ?? "";
-        BrowserAccentHexBox.Text = s.BrowserAccentColor ?? "";
-        BrowserBorderHexBox.Text = s.BrowserBorderColor ?? "";
-
-        UpdateBrowserColorPreviews();
-
         UpdateEnabledStates();
-        UpdateDefaultBrowserStatus();
         _loading = false;
+    }
+
+    private void GeminiApiKey_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        SettingsService.Instance.GeminiApiKey = GeminiApiKeyBox.Password;
+    }
+
+    private async void VerifyGeminiApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        string key = GeminiApiKeyBox?.Password?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            if (GeminiStatusText != null)
+            {
+                GeminiStatusText.Text = "❌ Por favor ingresa una clave de API antes de verificar.";
+                GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
+                GeminiStatusText.Visibility = Visibility.Visible;
+            }
+            return;
+        }
+
+        if (GeminiStatusText != null)
+        {
+            GeminiStatusText.Text = "⏳ Conectando con Google AI Studio...";
+            GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200));
+            GeminiStatusText.Visibility = Visibility.Visible;
+        }
+
+        if (VerifyGeminiApiKeyBtn != null) VerifyGeminiApiKeyBtn.IsEnabled = false;
+
+        try
+        {
+            using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            try { client.DefaultRequestHeaders.Add("x-goog-api-key", key); } catch { }
+
+            // 1. Discover active models via GET /v1beta/models
+            string listModelsUrl = $"https://generativelanguage.googleapis.com/v1beta/models?key={Uri.EscapeDataString(key)}";
+            var listResponse = await client.GetAsync(listModelsUrl);
+            string listJson = await listResponse.Content.ReadAsStringAsync();
+
+            var discoveredModels = new System.Collections.Generic.List<string>();
+
+            if (listResponse.IsSuccessStatusCode)
+            {
+                try
+                {
+                    using var docList = System.Text.Json.JsonDocument.Parse(listJson);
+                    if (docList.RootElement.TryGetProperty("models", out var modelsArr) &&
+                        modelsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var m in modelsArr.EnumerateArray())
+                        {
+                            if (m.TryGetProperty("name", out var nameProp))
+                            {
+                                string fullName = nameProp.GetString() ?? "";
+                                string shortName = fullName.StartsWith("models/") ? fullName.Substring(7) : fullName;
+
+                                if (m.TryGetProperty("supportedGenerationMethods", out var genMethods) &&
+                                    genMethods.ValueKind == System.Text.Json.JsonValueKind.Array)
+                                {
+                                    bool supportsGenerate = false;
+                                    foreach (var method in genMethods.EnumerateArray())
+                                    {
+                                        if (method.GetString() == "generateContent") { supportsGenerate = true; break; }
+                                    }
+                                    if (supportsGenerate) discoveredModels.Add(shortName);
+                                }
+                                else
+                                {
+                                    discoveredModels.Add(shortName);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // Separate Gemini and Gemma models, prioritizing Gemini Flash models
+            var geminiModels = new System.Collections.Generic.List<string>();
+            var gemmaModels = new System.Collections.Generic.List<string>();
+
+            foreach (var m in discoveredModels)
+            {
+                if (m.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+                    geminiModels.Add(m);
+                else if (m.StartsWith("gemma", StringComparison.OrdinalIgnoreCase))
+                    gemmaModels.Add(m);
+            }
+
+            var preferred = new System.Collections.Generic.List<string> 
+            { 
+                "gemini-2.5-flash", 
+                "gemini-2.5-flash-lite", 
+                "gemini-2.0-flash", 
+                "gemini-1.5-flash", 
+                "gemini-1.5-flash-latest" 
+            };
+
+            var reordered = new System.Collections.Generic.List<string>();
+            foreach (var pref in preferred)
+            {
+                foreach (var m in geminiModels)
+                {
+                    if (string.Equals(m, pref, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!reordered.Contains(m)) reordered.Add(m);
+                        break;
+                    }
+                }
+            }
+            foreach (var m in geminiModels)
+            {
+                if (!reordered.Contains(m)) reordered.Add(m);
+            }
+            foreach (var m in gemmaModels)
+            {
+                if (!reordered.Contains(m)) reordered.Add(m);
+            }
+
+            discoveredModels = reordered.Count > 0 ? reordered : new System.Collections.Generic.List<string> { "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash" };
+
+            bool success = false;
+            System.Net.HttpStatusCode lastStatusCode = listResponse.StatusCode;
+            string lastErrorMessage = "";
+
+            foreach (var model in discoveredModels)
+            {
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={Uri.EscapeDataString(key)}";
+                var requestBody = new
+                {
+                    contents = new[] { new { parts = new[] { new { text = "Ping" } } } }
+                };
+
+                string jsonContent = System.Text.Json.JsonSerializer.Serialize(requestBody);
+                using var content = new System.Net.Http.StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync(url, content);
+                if (response.IsSuccessStatusCode)
+                {
+                    success = true;
+                    SettingsService.Instance.GeminiModel = model;
+                    SettingsService.Save();
+                    break;
+                }
+                else
+                {
+                    lastStatusCode = response.StatusCode;
+                    string respErr = await response.Content.ReadAsStringAsync();
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(respErr);
+                        if (doc.RootElement.TryGetProperty("error", out var errObj) &&
+                            errObj.TryGetProperty("message", out var msgProp))
+                        {
+                            lastErrorMessage = msgProp.GetString() ?? "";
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            if (success)
+            {
+                if (GeminiStatusText != null)
+                {
+                    GeminiStatusText.Text = $"✅ ¡API Key válida y lista! Modelo activo detectado: {SettingsService.Instance.GeminiModel}";
+                    GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(76, 217, 100));
+                }
+            }
+            else
+            {
+                if (GeminiStatusText != null)
+                {
+                    if (lastStatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        GeminiStatusText.Text = "❌ Error 404 (Modelo o Endpoint No Encontrado): Revisa que la API de Gemini esté activa en tu proyecto de Google Cloud / AI Studio.";
+                        GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
+                    }
+                    else if (lastStatusCode == (System.Net.HttpStatusCode)429)
+                    {
+                        GeminiStatusText.Text = "⏳ ¡La clave es válida! Pero alcanzaste la cuota temporal de consultas por minuto. Espera 10 segundos e inténtalo de nuevo.";
+                        GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(255, 180, 0));
+                    }
+                    else
+                    {
+                        string detail = string.IsNullOrWhiteSpace(lastErrorMessage) ? $"Status {lastStatusCode}" : lastErrorMessage;
+                        GeminiStatusText.Text = $"❌ Clave rechazada por Google ({lastStatusCode}): {detail}";
+                        GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (GeminiStatusText != null)
+            {
+                GeminiStatusText.Text = "❌ Error de conexión: " + ex.Message;
+                GeminiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
+            }
+        }
+        finally
+        {
+            if (VerifyGeminiApiKeyBtn != null) VerifyGeminiApiKeyBtn.IsEnabled = true;
+        }
     }
 
     private void UpdateEnabledStates()
@@ -420,12 +629,7 @@ public partial class SettingsWindow : Window
             SpotlightColorsGrid.Opacity = spotlightBgAuto ? 0.35 : 1.0;
         }
 
-        var browserUseDock = BrowserUseDockColorsCheck != null && BrowserUseDockColorsCheck.IsChecked == true;
-        if (BrowserColorsGrid != null)
-        {
-            BrowserColorsGrid.IsEnabled = !browserUseDock;
-            BrowserColorsGrid.Opacity = browserUseDock ? 0.35 : 1.0;
-        }
+
     }
 
     private void UpdateAutoChangePanelState()
@@ -668,12 +872,7 @@ public partial class SettingsWindow : Window
                                          (string.IsNullOrEmpty(SpotlightSeparatorHexBox.Text) || TryParseColor(SpotlightSeparatorHexBox.Text, out _)) &&
                                          (string.IsNullOrEmpty(SpotlightFocusHexBox.Text) || TryParseColor(SpotlightFocusHexBox.Text, out _)));
 
-            bool browserColorsValid = BrowserUseDockColorsCheck.IsChecked == true ||
-                                      ((string.IsNullOrEmpty(BrowserBgHexBox.Text) || TryParseColor(BrowserBgHexBox.Text, out _)) &&
-                                       (string.IsNullOrEmpty(BrowserAccentHexBox.Text) || TryParseColor(BrowserAccentHexBox.Text, out _)) &&
-                                       (string.IsNullOrEmpty(BrowserBorderHexBox.Text) || TryParseColor(BrowserBorderHexBox.Text, out _)));
-
-            if (!accentValid || !border1Valid || !border2Valid || !border3Valid || !dockBgValid || !effectColorsValid || !spotlightColorsValid || !browserColorsValid)
+            if (!accentValid || !border1Valid || !border2Valid || !border3Valid || !dockBgValid || !effectColorsValid || !spotlightColorsValid)
             {
                 MessageBox.Show("Por favor, corrige los colores inválidos antes de guardar.", "Color Inválido", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -730,12 +929,9 @@ public partial class SettingsWindow : Window
             s.SpotlightSecondaryTextColor = SpotlightSecondaryTextHexBox.Text.Trim();
             s.SpotlightSeparatorColor = SpotlightSeparatorHexBox.Text.Trim();
             s.SpotlightSearchFocusColor = SpotlightFocusHexBox.Text.Trim();
+            if (GeminiApiKeyBox != null) s.GeminiApiKey = GeminiApiKeyBox.Password;
 
-            // Save Browser settings
-            s.BrowserUseDockColors = BrowserUseDockColorsCheck.IsChecked == true;
-            s.BrowserBackgroundColor = BrowserBgHexBox.Text.Trim();
-            s.BrowserAccentColor = BrowserAccentHexBox.Text.Trim();
-            s.BrowserBorderColor = BrowserBorderHexBox.Text.Trim();
+
 
             s.AutoHide = AutoHideCheck.IsChecked == true;
             s.HideWindowsTaskbar = HideTaskbarCheck.IsChecked == true;
@@ -750,9 +946,6 @@ public partial class SettingsWindow : Window
             s.Use24HourFormat = Use24HourCheck.IsChecked == true;
             s.ShowWeather = ShowWeatherCheck.IsChecked == true;
             s.ShowMediaPlayer = ShowMediaCheck.IsChecked == true;
-            s.ShowPerfCpu = ShowCpuCheck.IsChecked == true;
-            s.ShowPerfRam = ShowRamCheck.IsChecked == true;
-            s.ShowPerfNet = ShowNetCheck.IsChecked == true;
 
             s.Hotkey_PinnedApps = Hotkey_PinnedApps_Text.Text;
             s.Hotkey_Weather = Hotkey_Weather_Text.Text;
@@ -767,7 +960,6 @@ public partial class SettingsWindow : Window
             s.Hotkey_ToggleDock = Hotkey_ToggleDock_Text.Text;
             s.Hotkey_Clipboard = Hotkey_Clipboard_Text.Text;
             s.Hotkey_YouTube = Hotkey_YouTube_Text.Text;
-            s.Hotkey_WebBrowser = Hotkey_WebBrowser_Text.Text;
             s.Hotkey_TogglePinApp = Hotkey_TogglePinApp_Text.Text;
 
             s.EffectColor_Rain = EffectColor_Rain_Hex.Text;
@@ -829,41 +1021,32 @@ public partial class SettingsWindow : Window
             s.ShowIconLocalGallery = ShowIconLocalGalleryCheck.IsChecked == true;
             s.ShowIconOnlineGallery = ShowIconOnlineGalleryCheck.IsChecked == true;
             s.ShowIconYouTubeMusic = ShowIconYouTubeMusicCheck.IsChecked == true;
-            s.ShowIconWebBrowser = ShowIconWebBrowserCheck.IsChecked == true;
             s.ShowIconSettings = ShowIconSettingsCheck.IsChecked == true;
             s.ShowIconVolume = ShowIconVolumeCheck.IsChecked == true;
             s.ShowIconNotifications = ShowIconNotificationsCheck.IsChecked == true;
-            s.ShowIconRecycleBin = ShowIconRecycleBinCheck.IsChecked == true;
             s.ShowIconShowDesktop = ShowIconShowDesktopCheck.IsChecked == true;
             s.ShowIconPower = ShowIconPowerCheck.IsChecked == true;
 
-            SettingsService.Save();
-
-            ContextMenuWindow.SetAutoStart(StartWithWindowsCheck.IsChecked == true);
-            DockWindow.Instance?.ApplyWidgetVisibilities();
-            DockWindow.Instance?.UpdateClock();
-            DockWindow.Instance?.UpdateWeather();
-
             // Save Auto-Change Settings
-            MainWindow.SetAutoChangeEnabled(AutoChangeCheck.IsChecked == true);
-            MainWindow.SetCurrentSpeedIndex(AutoIntervalCombo.SelectedIndex);
+            LocalGalleryWindow.SetAutoChangeEnabled(AutoChangeCheck.IsChecked == true);
+            LocalGalleryWindow.SetCurrentSpeedIndex(AutoIntervalCombo.SelectedIndex);
             if (AutoModeCombo.SelectedIndex == 1)
-                MainWindow.SelectRandomMode();
+                LocalGalleryWindow.SelectRandomMode();
             else
-                MainWindow.SelectSequentialMode();
+                LocalGalleryWindow.SelectSequentialMode();
 
             if (weatherChanged)
             {
                 WeatherService.Instance.ResetCache();
-                DockWindow.Instance?.UpdateWeather();
             }
 
-            DockWindow.Instance?.RegisterGlobalHotkeys();
-            DockWindow.Instance?.ForceReloadWeatherEffects();
+            ContextMenuWindow.SetAutoStart(StartWithWindowsCheck.IsChecked == true);
 
-            DockWindow.Instance?.ApplyCustomColors();
-            DockWindow.Instance?.ApplySpotlightSettings();
-            DockWindow.Instance?.ApplyBrowserColors();
+            // Sync and save settings via ViewModel
+            _viewModel.LoadFromSettings();
+            _viewModel.SaveToSettings();
+
+            SystemCoordinator.Instance.RegisterGlobalHotkeys();
             Close();
         }
         catch { }
@@ -901,9 +1084,6 @@ public partial class SettingsWindow : Window
             Use24HourCheck.IsChecked = false;
             ShowWeatherCheck.IsChecked = true;
             ShowMediaCheck.IsChecked = true;
-            ShowCpuCheck.IsChecked = true;
-            ShowRamCheck.IsChecked = true;
-            ShowNetCheck.IsChecked = true;
 
             WeatherCityBox.Text = "";
 
@@ -953,16 +1133,13 @@ public partial class SettingsWindow : Window
             AutoIntervalCombo.SelectedIndex = 0;
             UpdateAutoChangePanelState();
 
-            // Reset custom dock icons and commands settings
             ShowIconPinnedAppsCheck.IsChecked = true;
             ShowIconLocalGalleryCheck.IsChecked = true;
             ShowIconOnlineGalleryCheck.IsChecked = true;
             ShowIconYouTubeMusicCheck.IsChecked = true;
-            ShowIconWebBrowserCheck.IsChecked = true;
             ShowIconSettingsCheck.IsChecked = true;
             ShowIconVolumeCheck.IsChecked = true;
             ShowIconNotificationsCheck.IsChecked = true;
-            ShowIconRecycleBinCheck.IsChecked = true;
             ShowIconShowDesktopCheck.IsChecked = true;
             ShowIconPowerCheck.IsChecked = true;
 
@@ -995,14 +1172,6 @@ public partial class SettingsWindow : Window
 
             UpdateSpotlightColorPreviews();
 
-            // Reset Browser settings
-            BrowserUseDockColorsCheck.IsChecked = true;
-            BrowserBgHexBox.Text = "";
-            BrowserAccentHexBox.Text = "";
-            BrowserBorderHexBox.Text = "";
-
-            UpdateBrowserColorPreviews();
-
             _loading = false;
         }
         catch { }
@@ -1026,21 +1195,21 @@ public partial class SettingsWindow : Window
         if (_loading) return;
         if (AutoModeCombo.SelectedIndex == 1)
         {
-            MainWindow.SelectRandomMode();
+            LocalGalleryWindow.SelectRandomMode();
         }
         else
         {
-            MainWindow.SelectSequentialMode();
+            LocalGalleryWindow.SelectSequentialMode();
         }
         _loading = true;
-        AutoIntervalCombo.SelectedIndex = MainWindow.GetCurrentSpeedIndex();
+        AutoIntervalCombo.SelectedIndex = LocalGalleryWindow.GetCurrentSpeedIndex();
         _loading = false;
     }
 
     private void AutoIntervalCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
-        MainWindow.SetCurrentSpeedIndex(AutoIntervalCombo.SelectedIndex);
+        LocalGalleryWindow.SetCurrentSpeedIndex(AutoIntervalCombo.SelectedIndex);
     }
 
     private void ResetBtn_MouseEnter(object sender, MouseEventArgs e)
@@ -1259,7 +1428,7 @@ public partial class SettingsWindow : Window
                 s.UserBorderColor3 = UseWallpaperBorderCheck.IsChecked == true ? null : BorderHex3.Text.Trim();
                 s.UserDockBackgroundColor = UseDefaultDockBgCheck.IsChecked == true ? null : DockBgHexBox.Text.Trim();
 
-                DockWindow.Instance?.ApplyCustomColors();
+                SettingsService.NotifyPreviewColorsRequested();
 
                 s.UserAccentColor = prevAccent;
                 s.UserBorderColor1 = prevBorder1;
@@ -1283,8 +1452,7 @@ public partial class SettingsWindow : Window
             else if (btn == TabBtn2) index = 2;
             else if (btn == TabBtn3) index = 3;
             else if (btn == TabBtn4) index = 4;
-            else if (btn == TabBtn5) index = 5;
-            else if (btn == TabBtn6) index = 6;
+            else if (btn == TabBtn6) index = 5;
             
             UpdateTabSelection(index);
         }
@@ -1295,7 +1463,7 @@ public partial class SettingsWindow : Window
         if (SettingsTabControl == null) return;
         SettingsTabControl.SelectedIndex = index;
 
-        var buttons = new[] { TabBtn0, TabBtn1, TabBtn2, TabBtn3, TabBtn4, TabBtn5, TabBtn6 };
+        var buttons = new[] { TabBtn0, TabBtn1, TabBtn2, TabBtn3, TabBtn4, TabBtn6 };
         for (int i = 0; i < buttons.Length; i++)
         {
             if (buttons[i] == null) continue;
@@ -1520,192 +1688,7 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void UpdateDefaultBrowserStatus()
-    {
-        try
-        {
-            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\RegisteredApplications"))
-            {
-                if (key != null)
-                {
-                    var val = key.GetValue("WallFlow") as string;
-                    if (val == @"Software\Clients\StartMenuInternet\WallFlow\Capabilities")
-                    {
-                        DefaultBrowserStatusText.Text = "Estado: Registrado en el sistema";
-                        DefaultBrowserStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x4C, 0xD9, 0x64)); // Green
-                        return;
-                    }
-                }
-            }
-        }
-        catch { }
-        DefaultBrowserStatusText.Text = "Estado: No registrado";
-        DefaultBrowserStatusText.Foreground = TryFindResource("TextSecondaryBrush") as System.Windows.Media.Brush 
-                                             ?? new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x8F));
-    }
 
-    private void RegisterBrowser_Click(object sender, MouseButtonEventArgs e)
-    {
-        try
-        {
-            RegisterAsBrowser();
-            UpdateDefaultBrowserStatus();
-            MessageBox.Show(
-                "Navegador de WallFlow registrado correctamente.\n\nA continuación se abrirá la Configuración de Windows. Por favor, busca 'WallFlow' en la lista y establécelo como tu navegador web predeterminado.",
-                "WallFlow", MessageBoxButton.OK, MessageBoxImage.Information);
-            
-            OpenSystemDefaultApps();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error al registrar el navegador: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    private void OpenSystemDefaultApps_Click(object sender, MouseButtonEventArgs e)
-    {
-        OpenSystemDefaultApps();
-    }
-
-    private void OpenSystemDefaultApps()
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "ms-settings:defaultapps?registeredApp=WallFlow",
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "ms-settings:defaultapps",
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"No se pudo abrir la configuración de Windows: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-    }
-
-    private void RegisterAsBrowser()
-    {
-        string? exePath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(exePath))
-        {
-            throw new InvalidOperationException("No se pudo obtener la ruta del ejecutable.");
-        }
-
-        string appName = "WallFlow";
-        string progId = "WallFlowHTML";
-        string progIdPdf = "WallFlowPDF";
-
-        // 1. StartMenuInternet registration
-        using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Clients\StartMenuInternet\{appName}"))
-        {
-            key.SetValue("", appName);
-        }
-
-        using (var capKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Clients\StartMenuInternet\{appName}\Capabilities"))
-        {
-            capKey.SetValue("ApplicationName", appName);
-            capKey.SetValue("ApplicationDescription", "Navegador web integrado de WallFlow");
-            capKey.SetValue("ApplicationIcon", $"{exePath},0");
-
-            using (var urlKey = capKey.CreateSubKey("URLAssociations"))
-            {
-                urlKey.SetValue("http", progId);
-                urlKey.SetValue("https", progId);
-            }
-            using (var fileKey = capKey.CreateSubKey("FileAssociations"))
-            {
-                fileKey.SetValue(".html", progId);
-                fileKey.SetValue(".htm", progId);
-                fileKey.SetValue(".pdf", progIdPdf); // Register PDF file association
-            }
-        }
-
-        using (var cmdKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Clients\StartMenuInternet\{appName}\shell\open\command"))
-        {
-            cmdKey.SetValue("", $"\"{exePath}\" \"%1\"");
-        }
-
-        // 2. RegisteredApplications
-        using (var regApps = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\RegisteredApplications"))
-        {
-            regApps.SetValue(appName, $@"Software\Clients\StartMenuInternet\{appName}\Capabilities");
-        }
-
-        // 3. Classes registration for ProgID (HTML)
-        using (var classKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}"))
-        {
-            classKey.SetValue("", "WallFlow HTML Document");
-        }
-        using (var appKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}\Application"))
-        {
-            appKey.SetValue("ApplicationName", appName);
-            appKey.SetValue("ApplicationDescription", "Navegador web integrado de WallFlow");
-            appKey.SetValue("ApplicationIcon", $"{exePath},0");
-        }
-        using (var iconKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}\DefaultIcon"))
-        {
-            iconKey.SetValue("", $"{exePath},0");
-        }
-        using (var openCmdKey = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}\shell\open\command"))
-        {
-            openCmdKey.SetValue("", $"\"{exePath}\" \"%1\"");
-        }
-
-        // 4. Classes registration for ProgID (PDF)
-        using (var classKeyPdf = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progIdPdf}"))
-        {
-            classKeyPdf.SetValue("", "WallFlow PDF Document");
-        }
-        using (var appKeyPdf = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progIdPdf}\Application"))
-        {
-            appKeyPdf.SetValue("ApplicationName", appName);
-            appKeyPdf.SetValue("ApplicationDescription", "Visor de PDF de WallFlow");
-            appKeyPdf.SetValue("ApplicationIcon", $"{exePath},0");
-        }
-        using (var iconKeyPdf = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progIdPdf}\DefaultIcon"))
-        {
-            iconKeyPdf.SetValue("", $"{exePath},0");
-        }
-        using (var openCmdKeyPdf = Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progIdPdf}\shell\open\command"))
-        {
-            openCmdKeyPdf.SetValue("", $"\"{exePath}\" \"%1\"");
-        }
-    }
-
-    private void RegisterBrowserBtn_MouseEnter(object sender, MouseEventArgs e)
-    {
-        try { RegisterBrowserBtn.Background = new SolidColorBrush(Color.FromArgb(0x25, 0xFF, 0xFF, 0xFF)); }
-        catch { }
-    }
-
-    private void RegisterBrowserBtn_MouseLeave(object sender, MouseEventArgs e)
-    {
-        try { RegisterBrowserBtn.Background = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)); }
-        catch { }
-    }
-
-    private void OpenSettingsBtn_MouseEnter(object sender, MouseEventArgs e)
-    {
-        try { OpenSystemDefaultAppsBtn.Background = new SolidColorBrush(Color.FromRgb(0xC5, 0x7B, 0xFA)); }
-        catch { }
-    }
-
-    private void OpenSettingsBtn_MouseLeave(object sender, MouseEventArgs e)
-    {
-        try { OpenSystemDefaultAppsBtn.Background = new SolidColorBrush(Color.FromRgb(0xAF, 0x52, 0xDE)); }
-        catch { }
-    }
 
     private void PopulateFonts()
     {
@@ -1718,9 +1701,7 @@ public partial class SettingsWindow : Window
             // 1. Add bundled fonts
             var bundledFonts = new string[]
             {
-                "Outfit", "Share Tech Mono", "Orbitron", "Lobster Two", "Dancing Script",
-                "Pacifico", "Cinzel", "Montserrat", "Playfair Display", "Comfortaa",
-                "Caveat", "Roboto Mono", "Michroma", "Syncopate", "Inter", "Quicksand", "Varela Round"
+                "Outfit", "Orbitron", "Google Sans Flex"
             };
 
             foreach (var fontName in bundledFonts)
@@ -2031,38 +2012,7 @@ public partial class SettingsWindow : Window
         UpdateEnabledStates();
     }
 
-    private void UpdateBrowserColorPreviews()
-    {
-        ValidateSpotlightColorInput(BrowserBgHexBox, BrowserBgPreview);
-        ValidateSpotlightColorInput(BrowserAccentHexBox, BrowserAccentPreview);
-        ValidateSpotlightColorInput(BrowserBorderHexBox, BrowserBorderPreview);
-    }
-
-    private void BrowserUseDockColors_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-        UpdateEnabledStates();
-    }
-
-    private void BrowserBgHex_Changed(object sender, TextChangedEventArgs e)
-    {
-        if (_loading) return;
-        ValidateSpotlightColorInput(BrowserBgHexBox, BrowserBgPreview);
-    }
-
-    private void BrowserAccentHex_Changed(object sender, TextChangedEventArgs e)
-    {
-        if (_loading) return;
-        ValidateSpotlightColorInput(BrowserAccentHexBox, BrowserAccentPreview);
-    }
-
-    private void BrowserBorderHex_Changed(object sender, TextChangedEventArgs e)
-    {
-        if (_loading) return;
-        ValidateSpotlightColorInput(BrowserBorderHexBox, BrowserBorderPreview);
-    }
-
-    private void BrowserColorPicker_Click(object sender, MouseButtonEventArgs e)
+    private void ColorPicker_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is Border border && border.Tag is string hexBoxName)
         {
@@ -2076,87 +2026,17 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private static readonly (string Name, string Bg, string Accent, string Border)[] BrowserThemes = new[]
+    private void SelectComboItemByTag(ComboBox combo, string tagValue)
     {
-        ("Default",  "#2C2C2E", "#AF52DE", "#3A3A3C"),
-        ("Ocean",    "#1C2A3A", "#4A9EFF", "#2A3A4A"),
-        ("Forest",   "#1A2E1A", "#4CAF50", "#2A3E2A"),
-        ("Sunset",   "#2E1A1A", "#FF6B35", "#3E2A2A"),
-        ("Midnight", "#1A1A2E", "#7C4DFF", "#2A2A3E"),
-        ("Crimson",  "#2E1A1A", "#E53935", "#3E2A2A"),
-        ("Teal",     "#1A2E2E", "#00BCD4", "#2A3E3E"),
-        ("Warm",     "#2E2A1A", "#FFB300", "#3E3A2A"),
-        ("Rose",     "#2E1A2E", "#E91E8C", "#3E2A3E"),
-        ("Slate",    "#1E1E1E", "#78909C", "#2E2E2E"),
-    };
-
-    private void PopulateBrowserThemes()
-    {
-        foreach (var theme in BrowserThemes)
+        if (combo == null) return;
+        for (int i = 0; i < combo.Items.Count; i++)
         {
-            var btn = new Button
+            if (combo.Items[i] is ComboBoxItem item && (item.Tag as string) == tagValue)
             {
-                Style = (Style)FindResource("SettingsActionButtonStyle"),
-                Width = 86,
-                Height = 58,
-                Tag = $"{theme.Bg},{theme.Accent},{theme.Border}",
-                Padding = new Thickness(4),
-                Margin = new Thickness(3),
-                Cursor = Cursors.Hand,
-            };
-
-            var innerStack = new StackPanel();
-
-            var colorRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-            colorRow.Children.Add(MakeColorSwatch(theme.Bg));
-            colorRow.Children.Add(MakeColorSwatch(theme.Accent));
-            colorRow.Children.Add(MakeColorSwatch(theme.Border));
-            innerStack.Children.Add(colorRow);
-
-            innerStack.Children.Add(new TextBlock
-            {
-                Text = theme.Name,
-                FontSize = 9,
-                Foreground = (SolidColorBrush)FindResource("TextSecondaryBrush"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 3, 0, 0),
-            });
-
-            btn.Content = innerStack;
-            btn.Click += BrowserTheme_Click;
-            BrowserThemeGrid.Children.Add(btn);
-        }
-    }
-
-    private static Border MakeColorSwatch(string hex)
-    {
-        var color = (Color)ColorConverter.ConvertFromString(hex);
-        return new Border
-        {
-            Width = 16,
-            Height = 16,
-            CornerRadius = new CornerRadius(3),
-            Background = new SolidColorBrush(color),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(1, 0, 1, 0),
-        };
-    }
-
-    private void BrowserTheme_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is string hexes)
-        {
-            var parts = hexes.Split(',');
-            if (parts.Length == 3)
-            {
-                BrowserBgHexBox.Text = parts[0];
-                BrowserAccentHexBox.Text = parts[1];
-                BrowserBorderHexBox.Text = parts[2];
-                BrowserUseDockColorsCheck.IsChecked = false;
-                UpdateBrowserColorPreviews();
+                combo.SelectedIndex = i;
+                return;
             }
         }
+        if (combo.Items.Count > 0) combo.SelectedIndex = 0;
     }
 }
-

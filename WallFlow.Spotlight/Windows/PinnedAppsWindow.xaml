@@ -1,6 +1,7 @@
 <Window x:Class="WallFlow.Windows.PinnedAppsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WallFlow.Windows"
         Style="{StaticResource WallFlowWindow}"
         Title="Pinned Apps"
         Width="700"
@@ -21,6 +22,7 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <FontFamily x:Key="LucideIconsFont">pack://application:,,,/WallFlow;component/Fonts/#lucide</FontFamily>
 
         <!-- Slim custom scrollviewer style to match acrylic glass theme -->
         <Style x:Key="SlimScrollViewer" TargetType="ScrollViewer">
@@ -210,7 +212,9 @@
             <Setter Property="CaretBrush" Value="White" />
             <Setter Property="SelectionBrush" Value="{DynamicResource AccentActiveBrush}" />
             <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="AcceptsReturn" Value="True" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -222,15 +226,10 @@
                                 <DropShadowEffect BlurRadius="15" ShadowDepth="3" Opacity="0.4" Color="Black" Direction="270" />
                             </Border.Effect>
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="false"
-                                          HorizontalScrollBarVisibility="Hidden"
-                                          VerticalScrollBarVisibility="Hidden"
-                                          VerticalAlignment="Center" Margin="46,2,4,2"/>
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto"
+                                          VerticalAlignment="Center" Margin="60,10,12,10"/>
                         </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsFocused" Value="true">
-                                <Setter TargetName="border" Property="Background" Value="{Binding DataContext.SpotlightSearchFocusBrush, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -349,7 +348,9 @@
                 <Grid Grid.Column="0">
                     <TextBox x:Name="SearchBox"
                               Style="{StaticResource SearchTextBoxStyle}"
-                              Height="54"
+                              MinHeight="54"
+                              AcceptsReturn="True"
+                              TextWrapping="Wrap"
                               Background="{Binding SpotlightBgBrush}"
                               BorderBrush="{Binding SpotlightBorderBrush}"
                               BorderThickness="{Binding SpotlightBorderThickness}"
@@ -362,24 +363,24 @@
                               VerticalContentAlignment="Center" />
 
                     <!-- Search Icon (magnifying glass) -->
-                    <TextBlock Text="&#xE71E;"
-                                FontFamily="Segoe MDL2 Assets"
+                    <TextBlock Text="&#xE151;"
+                                FontFamily="{DynamicResource LucideIconsFont}"
                                 Foreground="{Binding SpotlightIconBrush}"
-                                FontSize="16"
+                                FontSize="28"
                                 HorizontalAlignment="Left"
-                                VerticalAlignment="Center"
-                                Margin="20,0,0,0"
+                                VerticalAlignment="Top"
+                                Margin="20,12,0,0"
                                 IsHitTestVisible="False" />
 
                     <!-- Placeholder / Ghost Text -->
                     <TextBlock x:Name="PlaceholderText"
                                 Text="Buscar aplicación..."
                                 Foreground="{Binding SpotlightPlaceholderBrush}"
-                                FontSize="14"
+                                FontSize="20"
                                 FontFamily="{DynamicResource AppFontFamily}"
                                 HorizontalAlignment="Left"
-                                VerticalAlignment="Center"
-                                Margin="48,0,0,0"
+                                VerticalAlignment="Top"
+                                Margin="60,14,0,0"
                                 IsHitTestVisible="False"
                                 Visibility="Visible" />
                 </Grid>
@@ -390,19 +391,25 @@
                     <Button x:Name="ModeAppsBtn" Style="{StaticResource ModeCircleButtonStyle}" Click="ModeButton_Click" Tag="Apps" ToolTip="Buscar Aplicaciones"
                             Background="{Binding ModeAppsBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                             Foreground="{Binding ModeAppsForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <TextBlock Text="&#xE5C3;" FontFamily="{StaticResource MaterialIconsFont}" FontSize="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        <TextBlock Text="&#xE3B1;" FontFamily="{DynamicResource LucideIconsFont}" FontSize="28" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                     </Button>
                     <!-- Files Mode Button -->
                     <Button x:Name="ModeFilesBtn" Style="{StaticResource ModeCircleButtonStyle}" Click="ModeButton_Click" Tag="Files" ToolTip="Buscar Archivos" Margin="6,0,0,0"
                             Background="{Binding ModeFilesBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                             Foreground="{Binding ModeFilesForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <TextBlock Text="&#xE873;" FontFamily="{StaticResource MaterialIconsFont}" FontSize="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        <TextBlock Text="&#xE339;" FontFamily="{DynamicResource LucideIconsFont}" FontSize="28" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                     </Button>
                     <!-- Clipboard Mode Button -->
                     <Button x:Name="ModeClipboardBtn" Style="{StaticResource ModeCircleButtonStyle}" Click="ModeButton_Click" Tag="Clipboard" ToolTip="Historial de Portapapeles" Margin="6,0,0,0"
                             Background="{Binding ModeClipboardBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                             Foreground="{Binding ModeClipboardForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <TextBlock Text="&#xE14F;" FontFamily="{StaticResource MaterialIconsFont}" FontSize="18" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        <TextBlock Text="&#xE0CF;" FontFamily="{DynamicResource LucideIconsFont}" FontSize="28" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Button>
+                    <!-- Gemini AI Mode Button -->
+                    <Button x:Name="ModeAiBtn" Style="{StaticResource ModeCircleButtonStyle}" Click="ModeButton_Click" Tag="AI" ToolTip="Consultar a Gemini AI" Margin="6,0,0,0"
+                            Background="{Binding ModeAiBrush, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Foreground="{Binding ModeAiForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <TextBlock Text="&#xE1BB;" FontFamily="{DynamicResource LucideIconsFont}" FontSize="28" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                     </Button>
                 </StackPanel>
             </Grid>
@@ -416,14 +423,39 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Button Style="{StaticResource CircleButtonStyle}" Background="{Binding DataContext.SpotlightBgBrush, RelativeSource={RelativeSource AncestorType=Window}}" Click="AppButton_Click" Tag="{Binding Path}" ToolTip="{Binding Name}" Margin="6,4">
+                        <Button Style="{StaticResource CircleButtonStyle}" 
+                                Background="{Binding DataContext.SpotlightBgBrush, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                Opacity="{Binding Opacity}"
+                                Click="AppButton_Click" 
+                                Tag="{Binding Path}" 
+                                ToolTip="{Binding Name}" 
+                                Margin="6,4"
+                                AllowDrop="True"
+                                PreviewMouseLeftButtonDown="FavButton_PreviewMouseLeftButtonDown"
+                                PreviewMouseMove="FavButton_PreviewMouseMove"
+                                DragOver="FavButton_DragOver"
+                                Drop="FavButton_Drop">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <ContextMenu.Style>
+                                        <Style TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Path}" Value="ADD_APP">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ContextMenu.Style>
+                                    <MenuItem Header="Desanclar de Favoritos" Click="UnpinMenu_Click" Tag="{Binding Path}" />
+                                </ContextMenu>
+                            </Button.ContextMenu>
                             <Button.Effect>
                                 <DropShadowEffect BlurRadius="14" ShadowDepth="4" Opacity="0.5" Color="Black" Direction="270" />
                             </Button.Effect>
                             <Grid>
                                 <TextBlock Text="{Binding IconGlyph}"
                                            Visibility="{Binding IsGlyphVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                           FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                           FontFamily="{DynamicResource LucideIconsFont}" FontSize="28"
                                            Foreground="{Binding DataContext.SpotlightItemForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
  
@@ -452,7 +484,7 @@
                 </Border.Effect>
                 <StackPanel>
                     <!-- Results List -->
-                    <ScrollViewer x:Name="ResultsScrollViewer" Style="{StaticResource SlimScrollViewer}" MaxHeight="288" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                    <ScrollViewer x:Name="ResultsScrollViewer" Style="{StaticResource SlimScrollViewer}" MaxHeight="480" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
                         <ItemsControl x:Name="AppsControl" ItemsSource="{Binding PinnedAppsList, RelativeSource={RelativeSource AncestorType=Window}}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -500,6 +532,14 @@
                                                     </Style>
                                                 </MenuItem.Style>
                                             </MenuItem>
+
+                                            <!-- Clipboard specific options -->
+                                            <MenuItem Header="Abrir enlace" Click="OpenLinkMenu_Click" Tag="{Binding Path}" Visibility="{Binding IsClipboardLink, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <MenuItem Header="Abrir archivos" Click="OpenFilesMenu_Click" Tag="{Binding Path}" Visibility="{Binding IsClipboardFile, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <MenuItem Header="Abrir ubicación de los archivos" Click="OpenFilesLocationMenu_Click" Tag="{Binding Path}" Visibility="{Binding IsClipboardFile, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <MenuItem Header="Buscar en Google" Click="SearchGoogleMenu_Click" Tag="{Binding Path}" Visibility="{Binding IsClipboardText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <Separator Visibility="{Binding IsClipboardItem, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <MenuItem Header="Eliminar del historial" Click="DeleteClipboardItemMenu_Click" Tag="{Binding ClipboardId}" Visibility="{Binding IsClipboardItem, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         </ContextMenu>
                                     </Button.ContextMenu>
 
@@ -522,28 +562,36 @@
                                                 <Grid>
                                                     <TextBlock Text="{Binding IconGlyph}"
                                                                Visibility="{Binding IsGlyphVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                                               FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                                               FontFamily="{DynamicResource LucideIconsFont}" FontSize="28"
                                                                Foreground="{Binding DataContext.SpotlightItemForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
 
                                                     <Image Source="{Binding Icon}" 
                                                            Visibility="{Binding IsIconVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                                           Width="24" Height="24" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                                                           Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
                                                 </Grid>
                                             </Border>
 
-                                            <!-- App Name and Path -->
+                                            <!-- App Name and Subtitle/Path -->
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Name}"
+                                                <TextBlock local:MarkdownHelper.FormattedText="{Binding Name}"
                                                            Foreground="{Binding DataContext.SpotlightTextBrush, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                           FontSize="13.5" FontWeight="SemiBold" />
+                                                           FontSize="18" FontWeight="SemiBold"
+                                                           TextWrapping="Wrap" />
+
+                                                <TextBlock Text="{Binding Subtitle}"
+                                                           Visibility="{Binding IsSubtitleVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                           Foreground="{Binding DataContext.SpotlightSecondaryTextBrush, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                           FontSize="16" Opacity="0.75" Margin="0,2,0,0"
+                                                           TextWrapping="Wrap" />
                                             </StackPanel>
 
                                             <!-- Action Badge -->
                                             <Border x:Name="ActionBorder" Grid.Column="2" CornerRadius="4"
                                                     Background="{Binding DataContext.SpotlightItemBackgroundBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     BorderBrush="{Binding DataContext.SpotlightHoverBorderBrush, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    BorderThickness="1" Padding="6,2" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                    BorderThickness="1" Padding="6,2" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                    Visibility="{Binding IsActionBadgeVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <TextBlock x:Name="ActionTextControl" Text="{Binding ActionText}"
                                                            Foreground="{Binding DataContext.SpotlightSecondaryTextBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                                            FontSize="10.5" FontFamily="{DynamicResource AppFontFamily}" />
@@ -563,8 +611,22 @@
                                     <Trigger SourceName="AppButton" Property="IsMouseOver" Value="True">
                                         <Setter TargetName="RowBorder" Property="Background" Value="{Binding DataContext.SpotlightHoverBackgroundBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
                                         <Setter TargetName="RowBorder" Property="BorderBrush" Value="{Binding DataContext.SpotlightHoverBorderBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    </Trigger>
+                                    
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True" />
+                                            <Condition Binding="{Binding IsPinnable}" Value="True" />
+                                        </MultiDataTrigger.Conditions>
                                         <Setter TargetName="PinButton" Property="Visibility" Value="Visible" />
-                                        <Trigger.EnterActions>
+                                    </MultiDataTrigger>
+
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True" />
+                                            <Condition Binding="{Binding IsAiItem}" Value="False" />
+                                        </MultiDataTrigger.Conditions>
+                                        <MultiDataTrigger.EnterActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetName="RowContentGrid"
@@ -574,8 +636,8 @@
                                                     </DoubleAnimation>
                                                 </Storyboard>
                                             </BeginStoryboard>
-                                        </Trigger.EnterActions>
-                                        <Trigger.ExitActions>
+                                        </MultiDataTrigger.EnterActions>
+                                         <MultiDataTrigger.ExitActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetName="RowContentGrid"
@@ -585,8 +647,8 @@
                                                     </DoubleAnimation>
                                                 </Storyboard>
                                             </BeginStoryboard>
-                                        </Trigger.ExitActions>
-                                    </Trigger>
+                                         </MultiDataTrigger.ExitActions>
+                                     </MultiDataTrigger>
                                      <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                          <Setter TargetName="RowBorder" Property="Background" Value="{Binding DataContext.SpotlightSelectedBackgroundBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
                                          <Setter TargetName="RowBorder" Property="BorderBrush" Value="{Binding DataContext.SpotlightSelectedBorderBrush, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -605,6 +667,35 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
+
+                <!-- Empty / No Results Placeholder -->
+                <Grid x:Name="NoResultsPlaceholder" Visibility="Collapsed" Height="100">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <!-- Clipboard Icon -->
+                        <TextBlock Text="&#xE0CF;" 
+                                   FontFamily="{DynamicResource LucideIconsFont}" 
+                                   FontSize="28" 
+                                   Foreground="{Binding SpotlightIconBrush}" 
+                                   Opacity="0.45"
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,6" />
+                        <TextBlock x:Name="NoResultsTitle" 
+                                   Text="El portapapeles está vacío" 
+                                   Foreground="{Binding SpotlightTextBrush}" 
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   FontFamily="{DynamicResource AppFontFamily}"
+                                   HorizontalAlignment="Center" 
+                                   Margin="0,0,0,3" />
+                        <TextBlock x:Name="NoResultsSubtitle" 
+                                   Text="Copia texto o imágenes para ver tu historial aquí." 
+                                   Foreground="{Binding SpotlightSecondaryTextBrush}" 
+                                   FontSize="16" 
+                                   FontFamily="{DynamicResource AppFontFamily}"
+                                   Opacity="0.75"
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
 
                 <!-- Separator between results and web search (only visible when there are results) -->
                 <Border x:Name="WebSearchSeparator" Height="1"
@@ -668,7 +759,7 @@
                             <Border Grid.Column="0" Width="36" Height="36" CornerRadius="6"
                                     Background="{Binding DataContext.SpotlightItemBackgroundBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                     VerticalAlignment="Center" Margin="0,0,10,0">
-                                <TextBlock Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                <TextBlock Text="&#xE0E8;" FontFamily="{DynamicResource LucideIconsFont}" FontSize="28"
                                            Foreground="{Binding DataContext.SpotlightItemForegroundBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
@@ -677,13 +768,13 @@
                             <TextBlock x:Name="WebSearchText" Grid.Column="1"
                                        Text="Buscar en la web"
                                        Foreground="{Binding DataContext.SpotlightTextBrush, RelativeSource={RelativeSource AncestorType=Window}}"
-                                       FontSize="12.5" FontFamily="{DynamicResource AppFontFamily}"
+                                       FontSize="18" FontFamily="{DynamicResource AppFontFamily}"
                                        Opacity="0.75"
                                        VerticalAlignment="Center" />
 
                             <!-- Arrow -->
-                            <TextBlock Grid.Column="2" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets"
-                                       FontSize="10"
+                            <TextBlock Grid.Column="2" Text="&#xE06F;" FontFamily="{DynamicResource LucideIconsFont}"
+                                       FontSize="28"
                                        Foreground="{Binding DataContext.SpotlightIconBrush, RelativeSource={RelativeSource AncestorType=Window}}"
                                        VerticalAlignment="Center" Margin="6,0,2,0" />
                         </Grid>

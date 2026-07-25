@@ -196,10 +196,9 @@ public static class BackdropHelper
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero) return;
 
-        ApplyAccent(hwnd, AccentState.ACCENT_DISABLED);
         ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
         RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
-            RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+            RDW_INVALIDATE | RDW_UPDATENOW);
     }
 
     [DllImport("gdi32.dll", EntryPoint = "CreateRoundRectRgn")]

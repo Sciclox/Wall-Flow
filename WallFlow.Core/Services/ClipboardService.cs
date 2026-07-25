@@ -81,8 +81,100 @@ public class ClipboardService
         {
             Clipboard.SetText(text);
         }
-        catch { }
-        finally
+        catch
+        {
+            _isInternalCopy = false;
+        }
+    }
+
+    /// <summary>
+    /// Add AI/ChatGPT generated response directly to history with 'IA' type and '#IA' tag.
+    /// </summary>
+    public void AddAiItem(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var newItem = new ClipboardItem
+        {
+            Type = "IA",
+            Content = text,
+            Timestamp = DateTime.Now,
+            Tags = new List<string> { "#IA", "#Texto" }
+        };
+
+        lock (_lock)
+        {
+            var existing = _history.FirstOrDefault(h => h.Content == text);
+            if (existing != null)
+            {
+                _history.Remove(existing);
+                existing.Timestamp = DateTime.Now;
+                _history.Insert(0, existing);
+            }
+            else
+            {
+                _history.Insert(0, newItem);
+            }
+
+            while (_history.Count > 50)
+            {
+                var old = _history[_history.Count - 1];
+                if (old.Type == "Image" && File.Exists(old.ImagePath))
+                {
+                    try { File.Delete(old.ImagePath); } catch { }
+                }
+                _history.RemoveAt(_history.Count - 1);
+            }
+        }
+
+        try
+        {
+            _isInternalCopy = true;
+            Clipboard.SetText(text);
+        }
+        catch
+        {
+            _isInternalCopy = false;
+        }
+
+        HistoryChanged?.Invoke();
+    }
+
+    public void CopyToClipboardInternal(Guid id)
+    {
+        _isInternalCopy = true;
+        try
+        {
+            ClipboardItem? item = null;
+            lock (_lock)
+            {
+                item = _history.FirstOrDefault(i => i.Id == id);
+            }
+            if (item == null)
+            {
+                _isInternalCopy = false;
+                return;
+            }
+
+            if (item.Type == "Image" && !string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+            {
+                var uri = new Uri(item.ImagePath, UriKind.Absolute);
+                var bmi = new BitmapImage(uri);
+                Clipboard.SetImage(bmi);
+            }
+            else if (item.Type == "File")
+            {
+                var files = item.Content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                var sc = new System.Collections.Specialized.StringCollection();
+                foreach (var f in files) sc.Add(f);
+                Clipboard.SetFileDropList(sc);
+            }
+            else
+            {
+                Clipboard.SetText(item.Content);
+            }
+        }
+        catch
         {
             _isInternalCopy = false;
         }
@@ -107,7 +199,11 @@ public class ClipboardService
 
     public void OnClipboardUpdated()
     {
-        if (_isInternalCopy) return;
+        if (_isInternalCopy)
+        {
+            _isInternalCopy = false;
+            return;
+        }
 
         // Perform clipboard reading on STA thread with retries
         Task.Run(() =>
@@ -189,8 +285,29 @@ public class ClipboardService
                         {
                             lock (_lock)
                             {
-                                _history.Insert(0, newItem);
-                                
+                                var existing = _history.FirstOrDefault(h => 
+                                    h.Type == newItem.Type && 
+                                    (h.Content == newItem.Content || 
+                                     (h.Type == "Image" && !string.IsNullOrEmpty(h.ImagePath) && !string.IsNullOrEmpty(newItem.ImagePath) && 
+                                      Path.GetFileName(h.ImagePath) == Path.GetFileName(newItem.ImagePath)))
+                                );
+
+                                if (existing != null)
+                                {
+                                    _history.Remove(existing);
+                                    existing.Timestamp = DateTime.Now;
+                                    _history.Insert(0, existing);
+
+                                    if (newItem.Type == "Image" && File.Exists(newItem.ImagePath))
+                                    {
+                                        try { File.Delete(newItem.ImagePath); } catch { }
+                                    }
+                                }
+                                else
+                                {
+                                    _history.Insert(0, newItem);
+                                }
+
                                 // Limit history size to 50
                                 while (_history.Count > 50)
                                 {

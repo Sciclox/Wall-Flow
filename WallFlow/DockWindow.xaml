@@ -15,30 +15,30 @@
         FontFamily="{DynamicResource AppFontFamily}">
 
     <Window.Resources>
-        <!-- Storyboard for sound waves animation -->
+        <!-- Storyboard for sound waves animation (Apple Music / iOS Symmetrical Pill Bars) -->
         <Storyboard x:Key="SoundWavesPlaying" RepeatBehavior="Forever">
-            <DoubleAnimation Storyboard.TargetName="WaveBar1" Storyboard.TargetProperty="RenderTransform.ScaleY"
-                             From="0.2" To="0.9" Duration="0:0:0.48" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WaveBar1" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.2" To="0.9" Duration="0:0:0.38" AutoReverse="True">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar2" Storyboard.TargetProperty="RenderTransform.ScaleY"
-                             From="0.2" To="0.65" Duration="0:0:0.35" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WaveBar2" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.3" To="1.0" Duration="0:0:0.46" AutoReverse="True">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar3" Storyboard.TargetProperty="RenderTransform.ScaleY"
-                             From="0.2" To="1.0" Duration="0:0:0.55" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WaveBar3" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.15" To="0.85" Duration="0:0:0.32" AutoReverse="True">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar4" Storyboard.TargetProperty="RenderTransform.ScaleY"
-                             From="0.2" To="0.55" Duration="0:0:0.31" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WaveBar4" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.25" To="0.95" Duration="0:0:0.52" AutoReverse="True">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar5" Storyboard.TargetProperty="RenderTransform.ScaleY"
-                             From="0.2" To="0.85" Duration="0:0:0.51" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WaveBar5" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.2" To="0.75" Duration="0:0:0.40" AutoReverse="True">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar6" Storyboard.TargetProperty="RenderTransform.ScaleY"
-                             From="0.2" To="0.7" Duration="0:0:0.41" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WaveBar6" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.15" To="0.8" Duration="0:0:0.35" AutoReverse="True">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
         </Storyboard>
@@ -232,49 +232,12 @@
                             <Trigger Property="Content" Value="&#xE706;">
                                 <Setter TargetName="SunGrid" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="DefaultPresenterBorder" Property="Visibility" Value="Collapsed" />
-                                <Trigger.EnterActions>
-                                    <BeginStoryboard Name="SunAnimBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Rotate Sun Rays -->
-                                            <DoubleAnimation Storyboard.TargetName="SunRaysRotation" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:8" />
-                                            <!-- Pulse Sun Core -->
-                                            <DoubleAnimation Storyboard.TargetName="SunScale" Storyboard.TargetProperty="ScaleX" From="0.95" To="1.08" Duration="0:0:1.5" AutoReverse="True">
-                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetName="SunScale" Storyboard.TargetProperty="ScaleY" From="0.95" To="1.08" Duration="0:0:1.5" AutoReverse="True">
-                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <!-- Expand and Fade Solar Flare -->
-                                            <DoubleAnimation Storyboard.TargetName="FlareScale" Storyboard.TargetProperty="ScaleX" From="0.8" To="1.6" Duration="0:0:1.6" />
-                                            <DoubleAnimation Storyboard.TargetName="FlareScale" Storyboard.TargetProperty="ScaleY" From="0.8" To="1.6" Duration="0:0:1.6" />
-                                            <DoubleAnimation Storyboard.TargetName="SunFlare" Storyboard.TargetProperty="Opacity" From="0.8" To="0.0" Duration="0:0:1.6" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </Trigger.EnterActions>
-                                <Trigger.ExitActions>
-                                    <StopStoryboard BeginStoryboardName="SunAnimBoard" />
-                                </Trigger.ExitActions>
                             </Trigger>
 
                             <!-- Moon Content Trigger -->
                             <Trigger Property="Content" Value="&#xE708;">
                                 <Setter TargetName="MoonGrid" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="DefaultPresenterBorder" Property="Visibility" Value="Collapsed" />
-                                <Trigger.EnterActions>
-                                    <BeginStoryboard Name="MoonAnimBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Rock Moon Cradle -->
-                                            <DoubleAnimation Storyboard.TargetName="MoonRotation" Storyboard.TargetProperty="Angle" From="-6" To="6" Duration="0:0:3" AutoReverse="True" />
-                                            <!-- Twinkle Star 1 -->
-                                            <DoubleAnimation Storyboard.TargetName="Star1" Storyboard.TargetProperty="Opacity" From="0.1" To="1.0" Duration="0:0:0.8" AutoReverse="True" />
-                                            <!-- Twinkle Star 2 -->
-                                            <DoubleAnimation Storyboard.TargetName="Star2" Storyboard.TargetProperty="Opacity" From="1.0" To="0.2" Duration="0:0:1.2" AutoReverse="True" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </Trigger.EnterActions>
-                                <Trigger.ExitActions>
-                                    <StopStoryboard BeginStoryboardName="MoonAnimBoard" />
-                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -305,18 +268,7 @@
         </Style>
     </Window.Resources>
 
-    <!-- GPU-Accelerated Rotation Trigger -->
-    <Window.Triggers>
-        <EventTrigger RoutedEvent="Window.Loaded">
-            <BeginStoryboard>
-                <Storyboard RepeatBehavior="Forever">
-                    <DoubleAnimation Storyboard.TargetName="BorderRotate"
-                                     Storyboard.TargetProperty="Angle"
-                                     From="0" To="360" Duration="0:0:6" />
-                </Storyboard>
-            </BeginStoryboard>
-        </EventTrigger>
-    </Window.Triggers>
+
 
     <!-- ==================== MAIN TASKBAR (Black translucent background with GPU animated border) ==================== -->
     <Border x:Name="TaskbarBorder"
@@ -332,9 +284,9 @@
                 <LinearGradientBrush.RelativeTransform>
                     <RotateTransform x:Name="BorderRotate" Angle="0" CenterX="0.5" CenterY="0.5" />
                 </LinearGradientBrush.RelativeTransform>
-                <GradientStop Color="#007AFF" Offset="0" />
-                <GradientStop Color="#5856D6" Offset="0.5" />
-                <GradientStop Color="#AF52DE" Offset="1" />
+                <GradientStop Color="{DynamicResource BorderColor1}" Offset="0" />
+                <GradientStop Color="{DynamicResource BorderColor2}" Offset="0.5" />
+                <GradientStop Color="{DynamicResource BorderColor3}" Offset="1" />
             </LinearGradientBrush>
         </Border.BorderBrush>
 
@@ -351,138 +303,38 @@
             <!-- ===== LEFT: WallFlow Launcher & Open Windows List (Left aligned together) ===== -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                 
-                <!-- Pinned Apps Launcher Button (Grid icon: \uE71D) -->
-                <!-- Pinned Apps Launcher Button (Custom Animated Matrix Grid) -->
+                <!-- Pinned Apps Button -->
                 <Button x:Name="PinnedAppsButton"
                         Click="PinnedAppsButton_Click"
                         Width="42" Height="42"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
+                        Margin="2,0"
                         ToolTip="Aplicaciones Fijadas">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="AppsIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="AppsIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="AppsIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="AppsTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Holographic Glow (Back layer) -->
-                                <Ellipse x:Name="AppsGlow" Width="34" Height="34" Opacity="0.3" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFFF007F" Offset="0" />
-                                            <GradientStop Color="#00FF007F" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- 3x3 Matrix Grid -->
-                                <Grid Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="*" />
-                                    </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- 9 Glowing Nodes -->
-                                    <Border x:Name="Cell1" Grid.Row="0" Grid.Column="0" CornerRadius="1.5" Margin="1.5" Background="#FFFF007F" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale1" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                    <Border x:Name="Cell2" Grid.Row="0" Grid.Column="1" CornerRadius="1.5" Margin="1.5" Background="#FFAF52DE" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale2" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                    <Border x:Name="Cell3" Grid.Row="0" Grid.Column="2" CornerRadius="1.5" Margin="1.5" Background="#FF00F5FF" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale3" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-
-                                    <Border x:Name="Cell4" Grid.Row="1" Grid.Column="0" CornerRadius="1.5" Margin="1.5" Background="#FFAF52DE" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale4" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                    <Border x:Name="Cell5" Grid.Row="1" Grid.Column="1" CornerRadius="1.5" Margin="1.5" Background="#FFFFFFFF" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale5" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                    <Border x:Name="Cell6" Grid.Row="1" Grid.Column="2" CornerRadius="1.5" Margin="1.5" Background="#FFAF52DE" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale6" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-
-                                    <Border x:Name="Cell7" Grid.Row="2" Grid.Column="0" CornerRadius="1.5" Margin="1.5" Background="#FF00F5FF" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale7" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                    <Border x:Name="Cell8" Grid.Row="2" Grid.Column="1" CornerRadius="1.5" Margin="1.5" Background="#FFAF52DE" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale8" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                    <Border x:Name="Cell9" Grid.Row="2" Grid.Column="2" CornerRadius="1.5" Margin="1.5" Background="#FFFF007F" Opacity="0.8" RenderTransformOrigin="0.5,0.5">
-                                        <Border.RenderTransform><ScaleTransform x:Name="Scale9" ScaleX="1" ScaleY="1"/></Border.RenderTransform>
-                                    </Border>
-                                </Grid>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Ripple Animation Storyboard -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="RippleBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Cell 1 -->
-                                            <DoubleAnimation Storyboard.TargetName="Scale1" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.0" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale1" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.0" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell1" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.0" />
-                                            
-                                            <!-- Cell 2, 4 -->
-                                            <DoubleAnimation Storyboard.TargetName="Scale2" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.15" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale2" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.15" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell2" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.15" />
-                                            
-                                            <DoubleAnimation Storyboard.TargetName="Scale4" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.15" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale4" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.15" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell4" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.15" />
-
-                                            <!-- Cell 3, 5, 7 -->
-                                            <DoubleAnimation Storyboard.TargetName="Scale3" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale3" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell3" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-
-                                            <DoubleAnimation Storyboard.TargetName="Scale5" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale5" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell5" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-
-                                            <DoubleAnimation Storyboard.TargetName="Scale7" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale7" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell7" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.3" />
-
-                                            <!-- Cell 6, 8 -->
-                                            <DoubleAnimation Storyboard.TargetName="Scale6" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.45" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale6" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.45" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell6" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.45" />
-
-                                            <DoubleAnimation Storyboard.TargetName="Scale8" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.45" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale8" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.45" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell8" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.45" />
-
-                                            <!-- Cell 9 -->
-                                            <DoubleAnimation Storyboard.TargetName="Scale9" Storyboard.TargetProperty="ScaleX" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.6" />
-                                            <DoubleAnimation Storyboard.TargetName="Scale9" Storyboard.TargetProperty="ScaleY" From="1" To="1.4" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.6" />
-                                            <DoubleAnimation Storyboard.TargetName="Cell9" Storyboard.TargetProperty="Opacity" From="0.6" To="1.0" Duration="0:0:0.4" AutoReverse="True" BeginTime="0:0:0.6" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Mouse Hover Triggers -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsGlow" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -491,20 +343,17 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Window Active State Trigger -->
-                                <DataTrigger Binding="{Binding IsPinnedFlyoutOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsPinnedFlyoutOpen}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard Name="ActiveAppsState">
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
@@ -513,7 +362,6 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.ExitActions>
@@ -523,8 +371,7 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Wallpaper Local Gallery Button (Picture frame icon: \uEB9F) -->
-                <!-- Wallpaper Local Gallery Button (Custom Animated Stacked Photo Frames) -->
+                <!-- Wallpaper Local Gallery Button -->
                 <Button x:Name="LocalGalleryButton"
                         Click="WallFlowLogoButton_Click"
                         Width="42" Height="42"
@@ -535,69 +382,27 @@
                         ToolTip="Galería de Wallpapers">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="GalleryIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="GalleryIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="GalleryIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="GalleryTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Gallery Glow -->
-                                <Ellipse x:Name="GalleryGlow" Width="34" Height="34" Opacity="0.3" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FF00F5FF" Offset="0" />
-                                            <GradientStop Color="#0000F5FF" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Back Photo Frame -->
-                                <Border x:Name="BackFrame" Width="20" Height="20" BorderBrush="White" BorderThickness="1.5" Background="#80101010" CornerRadius="1.5" RenderTransformOrigin="0.5,0.5">
-                                    <Border.RenderTransform>
-                                        <RotateTransform x:Name="BackRotation" Angle="12" />
-                                    </Border.RenderTransform>
-                                </Border>
-
-                                <!-- Front Photo Frame (with Gradient Wallpaper landscape) -->
-                                <Border x:Name="FrontFrame" Width="20" Height="20" BorderBrush="White" BorderThickness="1.5" CornerRadius="1.5" RenderTransformOrigin="0.5,0.5">
-                                    <Border.RenderTransform>
-                                        <RotateTransform x:Name="FrontRotation" Angle="-8" />
-                                    </Border.RenderTransform>
-                                    <Border.Background>
-                                        <LinearGradientBrush x:Name="WallpaperGradient" StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop x:Name="GradStop1" Color="#FF00F5FF" Offset="0.0" />
-                                            <GradientStop x:Name="GradStop2" Color="#FFAF52DE" Offset="1.0" />
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                </Border>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M21 15l-5-5L5 21"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Shift/Pulse animations -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="GalleryBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Alternate frame angles slightly -->
-                                            <DoubleAnimation Storyboard.TargetName="BackRotation" Storyboard.TargetProperty="Angle" From="12" To="18" Duration="0:0:3.5" AutoReverse="True" />
-                                            <DoubleAnimation Storyboard.TargetName="FrontRotation" Storyboard.TargetProperty="Angle" From="-8" To="-14" Duration="0:0:3.5" AutoReverse="True" />
-                                            
-                                            <!-- Color shifting wallpaper -->
-                                            <ColorAnimation Storyboard.TargetName="GradStop1" Storyboard.TargetProperty="Color" To="#FFFF007F" Duration="0:0:5" AutoReverse="True" />
-                                            <ColorAnimation Storyboard.TargetName="GradStop2" Storyboard.TargetProperty="Color" To="#FF00F5FF" Duration="0:0:5" AutoReverse="True" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Mouse Hover Triggers -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryGlow" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -606,20 +411,17 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Window Active State Trigger -->
-                                <DataTrigger Binding="{Binding IsLocalGalleryOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsLocalGalleryOpen}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard Name="ActiveGalleryState">
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
@@ -628,7 +430,6 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.ExitActions>
@@ -638,8 +439,7 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Wallpaper Online Gallery Button (Globe icon: \uE753) -->
-                <!-- Wallpaper Online Gallery Button (Custom Animated Planet & Satellite Orbit) -->
+                <!-- Wallpaper Online Gallery Button -->
                 <Button x:Name="OnlineGalleryButton"
                         Click="OnlineGalleryButton_Click"
                         Width="42" Height="42"
@@ -650,64 +450,27 @@
                         ToolTip="Galería Online">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="OnlineIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="OnlineIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="OnlineIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="OnlineTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Online Glow -->
-                                <Ellipse x:Name="OnlineGlow" Width="34" Height="34" Opacity="0.3" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFAF52DE" Offset="0" />
-                                            <GradientStop Color="#00AF52DE" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Central Planet Globe -->
-                                <Ellipse x:Name="PlanetGlobe" Width="16" Height="16" Stroke="#FFAF52DE" StrokeThickness="1.5" Fill="#20000000" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <!-- Diagonal Orbit Ring (Rotated 30 deg) -->
-                                <Grid Width="28" Height="10" RenderTransformOrigin="0.5,0.5">
-                                    <Grid.RenderTransform>
-                                        <TransformGroup>
-                                            <RotateTransform Angle="-30" />
-                                            <RotateTransform x:Name="SatelliteRotation" Angle="0" />
-                                        </TransformGroup>
-                                    </Grid.RenderTransform>
-                                    <!-- Orbit Line -->
-                                    <Ellipse Stroke="#40FFFFFF" StrokeThickness="1" StrokeDashArray="3,2" Margin="0" />
-                                    <!-- Satellite Node -->
-                                    <Ellipse Width="4.5" Height="4.5" Fill="#FF00F5FF" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="-2.25,0">
-                                        <Ellipse.Effect>
-                                            <DropShadowEffect Color="#FF00F5FF" BlurRadius="4" ShadowDepth="0" Opacity="0.8" />
-                                        </Ellipse.Effect>
-                                    </Ellipse>
-                                </Grid>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Orbit Animation -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="OnlineBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <DoubleAnimation Storyboard.TargetName="SatelliteRotation" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:3" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Mouse Hover Triggers -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineGlow" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -716,20 +479,17 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Window Active State Trigger -->
-                                <DataTrigger Binding="{Binding IsOnlineGalleryOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsOnlineGalleryOpen}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard Name="ActiveOnlineState">
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
@@ -738,7 +498,6 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.ExitActions>
@@ -748,8 +507,7 @@
                     </Button.Template>
                 </Button>
 
-                <!-- YouTube Music Button (Music note icon: \uE189) -->
-                <!-- YouTube Music Button (Custom Animated Equalizer Waveform) -->
+                <!-- YouTube Music Button -->
                 <Button x:Name="YouTubeMusicButton"
                         Click="YouTubeMusicButton_Click"
                         Width="42" Height="42"
@@ -760,54 +518,27 @@
                         ToolTip="YouTube Music">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="MusicIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="MusicIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="MusicIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="MusicTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Music Glow -->
-                                <Ellipse x:Name="MusicGlow" Width="34" Height="34" Opacity="0.3" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFFF0055" Offset="0" />
-                                            <GradientStop Color="#00FF0055" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Equalizer Bars -->
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Height="26" Margin="0,2,0,0">
-                                    <Border x:Name="Bar1" Width="3.5" Height="10" Margin="1.5,0" CornerRadius="1.5" Background="White" VerticalAlignment="Center" />
-                                    <Border x:Name="Bar2" Width="3.5" Height="18" Margin="1.5,0" CornerRadius="1.5" Background="White" VerticalAlignment="Center" />
-                                    <Border x:Name="Bar3" Width="3.5" Height="14" Margin="1.5,0" CornerRadius="1.5" Background="White" VerticalAlignment="Center" />
-                                    <Border x:Name="Bar4" Width="3.5" Height="8" Margin="1.5,0" CornerRadius="1.5" Background="White" VerticalAlignment="Center" />
-                                </StackPanel>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M9 18V5l12-2v13 M6 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Equalizer Bounce Animation -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="MusicBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <DoubleAnimation Storyboard.TargetName="Bar1" Storyboard.TargetProperty="Height" From="6" To="22" Duration="0:0:0.65" AutoReverse="True" />
-                                            <DoubleAnimation Storyboard.TargetName="Bar2" Storyboard.TargetProperty="Height" From="24" To="8" Duration="0:0:0.8" AutoReverse="True" />
-                                            <DoubleAnimation Storyboard.TargetName="Bar3" Storyboard.TargetProperty="Height" From="10" To="26" Duration="0:0:0.55" AutoReverse="True" />
-                                            <DoubleAnimation Storyboard.TargetName="Bar4" Storyboard.TargetProperty="Height" From="18" To="4" Duration="0:0:0.75" AutoReverse="True" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Mouse Hover Triggers -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicGlow" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -816,20 +547,17 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Window Active State Trigger -->
-                                <DataTrigger Binding="{Binding IsYouTubeMusicOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsYouTubeMusicOpen}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard Name="ActiveMusicState">
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
@@ -838,7 +566,6 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.ExitActions>
@@ -848,154 +575,65 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Web Browser Button (Custom Animated Compass Navigator) -->
-                <Button x:Name="WebBrowserButton"
-                        Click="WebBrowserButton_Click"
+                <!-- AI Assistant Button (ChatGPT & Gemini) -->
+                <Button x:Name="ChatGPTButton"
+                        Click="ChatGPTButton_Click"
                         Width="42" Height="42"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
                         Margin="4,0,0,0"
-                        ToolTip="Navegador Web">
-                    <Button.ContextMenu>
-                        <ContextMenu x:Name="BrowserContextMenu" Opened="BrowserContextMenu_Opened" Closed="ContextMenu_Closed"/>
-                    </Button.ContextMenu>
+                        ToolTip="Asistente IA (ChatGPT &amp; Gemini)">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="BrowserIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="ChatGptIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="BrowserIconScale" ScaleX="1" ScaleY="1" />
+                                    <ScaleTransform x:Name="ChatGptIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="ChatGptTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Cyber Glow (Back layer) -->
-                                <Ellipse x:Name="BrowserGlow" Width="34" Height="34" Opacity="0.3" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FF00F5FF" Offset="0" />
-                                            <GradientStop Color="#0000F5FF" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Outer Compass Ring (Slow rotation with tick marks) -->
-                                <Ellipse Width="28" Height="28" Stroke="White" StrokeThickness="1.5" StrokeDashArray="1,2.5" RenderTransformOrigin="0.5,0.5">
-                                    <Ellipse.RenderTransform>
-                                        <RotateTransform x:Name="CompassRingRotation" Angle="0" />
-                                    </Ellipse.RenderTransform>
-                                </Ellipse>
-
-                                <!-- Inner Circle -->
-                                <Ellipse Width="20" Height="20" Stroke="#80FFFFFF" StrokeThickness="0.8" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <!-- Cardinal Points (N, E, S, W as tiny dots) -->
-                                <Ellipse x:Name="CardN" Width="3" Height="3" Fill="#FF00F5FF" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,5,0,0">
-                                    <Ellipse.Effect>
-                                        <DropShadowEffect Color="#FF00F5FF" BlurRadius="3" ShadowDepth="0" Opacity="0.9" />
-                                    </Ellipse.Effect>
-                                </Ellipse>
-                                <Ellipse Width="2" Height="2" Fill="White" Opacity="0.6" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,5" />
-                                <Ellipse Width="2" Height="2" Fill="White" Opacity="0.6" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="5,0,0,0" />
-                                <Ellipse Width="2" Height="2" Fill="White" Opacity="0.6" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,5,0" />
-
-                                <!-- Compass Needle (Rotating arrow) -->
-                                <Path x:Name="CompassNeedle" StrokeThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"
-                                      Data="M 0,-9 L 2.5,0 L 0,2 L -2.5,0 Z">
-                                    <Path.Fill>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                            <GradientStop Color="#FFFF4060" Offset="0" />
-                                            <GradientStop Color="White" Offset="0.5" />
-                                        </LinearGradientBrush>
-                                    </Path.Fill>
-                                    <Path.RenderTransform>
-                                        <RotateTransform x:Name="NeedleRotation" Angle="0" />
-                                    </Path.RenderTransform>
-                                </Path>
-
-                                <!-- Center Pivot -->
-                                <Ellipse Width="4" Height="4" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Ellipse.Effect>
-                                        <DropShadowEffect Color="#FF00F5FF" BlurRadius="4" ShadowDepth="0" Opacity="0.9" />
-                                    </Ellipse.Effect>
-                                </Ellipse>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M12 8V4H8 M4 8h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z M2 14h2 M20 14h2 M15 13v2 M9 13v2"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Spin/Scale Animations -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="CompassBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Slow outer ring rotation -->
-                                            <DoubleAnimation Storyboard.TargetName="CompassRingRotation" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:12" />
-                                            
-                                            <!-- Needle seeking oscillation (swings then settles) -->
-                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NeedleRotation" Storyboard.TargetProperty="Angle">
-                                                <EasingDoubleKeyFrame Value="0" KeyTime="0:0:0.0" />
-                                                <EasingDoubleKeyFrame Value="35" KeyTime="0:0:0.6">
-                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut"/></EasingDoubleKeyFrame.EasingFunction>
-                                                </EasingDoubleKeyFrame>
-                                                <EasingDoubleKeyFrame Value="-25" KeyTime="0:0:1.2">
-                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseInOut"/></EasingDoubleKeyFrame.EasingFunction>
-                                                </EasingDoubleKeyFrame>
-                                                <EasingDoubleKeyFrame Value="15" KeyTime="0:0:1.7">
-                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseInOut"/></EasingDoubleKeyFrame.EasingFunction>
-                                                </EasingDoubleKeyFrame>
-                                                <EasingDoubleKeyFrame Value="-8" KeyTime="0:0:2.1">
-                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseInOut"/></EasingDoubleKeyFrame.EasingFunction>
-                                                </EasingDoubleKeyFrame>
-                                                <EasingDoubleKeyFrame Value="0" KeyTime="0:0:2.5">
-                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut"/></EasingDoubleKeyFrame.EasingFunction>
-                                                </EasingDoubleKeyFrame>
-                                                <EasingDoubleKeyFrame Value="0" KeyTime="0:0:5.0" /> <!-- Rest -->
-                                            </DoubleAnimationUsingKeyFrames>
-
-                                            <!-- North Cardinal Point Pulse -->
-                                            <DoubleAnimation Storyboard.TargetName="CardN" Storyboard.TargetProperty="Opacity" From="0.5" To="1.0" Duration="0:0:1.0" AutoReverse="True" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Mouse Hover Triggers -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserGlow" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
                                     <Trigger.ExitActions>
                                         <BeginStoryboard>
                                             <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Window Active State Trigger -->
-                                <DataTrigger Binding="{Binding IsBrowserOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsAiAssistantOpen}" Value="True">
                                     <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveBrowserState">
+                                        <BeginStoryboard Name="ActiveChatGptState">
                                             <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
                                     <DataTrigger.ExitActions>
                                         <BeginStoryboard>
                                             <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="BrowserGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.ExitActions>
@@ -1005,82 +643,38 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Settings Button (Gear icon: \uE713) -->
-                <!-- Settings Button (Custom Animated Intermeshing Gears) -->
+                <!-- Settings Button -->
                 <Button x:Name="SettingsButton"
                         Click="SettingsButton_Click"
                         Width="42" Height="42"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
-                        Margin="4,0,0,0"
+                        Margin="2,0"
                         ToolTip="Ajustes de Interfaz">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="SettingsIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="SettingsIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="SettingsIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="SettingsTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Settings Glow -->
-                                <Ellipse x:Name="SettingsGlow" Width="34" Height="34" Opacity="0.3" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FF00F5FF" Offset="0" />
-                                            <GradientStop Color="#0000F5FF" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Primary Spinning Gear -->
-                                <Grid Width="22" Height="22" RenderTransformOrigin="0.5,0.5">
-                                    <Grid.RenderTransform>
-                                        <RotateTransform x:Name="GearRotation" Angle="0" />
-                                    </Grid.RenderTransform>
-                                    <!-- Gear Teeth (Outer dashed ring) -->
-                                    <Ellipse Width="20" Height="20" Stroke="White" StrokeThickness="3.5" StrokeDashArray="1.2,1.2" />
-                                    <!-- Gear Body -->
-                                    <Ellipse Width="15" Height="15" Stroke="White" StrokeThickness="2" Fill="Transparent" />
-                                    <!-- Gear Center Hole -->
-                                    <Ellipse Width="6" Height="6" Fill="White" />
-                                </Grid>
-
-                                <!-- Secondary Small Gear (Bottom Right) -->
-                                <Grid Width="14" Height="14" Margin="14,14,0,0" RenderTransformOrigin="0.5,0.5">
-                                    <Grid.RenderTransform>
-                                        <RotateTransform x:Name="SmallGearRotation" Angle="0" />
-                                    </Grid.RenderTransform>
-                                    <!-- Small Gear Teeth -->
-                                    <Ellipse Width="12" Height="12" Stroke="White" StrokeThickness="2" StrokeDashArray="1,1" Opacity="0.75" />
-                                    <!-- Small Gear Center Hole -->
-                                    <Ellipse Width="4" Height="4" Fill="White" Opacity="0.75" />
-                                </Grid>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M21 4h-7 M10 4H3 M21 12h-9 M8 12H3 M21 20h-5 M12 20H3 M14 2v4 M8 10v4 M16 18v4"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Gear Spin Animation -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="SettingsBoard">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Main gear spins clockwise -->
-                                            <DoubleAnimation Storyboard.TargetName="GearRotation" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:6" />
-                                            <!-- Small gear spins counter-clockwise (faster) -->
-                                            <DoubleAnimation Storyboard.TargetName="SmallGearRotation" Storyboard.TargetProperty="Angle" From="360" To="0" Duration="0:0:3.8" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Mouse Hover Triggers -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsGlow" Storyboard.TargetProperty="Opacity" To="0.75" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -1089,20 +683,17 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Window Active State Trigger -->
-                                <DataTrigger Binding="{Binding IsSettingsOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsSettingsOpen}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard Name="ActiveSettingsState">
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
@@ -1111,7 +702,6 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsGlow" Storyboard.TargetProperty="Opacity" To="0.3" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.ExitActions>
@@ -1205,15 +795,15 @@
                         Cursor="Hand"
                         ToolTip="Controlador de Música (Clic para abrir Controles)">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <!-- Sound Waves Visualizer (6 bars with soft gradients and spacing) -->
-                        <Grid Width="24" Height="24" Margin="0,0,8,0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                                <Border x:Name="WaveBar1" Width="2" Height="20" CornerRadius="1" Margin="0.6,0" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,1.0"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFD39BFF" Offset="0" /><GradientStop Color="#FFAF52DE" Offset="1" /></LinearGradientBrush></Border.Background></Border>
-                                <Border x:Name="WaveBar2" Width="2" Height="20" CornerRadius="1" Margin="0.6,0" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,1.0"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFD39BFF" Offset="0" /><GradientStop Color="#FFAF52DE" Offset="1" /></LinearGradientBrush></Border.Background></Border>
-                                <Border x:Name="WaveBar3" Width="2" Height="20" CornerRadius="1" Margin="0.6,0" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,1.0"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFD39BFF" Offset="0" /><GradientStop Color="#FFAF52DE" Offset="1" /></LinearGradientBrush></Border.Background></Border>
-                                <Border x:Name="WaveBar4" Width="2" Height="20" CornerRadius="1" Margin="0.6,0" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,1.0"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFD39BFF" Offset="0" /><GradientStop Color="#FFAF52DE" Offset="1" /></LinearGradientBrush></Border.Background></Border>
-                                <Border x:Name="WaveBar5" Width="2" Height="20" CornerRadius="1" Margin="0.6,0" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,1.0"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFD39BFF" Offset="0" /><GradientStop Color="#FFAF52DE" Offset="1" /></LinearGradientBrush></Border.Background></Border>
-                                <Border x:Name="WaveBar6" Width="2" Height="20" CornerRadius="1" Margin="0.6,0" VerticalAlignment="Bottom" RenderTransformOrigin="0.5,1.0"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FFD39BFF" Offset="0" /><GradientStop Color="#FFAF52DE" Offset="1" /></LinearGradientBrush></Border.Background></Border>
+                        <!-- Sound Waves Visualizer (Apple Music / iOS Symmetrical Pill Bars) -->
+                        <Grid Width="26" Height="24" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border x:Name="WaveBar1" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar2" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar3" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar4" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar5" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar6" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
                             </StackPanel>
                         </Grid>
 
@@ -1274,140 +864,7 @@
                          ToolTip="Cargando clima..." Margin="10,0,0,0"
                          FontSize="26" VerticalAlignment="Center" />
 
-                <!-- Separator between weather/clock and performance -->
-                <Border x:Name="PerfSeparator" Width="1" Height="26" Background="#20FFFFFF" Margin="14,0,0,0" VerticalAlignment="Center" />
 
-                <!-- Performance Monitor Panel (CPU, RAM, Net) -->
-                <StackPanel x:Name="PerfMonitorPanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                    <!-- CPU widget -->
-                    <StackPanel x:Name="CpuWidget" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0" ToolTip="Uso del Procesador">
-                        <!-- Custom Animated CPU Icon -->
-                        <Grid Width="26" Height="26" VerticalAlignment="Center">
-                            <Grid.LayoutTransform>
-                                <ScaleTransform ScaleX="1.1" ScaleY="1.1" />
-                            </Grid.LayoutTransform>
-                            <!-- Outer Chip Board -->
-                            <Border x:Name="CpuBoard" Width="18" Height="18" BorderBrush="White" BorderThickness="1.5" CornerRadius="2.5" Background="#15FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            
-                            <!-- Pulsing Core -->
-                            <Border x:Name="CpuCore" Width="8" Height="8" CornerRadius="1.5" Background="White" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                <Border.RenderTransform>
-                                    <ScaleTransform x:Name="CoreScale" ScaleX="1" ScaleY="1" />
-                                </Border.RenderTransform>
-                                <Border.Effect>
-                                    <DropShadowEffect Color="#FF00F5FF" BlurRadius="6" ShadowDepth="0" Opacity="0.8" />
-                                </Border.Effect>
-                            </Border>
-
-                            <!-- Pins (Pulsing opacity) -->
-                            <Path x:Name="CpuPins" Stroke="White" StrokeThickness="1.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                  Data="M 8,1 L 8,4 M 11,1 L 11,4 M 15,1 L 15,4 M 18,1 L 18,4 M 8,22 L 8,25 M 11,22 L 11,25 M 15,22 L 15,25 M 18,22 L 18,25 M 1,8 L 4,8 M 1,11 L 4,11 M 1,15 L 4,15 M 1,18 L 4,18 M 22,8 L 25,8 M 22,11 L 25,11 M 22,15 L 25,15 M 22,18 L 25,18" />
-                            
-                            <Grid.Triggers>
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="CpuStory">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Core Pulsation -->
-                                            <DoubleAnimation Storyboard.TargetName="CoreScale" Storyboard.TargetProperty="ScaleX" From="0.85" To="1.15" Duration="0:0:1.0" AutoReverse="True">
-                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <DoubleAnimation Storyboard.TargetName="CoreScale" Storyboard.TargetProperty="ScaleY" From="0.85" To="1.15" Duration="0:0:1.0" AutoReverse="True">
-                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                            <!-- Pins Electrical Pulse -->
-                                            <DoubleAnimation Storyboard.TargetName="CpuPins" Storyboard.TargetProperty="Opacity" From="0.4" To="1.0" Duration="0:0:0.8" AutoReverse="True">
-                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                            </Grid.Triggers>
-                        </Grid>
-                        <TextBlock x:Name="CpuText" Text="0%" Foreground="#EEFFFFFF" FontFamily="{DynamicResource AppFontFamily}" FontSize="16" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    
-                    <!-- RAM widget -->
-                    <StackPanel x:Name="RamWidget" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0" ToolTip="Uso de Memoria RAM">
-                        <!-- Custom Animated RAM Icon -->
-                        <Grid Width="26" Height="26" VerticalAlignment="Center">
-                            <Grid.LayoutTransform>
-                                <ScaleTransform ScaleX="1.15" ScaleY="1.15" />
-                            </Grid.LayoutTransform>
-                            <!-- RAM Board -->
-                            <Border Width="24" Height="10" BorderBrush="White" BorderThickness="1.5" CornerRadius="1.5" Background="#15FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            
-                            <!-- Connectors (Bottom pin layout) -->
-                            <Path Stroke="White" StrokeThickness="1.0" Opacity="0.7" Data="M 3,17 L 3,19 M 6,17 L 6,19 M 9,17 L 9,19 M 12,17 L 12,19 M 14,17 L 14,19 M 17,17 L 17,19 M 20,17 L 20,19 M 23,17 L 23,19" />
-                            
-                            <!-- Memory Chips (Pulsing sequentially) -->
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0">
-                                <Border x:Name="Chip1" Width="3" Height="5" CornerRadius="0.5" Background="White" Margin="1,0" Opacity="0.5" />
-                                <Border x:Name="Chip2" Width="3" Height="5" CornerRadius="0.5" Background="White" Margin="1,0" Opacity="0.5" />
-                                <Border x:Name="Chip3" Width="3" Height="5" CornerRadius="0.5" Background="White" Margin="1,0" Opacity="0.5" />
-                                <Border x:Name="Chip4" Width="3" Height="5" CornerRadius="0.5" Background="White" Margin="1,0" Opacity="0.5" />
-                            </StackPanel>
-
-                            <Grid.Triggers>
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="RamStory">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Chip 1 blink -->
-                                            <DoubleAnimation Storyboard.TargetName="Chip1" Storyboard.TargetProperty="Opacity" From="0.3" To="1.0" Duration="0:0:0.3" AutoReverse="True" BeginTime="0:0:0.0" />
-                                            <!-- Chip 2 blink -->
-                                            <DoubleAnimation Storyboard.TargetName="Chip2" Storyboard.TargetProperty="Opacity" From="0.3" To="1.0" Duration="0:0:0.3" AutoReverse="True" BeginTime="0:0:0.25" />
-                                            <!-- Chip 3 blink -->
-                                            <DoubleAnimation Storyboard.TargetName="Chip3" Storyboard.TargetProperty="Opacity" From="0.3" To="1.0" Duration="0:0:0.3" AutoReverse="True" BeginTime="0:0:0.5" />
-                                            <!-- Chip 4 blink -->
-                                            <DoubleAnimation Storyboard.TargetName="Chip4" Storyboard.TargetProperty="Opacity" From="0.3" To="1.0" Duration="0:0:0.3" AutoReverse="True" BeginTime="0:0:0.75" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                            </Grid.Triggers>
-                        </Grid>
-                        <TextBlock x:Name="RamText" Text="0%" Foreground="#EEFFFFFF" FontFamily="{DynamicResource AppFontFamily}" FontSize="16" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    
-                    <!-- Net widget -->
-                    <StackPanel x:Name="NetWidget" Orientation="Horizontal" VerticalAlignment="Center" ToolTip="Velocidad de Red">
-                        <!-- Custom Animated Network Globe Icon -->
-                        <Grid Width="26" Height="26" VerticalAlignment="Center">
-                            <Grid.LayoutTransform>
-                                <ScaleTransform ScaleX="1.15" ScaleY="1.15" />
-                            </Grid.LayoutTransform>
-                            <!-- Outer Sphere Ring -->
-                            <Ellipse Width="18" Height="18" Stroke="White" StrokeThickness="1.5" Fill="#10FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            
-                            <!-- Equator Line (Horizontal) -->
-                            <Line X1="4" Y1="13" X2="22" Y2="13" Stroke="White" StrokeThickness="1.0" Opacity="0.5" />
-                            
-                            <!-- Meridian Ring (Rotating vertical ellipse) -->
-                            <Ellipse x:Name="NetMeridian" Width="8" Height="18" Stroke="White" StrokeThickness="1.2" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                <Ellipse.RenderTransform>
-                                    <ScaleTransform x:Name="MeridianScale" ScaleX="1" ScaleY="1" />
-                                </Ellipse.RenderTransform>
-                            </Ellipse>
-
-                            <!-- Diagonal Orbit Ring -->
-                            <Ellipse Width="22" Height="6" Stroke="#FFFFF0B5" StrokeThickness="1.0" Opacity="0.7" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Ellipse.RenderTransform>
-                                    <RotateTransform Angle="-30" />
-                                </Ellipse.RenderTransform>
-                            </Ellipse>
-
-                            <Grid.Triggers>
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="NetStory">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Rotate 3D Meridian Ring -->
-                                            <DoubleAnimation Storyboard.TargetName="MeridianScale" Storyboard.TargetProperty="ScaleX" From="1.0" To="-1.0" Duration="0:0:2.0" AutoReverse="True" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                            </Grid.Triggers>
-                        </Grid>
-                        <TextBlock x:Name="NetText" Text="0.0 KB/s" Foreground="#EEFFFFFF" FontFamily="{DynamicResource AppFontFamily}" FontSize="16" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
-                </StackPanel>
 
                 <!-- Separator between performance and battery -->
                 <Border x:Name="BatterySeparator" Width="1" Height="26" Background="#20FFFFFF" Margin="14,0" VerticalAlignment="Center" />
@@ -1463,9 +920,7 @@
 
             <!-- ===== RIGHT: System Status Bar (Clean volume, notifications, recycle bin, power) ===== -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <!-- Volume (Scroll mouse wheel on hover to change volume, click to mute) -->
-                <!-- Volume Button (Custom Animated Soundwaves) -->
-                <!-- Volume Button (Custom Animated Holographic Subwoofer) -->
+                <!-- Volume Button -->
                 <Button x:Name="VolumeButton"
                         Click="VolumeButton_Click"
                         PreviewMouseWheel="VolumeButton_PreviewMouseWheel"
@@ -1473,94 +928,44 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
-                        Margin="1,0"
+                        Margin="2,0"
                         ToolTip="Volumen (Rueda del mouse cambia volumen)">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="VolumeIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="VolumeIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="VolumeIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="VolumeTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Volume Glow -->
-                                <Ellipse x:Name="VolumeGlow" Width="34" Height="34" Opacity="0.25">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8" />
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FF00F5FF" Offset="0" />
-                                            <GradientStop Color="#0000F5FF" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
 
-                                <!-- Speaker Cone / Megaphone (Premium curved design, Centered horizontally) -->
-                                <Path x:Name="SpeakerCone" Stroke="White" StrokeThickness="1.5" Fill="#20FFFFFF" StrokeLineJoin="Round" Data="M 7,15 L 11,15 L 16,10 L 16,28 L 11,23 L 7,23 Z" RenderTransformOrigin="0.35,0.5">
-                                    <Path.RenderTransform>
-                                        <ScaleTransform x:Name="ConeScale" ScaleX="1" ScaleY="1" />
-                                    </Path.RenderTransform>
-                                </Path>
-
-                                <!-- Wave 1 (inner, positioned next to megaphone without overlapping) -->
-                                <Path x:Name="Wave1" Stroke="White" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 20,14 A 5,5 0 0 1 20,24" />
-                                <!-- Wave 2 (outer, positioned next to Wave 1) -->
-                                <Path x:Name="Wave2" Stroke="White" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 24,11 A 8,8 0 0 1 24,27" />
-
-                                <!-- Mute Slash (Slashing across Megaphone) -->
-                                <Grid x:Name="MuteCross" Visibility="Collapsed">
-                                    <Path Stroke="Red" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 7,13 L 17,25" />
-                                </Grid>
+                                        <!-- Mute Slash -->
+                                        <Grid x:Name="MuteCross" Visibility="Collapsed">
+                                            <Path Stroke="Red" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 3,3 L 17,17" />
+                                        </Grid>
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Content = standard speaker glyph -->
                                 <Trigger Property="Content" Value="&#xE767;">
                                     <Setter TargetName="MuteCross" Property="Visibility" Value="Collapsed" />
-                                    <Setter TargetName="Wave1" Property="Visibility" Value="Visible" />
-                                    <Setter TargetName="Wave2" Property="Visibility" Value="Visible" />
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveSoundAnim">
-                                            <Storyboard RepeatBehavior="Forever">
-                                                <!-- Pulsing speaker megaphone -->
-                                                <DoubleAnimation Storyboard.TargetName="ConeScale" Storyboard.TargetProperty="ScaleX" From="0.95" To="1.05" Duration="0:0:0.6" AutoReverse="True">
-                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                                </DoubleAnimation>
-                                                <DoubleAnimation Storyboard.TargetName="ConeScale" Storyboard.TargetProperty="ScaleY" From="0.95" To="1.05" Duration="0:0:0.6" AutoReverse="True">
-                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                                </DoubleAnimation>
-                                                
-                                                <!-- Wave 1 pulse propagation -->
-                                                <DoubleAnimation Storyboard.TargetName="Wave1" Storyboard.TargetProperty="Opacity" From="0.1" To="1.0" Duration="0:0:0.4" BeginTime="0:0:0.0" />
-                                                <DoubleAnimation Storyboard.TargetName="Wave2" Storyboard.TargetProperty="Opacity" From="0.1" To="1.0" Duration="0:0:0.4" BeginTime="0:0:0.25" />
-                                                
-                                                <!-- Reset wave opacities -->
-                                                <DoubleAnimation Storyboard.TargetName="Wave1" Storyboard.TargetProperty="Opacity" To="0.1" Duration="0:0:0.1" BeginTime="0:0:0.7" />
-                                                <DoubleAnimation Storyboard.TargetName="Wave2" Storyboard.TargetProperty="Opacity" To="0.1" Duration="0:0:0.1" BeginTime="0:0:0.7" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <StopStoryboard BeginStoryboardName="ActiveSoundAnim" />
-                                    </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Content = muted speaker glyph -->
                                 <Trigger Property="Content" Value="&#xE74F;">
                                     <Setter TargetName="MuteCross" Property="Visibility" Value="Visible" />
-                                    <Setter TargetName="Wave1" Property="Visibility" Value="Collapsed" />
-                                    <Setter TargetName="Wave2" Property="Visibility" Value="Collapsed" />
-                                    <Setter TargetName="SpeakerCone" Property="Opacity" Value="0.4" />
                                 </Trigger>
 
-                                <!-- Hover Scaling -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="VolumeGlow" Storyboard.TargetProperty="Opacity" To="0.6" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -1569,14 +974,12 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="VolumeGlow" Storyboard.TargetProperty="Opacity" To="0.25" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Mute active (from window datatrigger binding) -->
-                                <DataTrigger Binding="{Binding IsMutedActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsMutedActive}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard>
                                             <Storyboard>
@@ -1599,52 +1002,32 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Notifications Button (Custom Animated Swinging Bell) -->
+                <!-- Notifications Button -->
                 <Button x:Name="NotificationsButton"
                         Click="NotificationsButton_Click"
                         Width="42" Height="42"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
-                        Margin="1,0"
+                        Margin="2,0"
                         ToolTip="Notificaciones">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="NotifyIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="NotifyIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="NotifyIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="NotifyTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Bell Shape (Swings from top center, Visually Centered at Y=13) -->
-                                <Path Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.2" Data="M 15,3 C 15,3 13,3 13,5 L 13,7 C 10.5,7.5 9,9.5 9,12 L 9,17 L 7,19 L 7,20 L 23,20 L 23,19 L 21,17 L 21,12 C 21,9.5 19.5,7.5 17,7 C 17,5 15,3 15,3 Z M 13,21 A 2,2 0 0 0 17,21 Z">
-                                    <Path.RenderTransform>
-                                        <RotateTransform x:Name="BellRotation" Angle="0" />
-                                    </Path.RenderTransform>
-                                </Path>
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9 M10.3 21a1.94 1.94 0 0 0 3.4 0"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Swinging Bell ring pattern (ringing periodically, then resting) -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="BellRinger">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <!-- Concentrated swing keyframes inside first 1.5 seconds, then resting for 4.5 seconds -->
-                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="BellRotation" Storyboard.TargetProperty="Angle">
-                                                <EasingDoubleKeyFrame Value="0" KeyTime="0:0:0.0" />
-                                                <EasingDoubleKeyFrame Value="-18" KeyTime="0:0:0.2" />
-                                                <EasingDoubleKeyFrame Value="16" KeyTime="0:0:0.4" />
-                                                <EasingDoubleKeyFrame Value="-12" KeyTime="0:0:0.6" />
-                                                <EasingDoubleKeyFrame Value="10" KeyTime="0:0:0.8" />
-                                                <EasingDoubleKeyFrame Value="-6" KeyTime="0:0:1.0" />
-                                                <EasingDoubleKeyFrame Value="4" KeyTime="0:0:1.2" />
-                                                <EasingDoubleKeyFrame Value="0" KeyTime="0:0:1.5" />
-                                                <EasingDoubleKeyFrame Value="0" KeyTime="0:0:6.0" /> <!-- Rest period -->
-                                            </DoubleAnimationUsingKeyFrames>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Hover Scale -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
@@ -1671,177 +1054,32 @@
                 <!-- Separator -->
                 <Border x:Name="RightSeparator1" Width="1" Height="16" Background="#20FFFFFF" Margin="6,0" VerticalAlignment="Center" />
 
-                <!-- Recycle Bin (Singularidad de Basura) -->
-                <Button x:Name="RecycleBinButton"
-                        Click="RecycleBinButton_Click"
-                        AllowDrop="True"
-                        DragOver="RecycleBinButton_DragOver"
-                        DragLeave="RecycleBinButton_DragLeave"
-                        Drop="RecycleBinButton_Drop"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="1,0"
-                        ToolTip="Papelera">
-                    <Button.ContextMenu>
-                        <ContextMenu Opened="ContextMenu_Opened" Closed="ContextMenu_Closed">
-                            <MenuItem Header="Vaciar Papelera de Reciclaje" Click="ContextEmptyRecycleBin_Click" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="SingularityGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="SingularityScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                
-                                <!-- Accretion Disk Glow (Back layer) -->
-                                <Ellipse x:Name="AccretionGlow" Width="34" Height="34" Opacity="0.4" Margin="0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8"/>
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFAF52DE" Offset="0" />
-                                            <GradientStop Color="#00AF52DE" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Accretion Disk Swirl (Middle rotating layer) -->
-                                <Ellipse x:Name="AccretionDisk" Width="28" Height="28" StrokeThickness="3.5" RenderTransformOrigin="0.5,0.5">
-                                    <Ellipse.Stroke>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#FF00F5FF" Offset="0.0" />
-                                            <GradientStop Color="#FFAF52DE" Offset="0.4" />
-                                            <GradientStop Color="#FFFF007F" Offset="0.8" />
-                                            <GradientStop Color="#FF00F5FF" Offset="1.0" />
-                                        </LinearGradientBrush>
-                                    </Ellipse.Stroke>
-                                    <Ellipse.RenderTransform>
-                                        <RotateTransform x:Name="AccretionRotation" Angle="0" />
-                                    </Ellipse.RenderTransform>
-                                </Ellipse>
-
-                                <!-- Accretion Disk Secondary Inner Swirl (Faster counter-rotating layer) -->
-                                <Ellipse x:Name="AccretionDiskInner" Width="20" Height="20" StrokeThickness="1.5" Opacity="0.7" RenderTransformOrigin="0.5,0.5">
-                                    <Ellipse.Stroke>
-                                        <LinearGradientBrush StartPoint="1,0" EndPoint="0,1">
-                                            <GradientStop Color="#FFAF52DE" Offset="0.0" />
-                                            <GradientStop Color="#FF00F5FF" Offset="0.5" />
-                                            <GradientStop Color="#FFFF007F" Offset="1.0" />
-                                        </LinearGradientBrush>
-                                    </Ellipse.Stroke>
-                                    <Ellipse.RenderTransform>
-                                        <RotateTransform x:Name="AccretionRotationInner" Angle="0" />
-                                    </Ellipse.RenderTransform>
-                                </Ellipse>
-
-                                <!-- Event Horizon (Black Hole Center) -->
-                                <Ellipse x:Name="EventHorizon" Width="10" Height="10" Fill="#FF050505" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Ellipse.Effect>
-                                        <DropShadowEffect Color="#FFAF52DE" BlurRadius="6" ShadowDepth="0" Opacity="0.8" />
-                                    </Ellipse.Effect>
-                                </Ellipse>
-                                
-                                <!-- Implosion/Explosion Flash Overlay -->
-                                <Ellipse x:Name="FlashOverlay" Width="38" Height="38" Fill="White" Opacity="0.0" IsHitTestVisible="False" />
-                            </Grid>
-                            
-                            <ControlTemplate.Triggers>
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="SpinBoard">
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="AccretionRotation"
-                                                             Storyboard.TargetProperty="Angle"
-                                                             From="0" To="360" Duration="0:0:3"
-                                                             RepeatBehavior="Forever" />
-                                            <DoubleAnimation Storyboard.TargetName="AccretionRotationInner"
-                                                             Storyboard.TargetProperty="Angle"
-                                                             From="360" To="0" Duration="0:0:1.8"
-                                                             RepeatBehavior="Forever" />
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SingularityScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.15">
-                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                </DoubleAnimation>
-                                                <DoubleAnimation Storyboard.TargetName="SingularityScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.15">
-                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                </DoubleAnimation>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SingularityScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.15">
-                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                </DoubleAnimation>
-                                                <DoubleAnimation Storyboard.TargetName="SingularityScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.15">
-                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                </DoubleAnimation>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
                 <!-- Show Desktop -->
-                <!-- Show Desktop (Custom Animated Desktop Screen & Minimizing Window) -->
                 <Button x:Name="ShowDesktopButton"
                         Click="ShowDesktopButton_Click"
                         Width="42" Height="42"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
-                        Margin="1,0"
+                        Margin="2,0"
                         ToolTip="Mostrar Escritorio">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="DesktopIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="DesktopIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="DesktopIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="DesktopTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Desktop Screen frame -->
-                                <Border Width="22" Height="15" BorderBrush="White" BorderThickness="1.5" CornerRadius="1" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="1" Background="#20000000">
-                                    <Grid>
-                                        <!-- Minimizing internal window mockup -->
-                                        <Border x:Name="MockWindow" Background="White" Width="14" Height="9" CornerRadius="0.5" HorizontalAlignment="Center" VerticalAlignment="Top" RenderTransformOrigin="0.5,1">
-                                            <Border.RenderTransform>
-                                                <ScaleTransform x:Name="WindowScale" ScaleY="1" />
-                                            </Border.RenderTransform>
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                                <!-- Monitor Stand -->
-                                <Path Fill="White" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8" Data="M 16,27 L 22,27 L 21,29 L 17,29 Z" />
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M2 5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5z M8 21h8 M12 17v4"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Minimizing Window loop -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="DesktopMinimize">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <DoubleAnimation Storyboard.TargetName="WindowScale" Storyboard.TargetProperty="ScaleY" From="1.0" To="0.15" Duration="0:0:1.3" AutoReverse="True" BeginTime="0:0:0.5">
-                                                <DoubleAnimation.EasingFunction>
-                                                    <CubicEase EasingMode="EaseInOut" />
-                                                </DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Hover Scale -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
@@ -1867,56 +1105,33 @@
 
                 <!-- Separator -->
                 <Border x:Name="RightSeparator2" Width="1" Height="16" Background="#20FFFFFF" Margin="6,0" VerticalAlignment="Center" />
-                <!-- Power Button (Custom Animated Glowing Power Icon) -->
+
+                <!-- Power Button -->
                 <Button x:Name="PowerButton"
                         Click="PowerButton_Click"
                         Width="42" Height="42"
                         Background="Transparent"
                         BorderThickness="0"
                         Cursor="Hand"
-                        Margin="1,0"
+                        Margin="2,0"
                         ToolTip="Opciones de Energía">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="PowerIconGrid" Width="38" Height="38" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Grid x:Name="PowerIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
                                 <Grid.RenderTransform>
                                     <ScaleTransform x:Name="PowerIconScale" ScaleX="1" ScaleY="1" />
                                 </Grid.RenderTransform>
+                                <Border x:Name="PowerTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
-                                <!-- Power Glow (Heartbeat red glow) -->
-                                <Ellipse x:Name="PowerGlow" Width="30" Height="30" Opacity="0.25">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="6" />
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFFF0033" Offset="0" />
-                                            <GradientStop Color="#00FF0033" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Power Symbol Circle (Centered at Y=19) -->
-                                <Path Stroke="White" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 14,14 A 7,7 0 1 0 24,14" />
-                                <!-- Power Symbol Line (Centered at Y=19) -->
-                                <Path Stroke="White" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 19,12 L 19,19" />
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M12 2v10 M18.36 6.64a9 9 0 1 1-12.73 0"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
                             </Grid>
 
                             <ControlTemplate.Triggers>
-                                <!-- Loaded Heartbeat red glow loop -->
-                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                    <BeginStoryboard Name="PowerHeartbeat">
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <DoubleAnimation Storyboard.TargetName="PowerGlow" Storyboard.TargetProperty="Opacity" From="0.15" To="0.75" Duration="0:0:1.5" AutoReverse="True">
-                                                <DoubleAnimation.EasingFunction>
-                                                    <CubicEase EasingMode="EaseInOut" />
-                                                </DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-
-                                <!-- Hover Scale -->
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Trigger.EnterActions>
                                         <BeginStoryboard>
@@ -1936,14 +1151,12 @@
                                     </Trigger.ExitActions>
                                 </Trigger>
 
-                                <!-- Power Window Open state -->
-                                <DataTrigger Binding="{Binding IsPowerWindowOpen, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <DataTrigger Binding="{Binding IsPowerWindowOpen}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard Name="ActivePowerState">
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
                                                 <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="PowerGlow" Storyboard.TargetProperty="Opacity" To="0.8" Duration="0:0:0.2" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>

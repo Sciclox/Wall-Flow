@@ -38,9 +38,6 @@ public class AppSettings
     public bool ShowClock { get; set; } = true;
     public bool ShowWeather { get; set; } = true;
     public bool ShowMediaPlayer { get; set; } = true;
-    public bool ShowPerfCpu { get; set; } = true;
-    public bool ShowPerfRam { get; set; } = true;
-    public bool ShowPerfNet { get; set; } = true;
 
     // Weather effects
     public string SelectedWallpaperEffect { get; set; } = "Ninguno";
@@ -102,13 +99,19 @@ public class AppSettings
     public bool ShowIconLocalGallery { get; set; } = true;
     public bool ShowIconOnlineGallery { get; set; } = true;
     public bool ShowIconYouTubeMusic { get; set; } = true;
+    public bool ShowIconChatGPT { get; set; } = true;
+    public bool ShowIconGemini { get; set; } = true;
     public bool ShowIconWebBrowser { get; set; } = true;
     public bool ShowIconSettings { get; set; } = true;
     public bool ShowIconVolume { get; set; } = true;
     public bool ShowIconNotifications { get; set; } = true;
-    public bool ShowIconRecycleBin { get; set; } = true;
     public bool ShowIconShowDesktop { get; set; } = true;
     public bool ShowIconPower { get; set; } = true;
+
+    // Tema y Color de Iconos del Dock
+    public string DockIconTheme { get; set; } = "Original"; // Original, Minimalista, Vidrio, Cyberpunk, CircularTile
+    public string DockIconColorMode { get; set; } = "Multicolor"; // Multicolor, Auto, White, Custom
+    public string? DockIconCustomColor { get; set; } = "#00F5FF";
 
     // Spotlight customization settings
     public string? SpotlightBackgroundColor { get; set; } = "";
@@ -132,6 +135,10 @@ public class AppSettings
     public string? SpotlightSeparatorColor { get; set; } = "";
     public string? SpotlightSearchFocusColor { get; set; } = "";
 
+    // Gemini AI settings
+    public string? GeminiApiKey { get; set; } = "";
+    public string GeminiModel { get; set; } = "gemini-2.5-flash";
+
     // Browser color customization
     public bool BrowserUseDockColors { get; set; } = true;
     public string? BrowserBackgroundColor { get; set; }
@@ -153,6 +160,8 @@ public static class SettingsService
     private static readonly string SettingsFile = Path.Combine(SettingsFolder, "settings.json");
 
     private static AppSettings? _settings;
+
+    public static void NotifyPreviewColorsRequested() => EventBus.Publish(new PreviewColorsRequestedEvent());
 
     public static AppSettings Instance
     {
@@ -236,6 +245,7 @@ public static class SettingsService
             Directory.CreateDirectory(SettingsFolder);
             var json = JsonSerializer.Serialize(Instance, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(SettingsFile, json);
+            EventBus.Publish(new SettingsChangedEvent());
         }
         catch
         {

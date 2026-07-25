@@ -7,6 +7,9 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $publishDir = Join-Path $root "publish"
 $projectDir = Join-Path $root "WallFlow"
 
+Write-Host "Stopping NavegadorFlow..." -ForegroundColor Cyan
+Get-Process NavegadorFlow -ErrorAction SilentlyContinue | Stop-Process -Force
+
 Write-Host "Building WallFlow..." -ForegroundColor Cyan
 
 if (-not $SkipBuild) {
@@ -17,6 +20,13 @@ if (-not $SkipBuild) {
 Write-Host "Publishing..." -ForegroundColor Cyan
 & dotnet publish -c Release --nologo -v q -o $publishDir $projectDir
 if ($LASTEXITCODE -ne 0) { exit 1 }
+
+Write-Host "Building NavegadorFlow..." -ForegroundColor Cyan
+& dotnet build -c Release --nologo -v q "C:\Users\Lenovo\OneDrive\Documentos\Proyectos\NavegadorFlow\NavegadorFlow.csproj"
+if ($LASTEXITCODE -ne 0) { exit 1 }
+
+Write-Host "Copying NavegadorFlow output to publish folder..." -ForegroundColor Cyan
+Copy-Item -Path "C:\Users\Lenovo\OneDrive\Documentos\Proyectos\NavegadorFlow\bin\Release\net8.0-windows10.0.19041.0\*" -Destination $publishDir -Recurse -Force
 
 if (-not $SkipInstaller) {
     $iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue

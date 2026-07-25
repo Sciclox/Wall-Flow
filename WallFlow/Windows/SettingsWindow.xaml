@@ -9,7 +9,7 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         UseLayoutRounding="True"
-        Opacity="0"
+        Opacity="1"
         Loaded="Window_Loaded"
         Deactivated="Window_Deactivated"
         PreviewKeyDown="Window_PreviewKeyDown">
@@ -483,15 +483,7 @@
                                            FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button x:Name="TabBtn5" Style="{StaticResource SidebarNavButtonStyle}"
-                                Click="TabBtn_Click" Margin="0,2">
-                            <StackPanel Orientation="Horizontal" Margin="6,0">
-                                <TextBlock Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <TextBlock Text="Navegador" FontFamily="{DynamicResource AppFontFamily}"
-                                           FontSize="12.5" Foreground="White" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
+
                         <Button x:Name="TabBtn6" Style="{StaticResource SidebarNavButtonStyle}"
                                 Click="TabBtn_Click" Margin="0,2">
                             <StackPanel Orientation="Horizontal" Margin="6,0">
@@ -513,6 +505,7 @@
                     <!-- ═══ TabItem 0: Apariencia ═══ -->
                     <TabItem>
                             <StackPanel Margin="0,0,4,0">
+
                                 <!-- Section: Color de Hover y Widgets -->
                                 <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
                                         BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
@@ -1390,13 +1383,7 @@
                                                       Content="Widget del Clima" Margin="0,0,0,8" />
                                             <CheckBox x:Name="ShowMediaCheck" Grid.Row="1" Grid.Column="0"
                                                       Content="Reproductor de Música" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowCpuCheck" Grid.Row="1" Grid.Column="1"
-                                                      Content="Rendimiento: CPU" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowRamCheck" Grid.Row="2" Grid.Column="0"
-                                                      Content="Rendimiento: RAM" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowNetCheck" Grid.Row="2" Grid.Column="1"
-                                                      Content="Rendimiento: Red" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="Use24HourCheck" Grid.Row="3" Grid.Column="0"
+                                            <CheckBox x:Name="Use24HourCheck" Grid.Row="1" Grid.Column="1"
                                                       Content="Formato de 24 horas" Margin="0,0,0,8" />
                                         </Grid>
                                     </StackPanel>
@@ -1435,19 +1422,15 @@
                                                       Content="Galería Online" Margin="0,0,0,8" />
                                             <CheckBox x:Name="ShowIconYouTubeMusicCheck" Grid.Row="1" Grid.Column="1"
                                                       Content="YouTube Music" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowIconWebBrowserCheck" Grid.Row="2" Grid.Column="0"
-                                                      Content="Navegador Web" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowIconSettingsCheck" Grid.Row="2" Grid.Column="1"
+                                            <CheckBox x:Name="ShowIconSettingsCheck" Grid.Row="2" Grid.Column="0"
                                                       Content="Ajustes" Margin="0,0,0,8" />
                                             <CheckBox x:Name="ShowIconVolumeCheck" Grid.Row="3" Grid.Column="0"
                                                       Content="Volumen" Margin="0,0,0,8" />
                                             <CheckBox x:Name="ShowIconNotificationsCheck" Grid.Row="3" Grid.Column="1"
                                                       Content="Notificaciones" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowIconRecycleBinCheck" Grid.Row="4" Grid.Column="0"
-                                                      Content="Papelera" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowIconShowDesktopCheck" Grid.Row="4" Grid.Column="1"
+                                            <CheckBox x:Name="ShowIconShowDesktopCheck" Grid.Row="4" Grid.Column="0"
                                                       Content="Mostrar Escritorio" Margin="0,0,0,8" />
-                                            <CheckBox x:Name="ShowIconPowerCheck" Grid.Row="5" Grid.Column="0"
+                                            <CheckBox x:Name="ShowIconPowerCheck" Grid.Row="4" Grid.Column="1"
                                                       Content="Apagar" Margin="0,0,0,8" />
                                         </Grid>
                                     </StackPanel>
@@ -1541,41 +1524,7 @@
                     <!-- ═══ TabItem 3: Sistema ═══ -->
                     <TabItem>
                             <StackPanel Margin="0,0,4,0">
-                                <!-- Section: Navegador Predeterminado -->
-                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
-                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
-                                    <StackPanel>
-                                        <TextBlock Text="Navegador Web Predeterminado"
-                                                   FontFamily="{DynamicResource AppFontFamily}"
-                                                   FontSize="14" FontWeight="SemiBold"
-                                                   Foreground="White" Margin="0,0,0,2" />
-                                        <TextBlock Text="Registra WallFlow como navegador web en Windows para abrir enlaces desde la búsqueda Spotlight."
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
 
-                                        <TextBlock x:Name="DefaultBrowserStatusText" Text="Estado: No registrado"
-                                                   FontSize="12"
-                                                   Foreground="#8A8A8F" Margin="0,0,0,8" />
-
-                                        <Border x:Name="RegisterBrowserBtn" CornerRadius="6"
-                                                Background="#1AFFFFFF" BorderBrush="{StaticResource BorderBrush}"
-                                                BorderThickness="1" Padding="14,7" Cursor="Hand"
-                                                MouseLeftButtonUp="RegisterBrowser_Click"
-                                                MouseEnter="RegisterBrowserBtn_MouseEnter"
-                                                MouseLeave="RegisterBrowserBtn_MouseLeave">
-                                            <TextBlock Text="Registrar como Navegador" FontSize="13" Foreground="White" />
-                                        </Border>
-
-                                        <Border x:Name="OpenSystemDefaultAppsBtn" CornerRadius="6"
-                                                Background="#AF52DE" Padding="14,7" Cursor="Hand"
-                                                Margin="0,8,0,0"
-                                                MouseLeftButtonUp="OpenSystemDefaultApps_Click"
-                                                MouseEnter="OpenSettingsBtn_MouseEnter"
-                                                MouseLeave="OpenSettingsBtn_MouseLeave">
-                                            <TextBlock Text="Abrir Configuración de Windows" FontSize="13" FontWeight="SemiBold" Foreground="White" />
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
 
                                 <!-- Section: Fuentes -->
                                 <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
@@ -1789,109 +1738,7 @@
                             </StackPanel>
                     </TabItem>
 
-                    <!-- ═══ TabItem 5: Navegador ═══ -->
-                    <TabItem>
-                        <TabItem.Header>
-                            <TextBlock Text="Navegador" FontFamily="{DynamicResource AppFontFamily}" FontSize="13" />
-                        </TabItem.Header>
-                            <StackPanel Margin="0,0,4,0">
-                                <!-- Section: Colores del Navegador -->
-                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
-                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,6">
-                                    <StackPanel>
-                                        <TextBlock Text="Colores del Navegador Web"
-                                                   FontFamily="{DynamicResource AppFontFamily}"
-                                                   FontSize="14" FontWeight="SemiBold"
-                                                   Foreground="White" Margin="0,0,0,2" />
-                                        <TextBlock Text="Personaliza los colores del navegador integrado. Puedes heredar los colores del Dock o definir colores personalizados."
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" TextWrapping="Wrap" />
 
-                                        <CheckBox x:Name="BrowserUseDockColorsCheck"
-                                                  Content="Heredar colores del Dock"
-                                                  Checked="BrowserUseDockColors_Changed"
-                                                  Unchecked="BrowserUseDockColors_Changed"
-                                                  Margin="0,0,0,12" />
-
-                                        <Grid x:Name="BrowserColorsGrid">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto" />
-                                                <RowDefinition Height="8" />
-                                                <RowDefinition Height="*" />
-                                                <RowDefinition Height="8" />
-                                                <RowDefinition Height="Auto" />
-                                            </Grid.RowDefinitions>
-
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Fondo Hex:" Foreground="{StaticResource TextSecondaryBrush}"
-                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                             <TextBox Grid.Row="0" Grid.Column="1" x:Name="BrowserBgHexBox"
-                                                      MaxLength="9" TextChanged="BrowserBgHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
-                                             <Border Grid.Row="0" Grid.Column="2" x:Name="BrowserBgPreview"
-                                                    Width="24" Height="24" CornerRadius="4"
-                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
-                                             <Border Grid.Row="0" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
-                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
-                                                    Cursor="Hand" Tag="BrowserBgHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
-                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Acento Hex:" Foreground="{StaticResource TextSecondaryBrush}"
-                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                             <TextBox Grid.Row="2" Grid.Column="1" x:Name="BrowserAccentHexBox"
-                                                      MaxLength="9" TextChanged="BrowserAccentHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
-                                             <Border Grid.Row="2" Grid.Column="2" x:Name="BrowserAccentPreview"
-                                                    Width="24" Height="24" CornerRadius="4"
-                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
-                                             <Border Grid.Row="2" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
-                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
-                                                    Cursor="Hand" Tag="BrowserAccentHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
-                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Borde Hex:" Foreground="{StaticResource TextSecondaryBrush}"
-                                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                             <TextBox Grid.Row="4" Grid.Column="1" x:Name="BrowserBorderHexBox"
-                                                      MaxLength="9" TextChanged="BrowserBorderHex_Changed" Width="130" Height="30" Padding="10,4" FontSize="12" HorizontalAlignment="Right" />
-                                             <Border Grid.Row="4" Grid.Column="2" x:Name="BrowserBorderPreview"
-                                                    Width="24" Height="24" CornerRadius="4"
-                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="8,0,0,0" />
-                                             <Border Grid.Row="4" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
-                                                    Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
-                                                    Cursor="Hand" Tag="BrowserBorderHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
-                                                <TextBlock Text="🎨" Foreground="White" FontSize="12"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                        </Grid>
-
-                                        <!-- Section: Temas Predefinidos -->
-                                        <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
-                                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="12" Margin="0,12,0,0">
-                                            <StackPanel>
-                                                <TextBlock Text="Temas Predefinidos"
-                                                           FontFamily="{DynamicResource AppFontFamily}"
-                                                           FontSize="14" FontWeight="SemiBold"
-                                                           Foreground="White" Margin="0,0,0,2" />
-                                                <TextBlock Text="Selecciona un tema para personalizar los colores del navegador."
-                                                           FontSize="11"
-                                                           Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" TextWrapping="Wrap" />
-                                                <UniformGrid x:Name="BrowserThemeGrid" Columns="5" HorizontalAlignment="Center" />
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                    </TabItem>
 
                     <!-- ═══ TabItem 6: Spotlight ═══ -->
                     <TabItem>
@@ -2066,7 +1913,7 @@
                                              <Border Grid.Row="0" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightBgHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2081,7 +1928,7 @@
                                             <Border Grid.Row="2" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightBorderHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2096,7 +1943,7 @@
                                             <Border Grid.Row="4" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightTextHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2111,7 +1958,7 @@
                                             <Border Grid.Row="6" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightPlaceholderHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2126,7 +1973,7 @@
                                             <Border Grid.Row="8" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightIconHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2141,7 +1988,7 @@
                                             <Border Grid.Row="10" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightAccentHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2157,7 +2004,7 @@
                                             <Border Grid.Row="12" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightHoverBgHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2172,7 +2019,7 @@
                                             <Border Grid.Row="14" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightHoverBorderHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2187,7 +2034,7 @@
                                             <Border Grid.Row="16" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightItemBgHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2202,7 +2049,7 @@
                                             <Border Grid.Row="18" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightItemFgHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2217,7 +2064,7 @@
                                             <Border Grid.Row="20" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightSecondaryTextHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2232,7 +2079,7 @@
                                             <Border Grid.Row="22" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightSeparatorHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
@@ -2247,11 +2094,41 @@
                                             <Border Grid.Row="24" Grid.Column="3" Width="30" Height="30" CornerRadius="4"
                                                     Background="#AF52DE" BorderBrush="#AF52DE" BorderThickness="1"
                                                     Cursor="Hand" Tag="SpotlightFocusHexBox" Margin="4,0,0,0"
-                                                    MouseLeftButtonUp="BrowserColorPicker_Click">
+                                                    MouseLeftButtonUp="ColorPicker_Click">
                                                 <TextBlock Text="🎨" Foreground="White" FontSize="12"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
                                         </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Gemini AI Settings Card -->
+                                <Border CornerRadius="8" Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                        Padding="16" Margin="0,16,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Gemini AI (Asistente IA Gratis)" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="White" Margin="0,0,0,12" />
+
+                                        <TextBlock Text="Clave de API (Google AI Studio - Plan Gratuito):" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12" Margin="0,0,0,6" />
+                                        
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="8" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <PasswordBox Grid.Column="0" x:Name="GeminiApiKeyBox" PasswordChanged="GeminiApiKey_PasswordChanged" 
+                                                         Height="34" Padding="10,6" FontSize="12" Background="#1AFFFFFF" Foreground="White" />
+                                            <Button Grid.Column="2" x:Name="VerifyGeminiApiKeyBtn" Content="Verificar Clave" 
+                                                    Style="{StaticResource SettingsActionButtonStyle}" Height="34" Click="VerifyGeminiApiKey_Click" />
+                                        </Grid>
+                                        
+                                        <TextBlock x:Name="GeminiStatusText" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,0,0,8" Visibility="Collapsed" TextWrapping="Wrap" />
+                                        
+                                        <TextBlock Text="Obtén tu API Key 100% gratuita en 1 minuto desde Google AI Studio (aistudio.google.com)."
+                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

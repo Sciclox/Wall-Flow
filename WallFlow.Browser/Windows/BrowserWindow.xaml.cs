@@ -100,6 +100,23 @@ public partial class BrowserWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        // Apply window icon programmatically to support both assemblies
+        try
+        {
+            var assemblyName = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name;
+            var iconUri = new Uri($"pack://application:,,,/{assemblyName};component/browser_icon.png", UriKind.Absolute);
+            this.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(iconUri);
+        }
+        catch
+        {
+            try
+            {
+                var iconUri = new Uri("pack://application:,,,/browser_icon.png", UriKind.Absolute);
+                this.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(iconUri);
+            }
+            catch { }
+        }
+
         // Apply acrylic blur and allow to show in Alt-Tab
         BackdropHelper.ApplyAcrylic(this, roundCorners: true, hideFromAltTab: false);
         BackdropHelper.UpdateWindowRegion(this, 0);
@@ -136,6 +153,11 @@ public partial class BrowserWindow : Window
         // Position window relative to the Dock
         PositionWindow();
 
+        if (WindowState == WindowState.Normal && !_isMaximized && !_isFullScreen)
+        {
+            _restoreBounds = new Rect(Left, Top, Width, Height);
+        }
+
         // Initialize WebView2 safely
         InitializeWebViewAsync();
 
@@ -150,6 +172,11 @@ public partial class BrowserWindow : Window
     {
         BackdropHelper.UpdateWindowRegion(this, 0);
         ClampToDockBounds();
+
+        if (WindowState == WindowState.Normal && !_isMaximized && !_isFullScreen)
+        {
+            _restoreBounds = new Rect(Left, Top, Width, Height);
+        }
     }
 
     private void OnWebViewHostResized(double width, double height)
@@ -624,7 +651,7 @@ public partial class BrowserWindow : Window
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
-        SafeHide();
+        WindowState = WindowState.Minimized;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -739,9 +766,15 @@ public partial class BrowserWindow : Window
         this.BeginAnimation(Window.TopProperty, null);
         this.BeginAnimation(OpacityProperty, null);
 
-        if (WindowState == WindowState.Maximized)
+        if (WindowState == WindowState.Minimized)
         {
-            _restoreBounds = new Rect(Left, Top, Width, Height);
+            if (_activeTab?.WebView != null)
+            {
+                _activeTab.WebView.Detach();
+            }
+        }
+        else if (WindowState == WindowState.Maximized)
+        {
             _isMaximized = true;
 
             // Remove decorations for maximized state
@@ -757,8 +790,19 @@ public partial class BrowserWindow : Window
 
             MaximizeButton.Content = FindResource("RestoreIcon");
             MaximizeButton.ToolTip = "Restaurar";
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_activeTab?.WebView != null)
+                {
+                    _activeTab.WebView.Attach(WebViewHost.HostVisual!);
+                    double dpiScale = 1.0;
+                    try { dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch { }
+                    _activeTab.WebView.Resize(WebViewHost.ActualWidth * dpiScale, WebViewHost.ActualHeight * dpiScale);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
-        else
+        else if (WindowState == WindowState.Normal)
         {
             _isMaximized = false;
 
@@ -781,6 +825,8 @@ public partial class BrowserWindow : Window
             {
                 if (_restoreBounds != Rect.Empty)
                 {
+                    Left = _restoreBounds.Left;
+                    Top = _restoreBounds.Top;
                     Width = _restoreBounds.Width;
                     Height = _restoreBounds.Height;
                 }
@@ -788,11 +834,22 @@ public partial class BrowserWindow : Window
                 {
                     Width = 600;
                     Height = 700;
+                    PositionWindow();
                 }
-                PositionWindow();
             }
+            ClampToDockBounds();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_activeTab?.WebView != null)
+                {
+                    _activeTab.WebView.Attach(WebViewHost.HostVisual!);
+                    double dpiScale = 1.0;
+                    try { dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch { }
+                    _activeTab.WebView.Resize(WebViewHost.ActualWidth * dpiScale, WebViewHost.ActualHeight * dpiScale);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
-        ClampToDockBounds();
     }
 
     private void NewWindowButton_Click(object sender, RoutedEventArgs e)
@@ -857,6 +914,7 @@ public partial class BrowserWindow : Window
 
     private void WmGetMinMaxInfo(IntPtr hwnd, IntPtr lParam)
     {
+        if (_isFullScreen) return;
         try
         {
             MINMAXINFO mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
@@ -1921,6 +1979,11 @@ public partial class BrowserWindow : Window
         finally
         {
             _isUpdatingPosition = false;
+        }
+
+        if (WindowState == WindowState.Normal && !_isMaximized && !_isFullScreen)
+        {
+            _restoreBounds = new Rect(Left, Top, Width, Height);
         }
     }
 
@@ -3991,13 +4054,14 @@ public partial class BrowserWindow : Window
         try
         {
             var s = SettingsService.Instance;
-            if (s.BrowserUseDockColors)
-                return;
+            string? bgColor = s.BrowserUseDockColors ? s.UserDockBackgroundColor : s.BrowserBackgroundColor;
+            string? accentColor = s.BrowserUseDockColors ? s.UserAccentColor : s.BrowserAccentColor;
+            string? borderColor = s.BrowserUseDockColors ? s.UserBorderColor1 : s.BrowserBorderColor;
 
-            if (!string.IsNullOrEmpty(s.BrowserBackgroundColor) && TryParseColor(s.BrowserBackgroundColor, out var bg))
+            if (!string.IsNullOrEmpty(bgColor) && TryParseColor(bgColor, out var bg))
                 Resources["DockBackgroundBrush"] = new SolidColorBrush(bg);
 
-            if (!string.IsNullOrEmpty(s.BrowserAccentColor) && TryParseColor(s.BrowserAccentColor, out var accent))
+            if (!string.IsNullOrEmpty(accentColor) && TryParseColor(accentColor, out var accent))
             {
                 Resources["AccentBrush"] = new SolidColorBrush(accent);
                 Resources["AccentHoverBrush"] = new SolidColorBrush(Lighten(accent));
@@ -4006,7 +4070,7 @@ public partial class BrowserWindow : Window
                 Resources["AccentGlowBrush"] = new SolidColorBrush(Color.FromArgb(0x18, accent.R, accent.G, accent.B));
             }
 
-            if (!string.IsNullOrEmpty(s.BrowserBorderColor) && TryParseColor(s.BrowserBorderColor, out var border))
+            if (!string.IsNullOrEmpty(borderColor) && TryParseColor(borderColor, out var border))
                 RootBorder.BorderBrush = new SolidColorBrush(border);
         }
         catch { /* ignored */ }

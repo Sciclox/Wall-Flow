@@ -27,6 +27,7 @@ public partial class ClipboardSpiralWindow : Window
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_TRANSPARENT = 0x00000020;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int WS_EX_NOACTIVATE = 0x08000000;
 
     public static void Spawn(double startX, double startY, double targetX, double targetY)
     {
@@ -37,6 +38,7 @@ public partial class ClipboardSpiralWindow : Window
     public ClipboardSpiralWindow(double startX, double startY, double targetX, double targetY)
     {
         InitializeComponent();
+        ShowActivated = false;
         
         _startX = startX;
         _startY = startY;
@@ -49,7 +51,7 @@ public partial class ClipboardSpiralWindow : Window
         // 1. Hook native styles to ensure it behaves strictly as a click-through overlay
         var hwnd = new WindowInteropHelper(this).Handle;
         int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW);
+        SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
 
         // 2. Adjust window dimensions to cover entire virtual screen area
         Left = SystemParameters.VirtualScreenLeft;

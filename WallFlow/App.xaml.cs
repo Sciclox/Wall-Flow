@@ -5,13 +5,18 @@ using System.Reflection;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
+using Microsoft.Extensions.DependencyInjection;
+using WallFlow.ViewModels;
+using WallFlow.Services;
 
 namespace WallFlow;
 
 public partial class App : Application
 {
+    public static IServiceProvider ServiceProvider { get; private set; } = null!;
+
     private TrayIcon? _trayIcon;
-    private MainWindow? _mainWindow;
+    private LocalGalleryWindow? _mainWindow;
     private DockWindow? _dockWindow;
     private static Mutex? _appMutex;
 
@@ -45,6 +50,14 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (sender, args) => LogCrash(args.ExceptionObject as Exception);
         DispatcherUnhandledException += (sender, args) => {
             LogCrash(args.Exception);
+            // Suppress Storyboard namescope resolution errors from ControlTemplate triggers
+            // (.NET 8 does not always register x:Name within nested ControlTemplate visual trees)
+            if (args.Exception is InvalidOperationException ioe &&
+                ioe.StackTrace != null &&
+                ioe.StackTrace.Contains("Storyboard.ResolveTargetName"))
+            {
+                args.Handled = true;
+            }
         };
 
         // Parse command line URL/file path if present
@@ -116,21 +129,70 @@ public partial class App : Application
         // Preload sounds asynchronously on startup to prevent UI lag on hover
         Services.SoundService.PreloadAsync();
 
+        // Preload pinned app icons asynchronously on startup to prevent empty circles on first open
+        try { WallFlow.Windows.PinnedAppsWindow.PreloadPinnedIcons(); } catch { }
+
         base.OnStartup(e);
 
-        _mainWindow = new MainWindow();
-        // Force window handle (HWND) creation in background to hook hotkeys/IPC without flashing
-        new System.Windows.Interop.WindowInteropHelper(_mainWindow).EnsureHandle();
+        // Configure Dependency Injection Services
+        var services = new ServiceCollection();
+        services.AddSingleton<DockViewModel>();
+        services.AddSingleton<WidgetManager>();
+        services.AddSingleton<DockWindow>();
+        services.AddTransient<SettingsViewModel>();
+        services.AddTransient<Windows.SettingsWindow>();
+        ServiceProvider = services.BuildServiceProvider();
 
-        _dockWindow = new DockWindow();
+        // Resolve core window logic
+        var widgetManager = ServiceProvider.GetRequiredService<WidgetManager>();
+        var dockViewModel = ServiceProvider.GetRequiredService<DockViewModel>();
+        widgetManager.SetViewModel(dockViewModel);
+
+        // Register Dynamic Widgets in the factory dictionary
+        widgetManager.RegisterWidget("Calendar", (left) => new Windows.CalendarWindow(left));
+        widgetManager.RegisterWidget("Weather", (left) => new Windows.WeatherWindow(left));
+        widgetManager.RegisterWidget("Media", (left) => new Windows.MediaFlyoutWindow(DockWindow.Instance?.CurrentMediaSession, left));
+        widgetManager.RegisterWidget("Settings", (left) => WallFlow.Windows.SettingsWindow.Instance ?? ServiceProvider.GetRequiredService<WallFlow.Windows.SettingsWindow>());
+        widgetManager.RegisterWidget("OnlineGallery", (left) => new Windows.OnlineGalleryWindow());
+        widgetManager.RegisterWidget("YouTube", (left) => WallFlow.Windows.YouTubeMusicWindow.Instance ?? new WallFlow.Windows.YouTubeMusicWindow());
+        widgetManager.RegisterWidget("ChatGPT", (left) => WallFlow.Windows.AiAssistantWindow.Instance ?? new WallFlow.Windows.AiAssistantWindow());
+        widgetManager.RegisterWidget("Gemini", (left) => WallFlow.Windows.AiAssistantWindow.Instance ?? new WallFlow.Windows.AiAssistantWindow());
+        widgetManager.RegisterWidget("AiAssistant", (left) => WallFlow.Windows.AiAssistantWindow.Instance ?? new WallFlow.Windows.AiAssistantWindow());
+        widgetManager.RegisterWidget("Power", (left) => new Windows.PowerWindow());
+        widgetManager.RegisterWidget("PinnedApps", (left) => {
+            var win = new Windows.PinnedAppsWindow();
+            win.SetSearchMode("Apps");
+            return win;
+        });
+        widgetManager.RegisterWidget("Clipboard", (left) => {
+            var win = new Windows.PinnedAppsWindow();
+            win.SetSearchMode("Clipboard");
+            return win;
+        });
+
+        _mainWindow = new LocalGalleryWindow();
+        // Force window handle (HWND) creation in background to hook hotkeys/IPC without flashing
+        var mainHwnd = new System.Windows.Interop.WindowInteropHelper(_mainWindow).EnsureHandle();
+
+        // Initialize System Coordinator with LocalGalleryWindow's HWND
+        SystemCoordinator.Instance.Initialize(mainHwnd);
+
+        _dockWindow = ServiceProvider.GetRequiredService<DockWindow>();
         _dockWindow.Show();
+
+        // Initialize dynamic colors from wallpaper (Auto-Theming)
+        WallpaperThemeService.Instance.UpdateThemeFromWallpaper();
 
         // If we have an initial URL to open, open it immediately
         if (!string.IsNullOrEmpty(InitialUrl))
         {
             try
             {
-                _dockWindow.OpenNewBrowserWindow(InitialUrl);
+                using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = InitialUrl,
+                    UseShellExecute = true
+                });
                 InitialUrl = null;
             }
             catch { }
@@ -164,9 +226,7 @@ public partial class App : Application
         {
             var bundledFonts = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "Outfit", "Share Tech Mono", "Orbitron", "Lobster Two", "Dancing Script",
-                "Pacifico", "Cinzel", "Montserrat", "Playfair Display", "Comfortaa",
-                "Caveat", "Roboto Mono", "Michroma", "Syncopate", "Inter", "Quicksand", "Varela Round"
+                "Outfit", "Orbitron", "Google Sans Flex"
             };
 
             if (bundledFonts.Contains(fontName))
@@ -242,6 +302,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SystemCoordinator.Instance.Shutdown();
         _trayIcon?.Dispose();
         if (_appMutex != null)
         {

@@ -39,7 +39,14 @@ public class WebView2CompositionHost : HwndHost
         {
             try
             {
-                IntPtr hRgn = CreateRoundRectRgn(0, 0, (int)width, (int)height, (int)(cornerRadius * 2), (int)(cornerRadius * 2));
+                double dpiScale = 1.0;
+                try { dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch { }
+
+                int physicalWidth = (int)Math.Round(width * dpiScale);
+                int physicalHeight = (int)Math.Round(height * dpiScale);
+                int physicalRadius = (int)Math.Round(cornerRadius * dpiScale);
+
+                IntPtr hRgn = CreateRoundRectRgn(0, 0, physicalWidth, physicalHeight, physicalRadius * 2, physicalRadius * 2);
                 if (hRgn != IntPtr.Zero)
                 {
                     SetWindowRgn(_hwndSource.Handle, hRgn, true);
@@ -84,9 +91,8 @@ public class WebView2CompositionHost : HwndHost
     {
         if (msg == WM_SIZE)
         {
-            int width = (int)(short)(lParam.ToInt32() & 0xFFFF);
-            int height = (int)(short)((lParam.ToInt32() >> 16) & 0xFFFF);
-            HostResized?.Invoke(width, height);
+            int physicalWidth = (int)(short)(lParam.ToInt32() & 0xFFFF);
+            int physicalHeight = (int)(short)((lParam.ToInt32() >> 16) & 0xFFFF);
 
             double dpiScale = 1.0;
             try
@@ -95,7 +101,12 @@ public class WebView2CompositionHost : HwndHost
                 dpiScale = dpi.DpiScaleX;
             }
             catch { }
-            UpdateClip(width, height, 8 * dpiScale);
+
+            double logicalWidth = physicalWidth / dpiScale;
+            double logicalHeight = physicalHeight / dpiScale;
+
+            HostResized?.Invoke(physicalWidth, physicalHeight);
+            UpdateClip(logicalWidth, logicalHeight, 8);
         }
         return base.WndProc(hwnd, msg, wParam, lParam, ref handled);
     }

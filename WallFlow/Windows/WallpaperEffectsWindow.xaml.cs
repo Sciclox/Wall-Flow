@@ -6,10 +6,11 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 
 namespace WallFlow.Windows;
 
-public partial class WeatherEffectsWindow : Window
+public partial class WallpaperEffectsWindow : Window
 {
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_TRANSPARENT = 0x00000020;
@@ -22,23 +23,6 @@ public partial class WeatherEffectsWindow : Window
     [DllImport("user32.dll")]
     private extern static int SetWindowLong(IntPtr hwnd, int index, int dwNewLong);
 
-    [DllImport("user32.dll")]
-    private extern static IntPtr FindWindow(string? lpClassName, string? lpWindowName);
-
-    [DllImport("user32.dll")]
-    private extern static IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private extern static bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private extern static IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
-
-    [DllImport("user32.dll")]
-    private extern static IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
-
     [StructLayout(LayoutKind.Sequential)]
     private struct Win32Point
     {
@@ -48,6 +32,14 @@ public partial class WeatherEffectsWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Win32Point lppoint);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    private static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOACTIVATE = 0x0010;
 
     private class Particle
     {
@@ -88,8 +80,9 @@ public partial class WeatherEffectsWindow : Window
     private double _canvasWidth;
     private double _canvasHeight;
     private Rectangle? _lightningOverlay;
+    private DispatcherTimer? _zOrderTimer;
 
-    public WeatherEffectsWindow()
+    public WallpaperEffectsWindow()
     {
         InitializeComponent();
     }
@@ -104,8 +97,8 @@ public partial class WeatherEffectsWindow : Window
             var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
 
-            // Parent to Windows Desktop (WorkerW) behind icons
-            ParentToDesktop(this);
+            // Push to bottom of Z-order immediately
+            SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
         catch { }
 
@@ -117,35 +110,43 @@ public partial class WeatherEffectsWindow : Window
         Left = 0;
         Top = 0;
 
+        // Safety timer: keep window at bottom of Z-order every 2 seconds
+        // This ensures effects stay visible even if WorkerW parenting fails
+        _zOrderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _zOrderTimer.Tick += (s, args) =>
+        {
+            try
+            {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                    SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            catch { }
+        };
+
         if (_currentEffect != "Ninguno")
         {
             StartRendering();
         }
+        else
+        {
+            _zOrderTimer.Stop();
+        }
     }
 
-    private static void ParentToDesktop(Window window)
+    protected override void OnActivated(EventArgs e)
     {
-        IntPtr hwnd = new WindowInteropHelper(window).Handle;
-        IntPtr progman = FindWindow("Progman", null);
-        
-        // Spawn WorkerW
-        SendMessage(progman, 0x052C, new IntPtr(0), IntPtr.Zero);
-        
-        IntPtr workerw = IntPtr.Zero;
-        EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
+        base.OnActivated(e);
+        try
         {
-            IntPtr p = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", "");
-            if (p != IntPtr.Zero)
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
             {
-                workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", "");
+                // Force window to stay at the bottom of Z-order (behind desktop icons)
+                SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
-            return true;
-        }), IntPtr.Zero);
-        
-        if (workerw != IntPtr.Zero)
-        {
-            SetParent(hwnd, workerw);
         }
+        catch { }
     }
 
     public void SetEffect(string effectName)
@@ -180,19 +181,31 @@ public partial class WeatherEffectsWindow : Window
         if (_isRendering) return;
         _isRendering = true;
         CompositionTarget.Rendering += OnRendering;
+        if (_zOrderTimer != null && !_zOrderTimer.IsEnabled)
+        {
+            _zOrderTimer.Start();
+        }
         InitParticles();
     }
 
     public void StopRendering()
     {
-        if (!_isRendering) return;
         _isRendering = false;
         CompositionTarget.Rendering -= OnRendering;
+        if (_zOrderTimer != null && _zOrderTimer.IsEnabled)
+        {
+            _zOrderTimer.Stop();
+        }
     }
 
     protected override void OnClosed(EventArgs e)
     {
         StopRendering();
+        if (_zOrderTimer != null)
+        {
+            _zOrderTimer.Stop();
+            _zOrderTimer = null;
+        }
         base.OnClosed(e);
     }
 

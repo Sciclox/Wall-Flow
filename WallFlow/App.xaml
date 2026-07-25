@@ -9,6 +9,7 @@
 
             <FontFamily x:Key="AppFontFamily">pack://application:,,,/Fonts/#Outfit</FontFamily>
             <FontFamily x:Key="MaterialIconsFont">pack://application:,,,/Fonts/#Material Symbols Outlined</FontFamily>
+            <FontFamily x:Key="LucideIconsFont">pack://application:,,,/Fonts/#lucide</FontFamily>
 
             <Color x:Key="AccentColor">#AF52DE</Color>
             <Color x:Key="AccentHoverColor">#C57BFA</Color>
@@ -17,6 +18,14 @@
             <SolidColorBrush x:Key="AccentGlowBrush" Color="#18AF52DE" />
             <SolidColorBrush x:Key="AccentActiveBrush" Color="#65AF52DE" />
             <SolidColorBrush x:Key="AccentGroupBrush" Color="#30AF52DE" />
+
+            <Color x:Key="BorderColor1">#007AFF</Color>
+            <Color x:Key="BorderColor2">#FB2BFF</Color>
+            <Color x:Key="BorderColor3">#00F5FF</Color>
+            <LinearGradientBrush x:Key="VisualizerWaveBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FFD39BFF" Offset="0" />
+                <GradientStop Color="#FFAF52DE" Offset="1" />
+            </LinearGradientBrush>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

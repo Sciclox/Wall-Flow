@@ -7,6 +7,8 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
+using WallFlow.Services;
 
 namespace WallFlow;
 
@@ -86,7 +88,7 @@ public partial class ContextMenuWindow : Window
         InitializeComponent();
         Activated += (_, _) => _wasActivated = true;
         _autoStartEnabled = IsAutoStartEnabled();
-        _autoChangeEnabled = MainWindow.IsAutoChangeEnabled();
+        _autoChangeEnabled = LocalGalleryWindow.IsAutoChangeEnabled();
         UpdateCheckState();
         UpdateAutoChangeDisplay();
     }
@@ -199,10 +201,10 @@ public partial class ContextMenuWindow : Window
 
     private void UpdateModeTexts()
     {
-        var isRandom = MainWindow.IsRandomMode();
+        var isRandom = LocalGalleryWindow.IsRandomMode();
 
-        SeqText.Text = MainWindow.GetSequentialModeText();
-        RandText.Text = MainWindow.GetRandomModeText();
+        SeqText.Text = LocalGalleryWindow.GetSequentialModeText();
+        RandText.Text = LocalGalleryWindow.GetRandomModeText();
         SeqSpeed.Text = "";
         RandSpeed.Text = "";
 
@@ -253,8 +255,7 @@ public partial class ContextMenuWindow : Window
     {
         _closedByAction = true;
         _openInstance = null;
-        var gallery = new Windows.OnlineGalleryWindow();
-        gallery.Show();
+        WidgetManager.Instance.ToggleWidget("OnlineGallery");
         Close();
     }
 
@@ -267,21 +268,21 @@ public partial class ContextMenuWindow : Window
 
     private void AutoChange_Click(object sender, MouseButtonEventArgs e)
     {
-        MainWindow.ToggleAutoChange();
-        _autoChangeEnabled = MainWindow.IsAutoChangeEnabled();
+        LocalGalleryWindow.ToggleAutoChange();
+        _autoChangeEnabled = LocalGalleryWindow.IsAutoChangeEnabled();
         UpdateAutoChangeDisplay();
         e.Handled = true;
     }
 
     private void Sequential_Click(object sender, MouseButtonEventArgs e)
     {
-        if (MainWindow.IsRandomMode())
+        if (LocalGalleryWindow.IsRandomMode())
         {
-            MainWindow.SelectSequentialMode();
+            LocalGalleryWindow.SelectSequentialMode();
         }
         else
         {
-            MainWindow.CycleCurrentSpeed();
+            LocalGalleryWindow.CycleCurrentSpeed();
         }
         UpdateModeTexts();
         e.Handled = true;
@@ -289,13 +290,13 @@ public partial class ContextMenuWindow : Window
 
     private void Random_Click(object sender, MouseButtonEventArgs e)
     {
-        if (MainWindow.IsRandomMode())
+        if (LocalGalleryWindow.IsRandomMode())
         {
-            MainWindow.CycleCurrentSpeed();
+            LocalGalleryWindow.CycleCurrentSpeed();
         }
         else
         {
-            MainWindow.SelectRandomMode();
+            LocalGalleryWindow.SelectRandomMode();
         }
         UpdateModeTexts();
         e.Handled = true;
@@ -397,8 +398,9 @@ public partial class ContextMenuWindow : Window
         {
             _closedByAction = true;
             _openInstance = null;
-            var settings = new Windows.SettingsWindow();
+            var settings = WallFlow.Windows.SettingsWindow.Instance ?? App.ServiceProvider.GetRequiredService<WallFlow.Windows.SettingsWindow>();
             settings.Show();
+            settings.Activate();
             Close();
         }
         catch (Exception ex)
@@ -406,6 +408,7 @@ public partial class ContextMenuWindow : Window
             MessageBox.Show($"Error al abrir configuración: {ex.Message}", "WallFlow");
         }
     }
+
 
     private void Folder_Click(object sender, MouseButtonEventArgs e)
     {
@@ -424,8 +427,8 @@ public partial class ContextMenuWindow : Window
             var selectedPath = dialog.FolderName;
             if (!string.IsNullOrEmpty(selectedPath) && Directory.Exists(selectedPath))
             {
-                MainWindow.ChangeDirectory(selectedPath);
-                MainWindow.NotifyRefreshRequested();
+                LocalGalleryWindow.ChangeDirectory(selectedPath);
+                LocalGalleryWindow.NotifyRefreshRequested();
             }
         }
     }

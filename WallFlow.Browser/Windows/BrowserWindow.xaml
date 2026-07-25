@@ -180,7 +180,7 @@
             <Setter Property="Padding" Value="10,4" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">

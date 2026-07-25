@@ -135,6 +135,7 @@ public class CompositionWebViewTab : IDisposable
         {
             if (_controller == null) return;
             _controller.IsVisible = true;
+            try { _controller.NotifyParentWindowPositionChanged(); } catch { }
             IsActive = true;
         });
     }

@@ -22,8 +22,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WallFlow.Core\WallFlow.Core.csproj" />
-    <ProjectReference Include="..\WallFlow.Browser\WallFlow.Browser.csproj" />
     <ProjectReference Include="..\WallFlow.Spotlight\WallFlow.Spotlight.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
   </ItemGroup>
 
 </Project>

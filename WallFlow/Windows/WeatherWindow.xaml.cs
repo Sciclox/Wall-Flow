@@ -5,8 +5,11 @@ using WallFlow.Services;
 
 namespace WallFlow.Windows
 {
-    public partial class WeatherWindow : Window
+    public partial class WeatherWindow : Window, IWidget
     {
+        string IWidget.Name => "Weather";
+        public void Open() { Show(); Activate(); }
+        public bool IsOpen => IsLoaded && IsVisible;
         public static WeatherWindow? Instance { get; private set; }
 
         private readonly double _targetLeft;

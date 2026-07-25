@@ -17,7 +17,7 @@ using System.Windows.Threading;
 
 namespace WallFlow;
 
-public partial class MainWindow : Window
+public partial class LocalGalleryWindow : Window
 {
     private const int IMG_W = 250;
     private const int IMG_H = 430;
@@ -187,11 +187,11 @@ public partial class MainWindow : Window
     private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     private static readonly DependencyProperty ScrollOffsetProperty =
-        DependencyProperty.Register("ScrollOffset", typeof(double), typeof(MainWindow),
+        DependencyProperty.Register("ScrollOffset", typeof(double), typeof(LocalGalleryWindow),
             new PropertyMetadata(0.0, OnScrollOffsetChanged));
 
-    private static MainWindow? _instance;
-    public static MainWindow? Instance => _instance;
+    private static LocalGalleryWindow? _instance;
+    public static LocalGalleryWindow? Instance => _instance;
     private static IntPtr _mouseHookId;
     private static LowLevelMouseProc? _mouseProc;
 
@@ -203,11 +203,11 @@ public partial class MainWindow : Window
 
     private static void OnScrollOffsetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var w = (MainWindow)d;
+        var w = (LocalGalleryWindow)d;
         w.ImageScroll?.ScrollToHorizontalOffset((double)e.NewValue);
     }
 
-    public MainWindow()
+    public LocalGalleryWindow()
     {
         _instance = this;
         InitializeComponent();
@@ -219,6 +219,7 @@ public partial class MainWindow : Window
         ApplicationEvents.RefreshRequested += OnRefreshRequested;
         ApplicationEvents.DirectoryChanged += ChangeDirectory;
 
+        IsVisibleChanged += OnIsVisibleChanged;
         // Load AutoChange settings
         var s = Services.SettingsService.Instance;
         _autoChangeEnabled = s.AutoChangeEnabled;
@@ -226,6 +227,24 @@ public partial class MainWindow : Window
         _sequentialIntervalIndex = Math.Clamp(s.SequentialIntervalIndex, 0, AutoIntervals.Length - 1);
         _randomIntervalIndex = Math.Clamp(s.RandomIntervalIndex, 0, AutoIntervals.Length - 1);
         ApplyAutoChangeState();
+    }
+
+    private void OnIsVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (IsVisible)
+        {
+            var h = new WindowInteropHelper(this).Handle;
+            if (h != IntPtr.Zero)
+            {
+                RefreshBackdrop(h);
+                UpdateWindowRegion(h);
+            }
+            InstallMouseHook();
+        }
+        else
+        {
+            UninstallMouseHook();
+        }
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -269,17 +288,10 @@ public partial class MainWindow : Window
 
         RefreshBackdrop(hwnd);
 
-        IsVisibleChanged += (_, _) =>
+        if (IsVisible)
         {
-            if (IsVisible)
-            {
-                var h = new WindowInteropHelper(this).Handle;
-                RefreshBackdrop(h);
-                UpdateWindowRegion(h);
-            }
-        };
-
-        InstallMouseHook();
+            InstallMouseHook();
+        }
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
@@ -368,10 +380,9 @@ public partial class MainWindow : Window
 
     private static void RefreshBackdrop(IntPtr hwnd)
     {
-        ApplyAccent(hwnd, AccentState.ACCENT_DISABLED);
         ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
         RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
-            RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+            RDW_INVALIDATE | RDW_UPDATENOW);
     }
 
     public static void RefreshAllBackdrops()
@@ -382,7 +393,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 1. Refresh MainWindow
+        // 1. Refresh LocalGalleryWindow
         if (_instance != null)
         {
             var hwnd = new WindowInteropHelper(_instance).Handle;
@@ -485,9 +496,6 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     _wallpapers.Clear();
-                    GC.Collect();
-                    GC.Collect(2, GCCollectionMode.Forced, true, true);
-                    GC.WaitForPendingFinalizers();
                     foreach (var entry in temp)
                     {
                         _wallpapers.Add(entry);
@@ -538,7 +546,6 @@ public partial class MainWindow : Window
             _mouseHookId = IntPtr.Zero;
         }
         _mouseProc = null;
-        _instance = null;
     }
 
     private static IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -636,50 +643,26 @@ public partial class MainWindow : Window
             Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20))
         };
 
-        // Load image entirely on background threads (using SemaphoreSlim to throttle concurrent disk/CPU load)
+        // Load image using ThumbnailCacheService (disk cache + ultra-fast thumbnail load)
         Task.Run(async () =>
         {
-            await _thumbnailThrottle.WaitAsync();
             try
             {
-                if (!File.Exists(entry.FilePath)) return;
-                byte[] bytes = File.ReadAllBytes(entry.FilePath);
-
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                using (var ms = new MemoryStream(bytes))
+                var bmp = await ThumbnailCacheService.Instance.GetThumbnailAsync(entry.FilePath, IMG_W * 2);
+                if (bmp != null)
                 {
-                    bmp.StreamSource = ms;
-                    bmp.DecodePixelWidth = IMG_W * 2;
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    bmp.EndInit();
-                }
-                bmp.Freeze();
-
-                _ = Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    border.Background = new ImageBrush(bmp)
+                    _ = Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        Stretch = Stretch.UniformToFill,
-                        AlignmentX = AlignmentX.Center,
-                        AlignmentY = AlignmentY.Center
-                    };
-                }), DispatcherPriority.Background);
-            }
-            catch (Exception ex)
-            {
-                try
-                {
-                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow", "error_log.txt");
-                    Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-                    File.AppendAllText(logPath, $"Error loading {entry.FilePath}: {ex.Message}\n{ex.StackTrace}\n\n");
+                        border.Background = new ImageBrush(bmp)
+                        {
+                            Stretch = Stretch.UniformToFill,
+                            AlignmentX = AlignmentX.Center,
+                            AlignmentY = AlignmentY.Center
+                        };
+                    }), DispatcherPriority.Background);
                 }
-                catch { }
             }
-            finally
-            {
-                _thumbnailThrottle.Release();
-            }
+            catch { }
         });
 
         var pressAnim = new DoubleAnimation(0.93, TimeSpan.FromMilliseconds(80));
@@ -715,15 +698,10 @@ public partial class MainWindow : Window
 
     private void ChangeWallpaper(WallpaperEntry entry)
     {
-        var current = GetCurrentWallpaper();
-        if (string.Equals(current, entry.FilePath, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        // Run SystemParametersInfo on a background thread so the UI thread doesn't lag while Windows broadcasts WM_SETTINGCHANGE
-        Task.Run(() =>
+        WallpaperTransitionService.ApplyWallpaperWithFade(entry.FilePath, async () =>
         {
-            SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, entry.FilePath,
-                SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            await Task.Delay(150);
+            RefreshAllBackdrops();
         });
 
         // Sync index when wallpaper is manually changed
@@ -776,10 +754,15 @@ public partial class MainWindow : Window
                 {
                     App.Current.Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        if (DockWindow.Instance != null)
+                        try
                         {
-                            DockWindow.Instance.OpenNewBrowserWindow(url);
+                            using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = url,
+                                UseShellExecute = true
+                            });
                         }
+                        catch { }
                     }));
                 }
             }
@@ -794,7 +777,7 @@ public partial class MainWindow : Window
             {
                 // Debounce and delay refresh to allow Windows to complete drawing the new background
                 _backdropRefreshTimer?.Stop();
-                _backdropRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+                _backdropRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
                 _backdropRefreshTimer.Tick += (s, args) =>
                 {
                     _backdropRefreshTimer?.Stop();
@@ -999,6 +982,12 @@ public partial class MainWindow : Window
         RefreshWallpapers();
     }
 
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        e.Cancel = true;
+        Visibility = Visibility.Hidden;
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         RefreshRequested -= OnRefreshRequested;
@@ -1008,6 +997,7 @@ public partial class MainWindow : Window
         UninstallMouseHook();
         _watcher?.Dispose();
         _debounceTimer?.Stop();
+        _instance = null;
         base.OnClosed(e);
     }
 }

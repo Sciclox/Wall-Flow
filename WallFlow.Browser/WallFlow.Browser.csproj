@@ -16,4 +16,9 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="logofondo.ico" />
+    <Resource Include="browser_icon.png" />
+  </ItemGroup>
+
 </Project>

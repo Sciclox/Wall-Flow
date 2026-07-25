@@ -7,8 +7,11 @@ using WallFlow.Services;
 
 namespace WallFlow.Windows;
 
-public partial class PowerWindow : Window
+public partial class PowerWindow : Window, IWidget
 {
+    string IWidget.Name => "Power";
+    public void Open() { Show(); Activate(); }
+    public bool IsOpen => IsLoaded && IsVisible;
     public PowerWindow()
     {
         InitializeComponent();

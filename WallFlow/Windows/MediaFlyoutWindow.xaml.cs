@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -8,25 +9,32 @@ using WallFlow.Services;
 
 namespace WallFlow.Windows;
 
-public partial class MediaFlyoutWindow : Window
+public partial class MediaFlyoutWindow : Window, IWidget
 {
-    private readonly global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? _session;
+    string IWidget.Name => "Media";
+    public void Open() { Show(); Activate(); }
+    public bool IsOpen => IsLoaded && IsVisible;
+
+    private global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
+    private readonly List<global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession> _sessions = new();
+    private int _selectedSessionIndex = 0;
+    private bool _isInitialSessionSelected = false;
+    private readonly global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? _initialSession;
+
     private System.Threading.CancellationTokenSource? _updateCts;
     private bool _isClosing = false;
-
     private readonly double _targetLeft;
+
+    private global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? CurrentSession =>
+        (_sessions.Count > 0 && _selectedSessionIndex >= 0 && _selectedSessionIndex < _sessions.Count)
+            ? _sessions[_selectedSessionIndex]
+            : _initialSession;
 
     public MediaFlyoutWindow(global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? session, double left)
     {
         InitializeComponent();
-        _session = session;
+        _initialSession = session;
         _targetLeft = left;
-
-        if (_session != null)
-        {
-            _session.MediaPropertiesChanged += Session_MediaPropertiesChanged;
-            _session.PlaybackInfoChanged += Session_PlaybackInfoChanged;
-        }
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -82,7 +90,109 @@ public partial class MediaFlyoutWindow : Window
             Top = isBottom ? SystemParameters.PrimaryScreenHeight - Height - 56 : 56;
         }
 
-        UpdateDetails();
+        InitSessions();
+    }
+
+    private async void InitSessions()
+    {
+        try
+        {
+            _sessionManager = await global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            if (_sessionManager != null)
+            {
+                _sessionManager.SessionsChanged += SessionManager_SessionsChanged;
+            }
+        }
+        catch { }
+
+        RefreshSessions();
+    }
+
+    private void SessionManager_SessionsChanged(
+        global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager sender,
+        global::Windows.Media.Control.SessionsChangedEventArgs args)
+    {
+        Dispatcher.BeginInvoke(RefreshSessions);
+    }
+
+    private void RefreshSessions()
+    {
+        try
+        {
+            UnsubscribeCurrentSession();
+            _sessions.Clear();
+
+            if (_sessionManager != null)
+            {
+                var raw = _sessionManager.GetSessions();
+                if (raw != null)
+                {
+                    foreach (var s in raw)
+                    {
+                        _sessions.Add(s);
+                    }
+                }
+            }
+
+            if (_sessions.Count == 0 && _initialSession != null)
+            {
+                _sessions.Add(_initialSession);
+            }
+
+            // Auto-select session that is actively playing on initial open
+            if (!_isInitialSessionSelected && _sessions.Count > 0)
+            {
+                int playingIndex = -1;
+                for (int i = 0; i < _sessions.Count; i++)
+                {
+                    try
+                    {
+                        var pb = _sessions[i].GetPlaybackInfo();
+                        if (pb != null && pb.PlaybackStatus == global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                        {
+                            playingIndex = i;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (playingIndex >= 0)
+                {
+                    _selectedSessionIndex = playingIndex;
+                }
+                _isInitialSessionSelected = true;
+            }
+
+            if (_selectedSessionIndex >= _sessions.Count)
+            {
+                _selectedSessionIndex = Math.Max(0, _sessions.Count - 1);
+            }
+
+            SubscribeCurrentSession();
+            UpdateDetails();
+        }
+        catch { }
+    }
+
+    private void SubscribeCurrentSession()
+    {
+        var s = CurrentSession;
+        if (s != null)
+        {
+            s.MediaPropertiesChanged += Session_MediaPropertiesChanged;
+            s.PlaybackInfoChanged += Session_PlaybackInfoChanged;
+        }
+    }
+
+    private void UnsubscribeCurrentSession()
+    {
+        var s = CurrentSession;
+        if (s != null)
+        {
+            s.MediaPropertiesChanged -= Session_MediaPropertiesChanged;
+            s.PlaybackInfoChanged -= Session_PlaybackInfoChanged;
+        }
     }
 
     private void Session_MediaPropertiesChanged(
@@ -99,6 +209,29 @@ public partial class MediaFlyoutWindow : Window
         Dispatcher.BeginInvoke(UpdateDetails);
     }
 
+    private string GetAppFriendlyName(global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? session)
+    {
+        if (session == null) return "Reproductor";
+        try
+        {
+            string appId = session.SourceAppUserModelId ?? "";
+            if (string.IsNullOrEmpty(appId)) return "Reproductor";
+
+            string name = Path.GetFileNameWithoutExtension(appId);
+            if (name.Equals("chrome", StringComparison.OrdinalIgnoreCase)) return "Google Chrome";
+            if (name.Equals("brave", StringComparison.OrdinalIgnoreCase)) return "Brave Browser";
+            if (name.Equals("msedge", StringComparison.OrdinalIgnoreCase)) return "Microsoft Edge";
+            if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase)) return "Firefox";
+            if (name.Equals("spotify", StringComparison.OrdinalIgnoreCase)) return "Spotify";
+            if (name.Equals("vlc", StringComparison.OrdinalIgnoreCase)) return "VLC Media Player";
+            if (name.Equals("wmplayer", StringComparison.OrdinalIgnoreCase)) return "Windows Media Player";
+
+            if (name.Length > 1) return char.ToUpper(name[0]) + name.Substring(1);
+            return name;
+        }
+        catch { return "Reproductor"; }
+    }
+
     private async void UpdateDetails()
     {
         _updateCts?.Cancel();
@@ -106,22 +239,37 @@ public partial class MediaFlyoutWindow : Window
         _updateCts = cts;
         var token = cts.Token;
 
-        if (_session == null)
+        var session = CurrentSession;
+        if (session == null)
         {
             SafeClose();
             return;
         }
 
+        if (_sessions.Count > 1)
+        {
+            string appName = GetAppFriendlyName(session);
+            SessionAppText.Text = $"{appName} ({_selectedSessionIndex + 1}/{_sessions.Count})";
+            SessionSelectorPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            SessionSelectorPanel.Visibility = Visibility.Collapsed;
+        }
+
         try
         {
-            var props = await _session.TryGetMediaPropertiesAsync();
+            var props = await session.TryGetMediaPropertiesAsync();
             if (token.IsCancellationRequested) return;
 
-            var playback = _session.GetPlaybackInfo();
+            var playback = session.GetPlaybackInfo();
 
             if (props == null || string.IsNullOrEmpty(props.Title))
             {
-                SafeClose();
+                TitleText.Text = GetAppFriendlyName(session);
+                ArtistText.Text = "Reproduciendo audio";
+                PlayPauseButton.Content = "\uE769";
+                BgImageBorder.Visibility = Visibility.Collapsed;
                 return;
             }
 
@@ -171,31 +319,82 @@ public partial class MediaFlyoutWindow : Window
         }
         catch
         {
-            SafeClose();
+            // If failed to read properties for current session, fallback gracefully
         }
+    }
+
+    private void PrevSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sessions.Count <= 1) return;
+        UnsubscribeCurrentSession();
+        _selectedSessionIndex = (_selectedSessionIndex - 1 + _sessions.Count) % _sessions.Count;
+        SubscribeCurrentSession();
+        UpdateDetails();
+    }
+
+    private void NextSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sessions.Count <= 1) return;
+        UnsubscribeCurrentSession();
+        _selectedSessionIndex = (_selectedSessionIndex + 1) % _sessions.Count;
+        SubscribeCurrentSession();
+        UpdateDetails();
+    }
+
+    private void Window_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (_sessions.Count <= 1) return;
+
+        if (e.Delta > 0)
+        {
+            PrevSession_Click(sender, e);
+        }
+        else if (e.Delta < 0)
+        {
+            NextSession_Click(sender, e);
+        }
+        e.Handled = true;
     }
 
     private async void Prev_Click(object sender, RoutedEventArgs e)
     {
-        if (_session != null)
+        var session = CurrentSession;
+        if (session != null)
         {
-            try { await _session.TrySkipPreviousAsync(); } catch { }
+            try { await session.TrySkipPreviousAsync(); } catch { }
         }
     }
 
     private async void PlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (_session != null)
+        var session = CurrentSession;
+        if (session != null)
         {
-            try { await _session.TryTogglePlayPauseAsync(); } catch { }
+            try
+            {
+                var pb = session.GetPlaybackInfo();
+                if (pb != null && pb.PlaybackStatus == global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                {
+                    await session.TryPauseAsync();
+                }
+                else
+                {
+                    await session.TryPlayAsync();
+                }
+            }
+            catch
+            {
+                try { await session.TryTogglePlayPauseAsync(); } catch { }
+            }
         }
     }
 
     private async void Next_Click(object sender, RoutedEventArgs e)
     {
-        if (_session != null)
+        var session = CurrentSession;
+        if (session != null)
         {
-            try { await _session.TrySkipNextAsync(); } catch { }
+            try { await session.TrySkipNextAsync(); } catch { }
         }
     }
 
@@ -258,12 +457,12 @@ public partial class MediaFlyoutWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        // Unregister events to avoid leaks
-        if (_session != null)
+        if (_sessionManager != null)
         {
-            _session.MediaPropertiesChanged -= Session_MediaPropertiesChanged;
-            _session.PlaybackInfoChanged -= Session_PlaybackInfoChanged;
+            _sessionManager.SessionsChanged -= SessionManager_SessionsChanged;
         }
+        UnsubscribeCurrentSession();
+
         base.OnClosed(e);
 
         // Force GC collection to immediately free the media album art BitmapImages

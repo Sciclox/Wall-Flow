@@ -11,16 +11,23 @@ using System.Threading.Tasks;
 
 namespace WallFlow.Windows;
 
-public partial class YouTubeMusicWindow : Window
+public partial class YouTubeMusicWindow : Window, IWidget
 {
+    string IWidget.Name => "YouTube";
+    public void Open() { ShowWithAnimation(); }
+    public void CloseWidget() { SafeHide(); }
+    public bool IsOpen => IsLoaded && Visibility == Visibility.Visible;
     private bool _isPinned = false;
     private bool _isHiding = false;
     private bool _allowClose = false;
     private Microsoft.Web.WebView2.Core.CoreWebView2Environment? _webViewEnv;
     public DateTime LastHiddenTime { get; private set; } = DateTime.MinValue;
 
+    public static YouTubeMusicWindow? Instance { get; private set; }
+
     public YouTubeMusicWindow()
     {
+        Instance = this;
         InitializeComponent();
     }
 
@@ -201,11 +208,50 @@ public partial class YouTubeMusicWindow : Window
                         }
                         
                         setInterval(skipAds, 100);
+
+                        // Track monitoring JS Bridge
+                        (function() {
+                            let lastTitle = '';
+                            let lastArtist = '';
+                            let lastPaused = null;
+
+                            function checkTrackInfo() {
+                                try {
+                                    const titleEl = document.querySelector('ytmusic-player-bar .title');
+                                    const bylineEl = document.querySelector('ytmusic-player-bar .byline');
+                                    const videoEl = document.querySelector('video');
+                                    const imgEl = document.querySelector('ytmusic-player-bar img.image');
+
+                                    if (!titleEl || !videoEl) return;
+
+                                    const title = titleEl.innerText || '';
+                                    const artist = bylineEl ? bylineEl.innerText : '';
+                                    const paused = videoEl.paused;
+                                    const artwork = imgEl ? imgEl.src : '';
+
+                                    if (title !== lastTitle || artist !== lastArtist || paused !== lastPaused) {
+                                        lastTitle = title;
+                                        lastArtist = artist;
+                                        lastPaused = paused;
+
+                                        window.chrome.webview.postMessage(JSON.stringify({
+                                            type: 'trackInfo',
+                                            title: title,
+                                            artist: artist,
+                                            paused: paused,
+                                            artwork: artwork
+                                        }));
+                                    }
+                                } catch (e) { }
+                            }
+                            setInterval(checkTrackInfo, 500);
+                        })();
                     })();
                 ";
                 await webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(adBlockerScript);
 
                 webView.CoreWebView2.HistoryChanged += CoreWebView2_HistoryChanged;
+                webView.CoreWebView2.WebMessageReceived += WebMessageReceived;
                 UpdateNavigationButtonStates();
             }
 
@@ -215,6 +261,71 @@ public partial class YouTubeMusicWindow : Window
         {
             MessageBox.Show($"Error al iniciar el reproductor de música: {ex.Message}", "Error WebView2", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            string json = e.TryGetWebMessageAsString();
+            using (var doc = System.Text.Json.JsonDocument.Parse(json))
+            {
+                var root = doc.RootElement;
+                if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "trackInfo")
+                {
+                    string title = root.GetProperty("title").GetString() ?? "";
+                    string artist = root.GetProperty("artist").GetString() ?? "";
+                    bool paused = root.GetProperty("paused").GetBoolean();
+                    string artwork = root.GetProperty("artwork").GetString() ?? "";
+
+                    // If needed, we can push values to the DockViewModel or handle them.
+                    // Windows natively links WebView2 playing media with system SMTC.
+                }
+            }
+        }
+        catch { }
+    }
+
+    public async void TogglePlayPause()
+    {
+        try
+        {
+            if (webView.CoreWebView2 != null)
+            {
+                await webView.ExecuteScriptAsync(
+                    "document.querySelector('video')?.paused ? document.querySelector('video')?.play() : document.querySelector('video')?.pause()"
+                );
+            }
+        }
+        catch { }
+    }
+
+    public async void NextTrack()
+    {
+        try
+        {
+            if (webView.CoreWebView2 != null)
+            {
+                await webView.ExecuteScriptAsync(
+                    "document.querySelector('ytmusic-player-bar .next-button')?.click()"
+                );
+            }
+        }
+        catch { }
+    }
+
+    public async void PreviousTrack()
+    {
+        try
+        {
+            if (webView.CoreWebView2 != null)
+            {
+                await webView.ExecuteScriptAsync(
+                    "document.querySelector('ytmusic-player-bar .previous-button')?.click()"
+                );
+            }
+        }
+        catch { }
     }
 
     private void CoreWebView2_WebResourceRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)
@@ -427,6 +538,11 @@ public partial class YouTubeMusicWindow : Window
 
     public void ShowWithAnimation()
     {
+        // Cancel any running animations to prevent property locking and bounce glitches
+        BeginAnimation(OpacityProperty, null);
+        BeginAnimation(TopProperty, null);
+        _isHiding = false;
+
         SoundService.Play(SoundType.Whoosh);
         PositionWindow();
 
@@ -448,11 +564,14 @@ public partial class YouTubeMusicWindow : Window
                 : 56;
         }
 
-        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
+        double startTop = isBottom ? targetTop + 15 : targetTop - 15;
+        Top = startTop;
+
+        var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
-        var slide = new DoubleAnimation(isBottom ? targetTop + 15 : targetTop - 15, targetTop, TimeSpan.FromMilliseconds(250))
+        var slide = new DoubleAnimation(startTop, targetTop, TimeSpan.FromMilliseconds(200))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
@@ -467,6 +586,11 @@ public partial class YouTubeMusicWindow : Window
     public void SafeHide()
     {
         if (_isHiding || this.Visibility != Visibility.Visible) return;
+
+        // Cancel any running animations to prevent property locking
+        BeginAnimation(OpacityProperty, null);
+        BeginAnimation(TopProperty, null);
+
         SoundService.Play(SoundType.Whoosh);
         _isHiding = true;
         LastHiddenTime = DateTime.Now;
@@ -477,33 +601,27 @@ public partial class YouTubeMusicWindow : Window
         }
 
         bool isBottom = SettingsService.Instance.DockPosition == "Bottom";
-        double startTop;
-        if (isBottom)
-        {
-            startTop = DockWindow.Instance != null 
-                ? DockWindow.Instance.Top - Height 
-                : SystemParameters.PrimaryScreenHeight - Height - 56;
-        }
-        else
-        {
-            startTop = DockWindow.Instance != null 
-                ? DockWindow.Instance.Top + DockWindow.Instance.ActualHeight 
-                : 56;
-        }
+        double startTop = Top;
+        double targetTop = isBottom ? startTop + 15 : startTop - 15;
         
-        var fadeOut = new DoubleAnimation(0, TimeSpan.FromMilliseconds(200))
+        var fadeOut = new DoubleAnimation(Opacity, 0, TimeSpan.FromMilliseconds(180))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
         };
-        var slide = new DoubleAnimation(isBottom ? startTop + 15 : startTop - 15, TimeSpan.FromMilliseconds(200))
+        var slide = new DoubleAnimation(startTop, targetTop, TimeSpan.FromMilliseconds(180))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
         };
 
         fadeOut.Completed += (snd, args) =>
         {
-            this.Visibility = Visibility.Hidden;
-            _isHiding = false;
+            if (_isHiding)
+            {
+                this.Visibility = Visibility.Hidden;
+                _isHiding = false;
+                BeginAnimation(OpacityProperty, null);
+                BeginAnimation(TopProperty, null);
+            }
             if (DockWindow.Instance != null)
             {
                 DockWindow.Instance.IsYouTubeMusicOpen = false;
@@ -615,6 +733,7 @@ public partial class YouTubeMusicWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        if (Instance == this) Instance = null;
         base.OnClosed(e);
 
         // Force GC to clean resources

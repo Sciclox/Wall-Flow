@@ -25,10 +25,6 @@ public static class SoundService
 
     private const int SampleRate = 44100;
 
-    private static WaveOutEvent? _outputDevice;
-    private static MixingSampleProvider? _mixer;
-    private static readonly object _engineLock = new object();
-
     private static readonly Dictionary<string, CachedSound> _cachedSounds = new Dictionary<string, CachedSound>();
     private static readonly object _cacheLock = new object();
 
@@ -36,11 +32,6 @@ public static class SoundService
     {
         try
         {
-            if (Application.Current != null)
-            {
-                Application.Current.Exit += (s, e) => Shutdown();
-            }
-
             // Force clean regeneration of sounds on start to fix any old corrupted/static files
             if (Directory.Exists(SoundsFolder))
             {
@@ -59,41 +50,6 @@ public static class SoundService
 
     public static void Shutdown()
     {
-        lock (_engineLock)
-        {
-            if (_outputDevice != null)
-            {
-                try
-                {
-                    _outputDevice.Stop();
-                    _outputDevice.Dispose();
-                }
-                catch { }
-                _outputDevice = null;
-            }
-            _mixer = null;
-        }
-    }
-
-    private static void EnsureEngineInitialized()
-    {
-        if (_outputDevice != null) return;
-
-        lock (_engineLock)
-        {
-            if (_outputDevice == null)
-            {
-                var mixerFormat = WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, 2);
-                _mixer = new MixingSampleProvider(mixerFormat)
-                {
-                    ReadFully = true
-                };
-
-                _outputDevice = new WaveOutEvent();
-                _outputDevice.Init(_mixer);
-                _outputDevice.Play();
-            }
-        }
     }
 
     private class CachedSound
@@ -176,8 +132,6 @@ public static class SoundService
                         }
                     }
                 }
-
-                EnsureEngineInitialized();
             }
             catch { }
         });
@@ -201,53 +155,45 @@ public static class SoundService
 
     private static void PlayFile(string profile, SoundType type, double volume)
     {
-        try
+        Task.Run(() =>
         {
-            Directory.CreateDirectory(SoundsFolder);
-            string fileName = $"{profile}_{type}.wav";
-            string filePath = Path.Combine(SoundsFolder, fileName);
-
-            EnsureSoundExists(profile, type, filePath);
-
-            EnsureEngineInitialized();
-            if (_mixer == null) return;
-
-            CachedSound? cachedSound;
-            lock (_cacheLock)
+            try
             {
-                if (!_cachedSounds.TryGetValue(filePath, out cachedSound))
+                Directory.CreateDirectory(SoundsFolder);
+                string fileName = $"{profile}_{type}.wav";
+                string filePath = Path.Combine(SoundsFolder, fileName);
+
+                EnsureSoundExists(profile, type, filePath);
+
+                CachedSound? cachedSound;
+                lock (_cacheLock)
                 {
-                    if (!File.Exists(filePath)) return;
-                    cachedSound = new CachedSound(filePath);
-                    _cachedSounds[filePath] = cachedSound;
+                    if (!_cachedSounds.TryGetValue(filePath, out cachedSound))
+                    {
+                        if (!File.Exists(filePath)) return;
+                        cachedSound = new CachedSound(filePath);
+                        _cachedSounds[filePath] = cachedSound;
+                    }
                 }
+
+                ISampleProvider provider = new CachedSoundSampleProvider(cachedSound);
+
+                var volumeProvider = new VolumeSampleProvider(provider)
+                {
+                    Volume = (float)Math.Clamp(volume, 0.0, 1.0)
+                };
+
+                var waveOut = new WaveOutEvent();
+                waveOut.PlaybackStopped += (s, ev) =>
+                {
+                    try { waveOut.Dispose(); } catch { }
+                };
+
+                waveOut.Init(volumeProvider);
+                waveOut.Play();
             }
-
-            ISampleProvider provider = new CachedSoundSampleProvider(cachedSound);
-
-            var targetFormat = _mixer.WaveFormat;
-
-            if (provider.WaveFormat.Channels == 1 && targetFormat.Channels == 2)
-            {
-                provider = new MonoToStereoSampleProvider(provider);
-            }
-
-            if (provider.WaveFormat.SampleRate != targetFormat.SampleRate)
-            {
-                provider = new WdlResamplingSampleProvider(provider, targetFormat.SampleRate);
-            }
-
-            var volumeProvider = new VolumeSampleProvider(provider)
-            {
-                Volume = (float)Math.Clamp(volume, 0.0, 1.0)
-            };
-
-            lock (_engineLock)
-            {
-                _mixer.AddMixerInput(volumeProvider);
-            }
-        }
-        catch { }
+            catch { }
+        });
     }
 
     private static void EnsureSoundExists(string profile, SoundType type, string filePath)

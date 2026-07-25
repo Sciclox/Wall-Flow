@@ -16,6 +16,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using WallFlow.Services;
 using WallFlow.Windows;
+using WallFlow.ViewModels;
 using NAudio.Wave;
 using System.Net.NetworkInformation;
 
@@ -118,17 +119,7 @@ public partial class DockWindow : Window, IApplicationHost
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern int GetApplicationUserModelId(IntPtr hProcess, ref uint AppUserModelIdLength, StringBuilder sb);
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SHQUERYRBINFO
-    {
-        public int cbSize;
-        public long i64Size;
-        public long i64NumItems;
-    }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern int SHQueryRecycleBin(string? pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern int SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
-    private const uint SHERB_NOCONFIRMATION = 0x00000001;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct SHFILEOPSTRUCT
@@ -172,6 +163,8 @@ public partial class DockWindow : Window, IApplicationHost
     [DllImport("user32.dll")] private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    private const uint GA_ROOTOWNER = 3;
     private const int DWMWA_CLOAKED = 14;
     private const int WM_COPYDATA = 0x004A;
 
@@ -184,33 +177,7 @@ public partial class DockWindow : Window, IApplicationHost
     }
 
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    private class MEMORYSTATUSEX
-    {
-        public uint dwLength;
-        public uint dwMemoryLoad;
-        public ulong ullTotalPhys;
-        public ulong ullAvailPhys;
-        public ulong ullTotalPageFile;
-        public ulong ullAvailPageFile;
-        public ulong ullTotalVirtual;
-        public ulong ullAvailVirtual;
-        public ulong ullAvailExtendedVirtual;
-        public MEMORYSTATUSEX()
-        {
-            this.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
-        }
-    }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GetSystemTimes(
-        out System.Runtime.InteropServices.ComTypes.FILETIME lpIdleTime, 
-        out System.Runtime.InteropServices.ComTypes.FILETIME lpKernelTime, 
-        out System.Runtime.InteropServices.ComTypes.FILETIME lpUserTime);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Win32Point
@@ -238,86 +205,59 @@ public partial class DockWindow : Window, IApplicationHost
     private static IntPtr GetClassLongPtr(IntPtr hWnd, int nIndex) =>
         IntPtr.Size == 8 ? GetClassLongPtr64(hWnd, nIndex) : new IntPtr(GetClassLong32(hWnd, nIndex));
 
-    // ===== Dependency Properties for Hover Lock State =====
+    // ===== IApplicationHost implementation =====
 
-    private static void OnOpenStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    public void RecordWidgetClose(string widgetType)
     {
-        if (d is DockWindow dock)
-        {
-            dock.CheckAutoHide();
-        }
+        WidgetManager.Instance.RecordWidgetClose(widgetType);
     }
-
-    public static readonly DependencyProperty IsLocalGalleryOpenProperty =
-        DependencyProperty.Register(nameof(IsLocalGalleryOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
-
-    public bool IsLocalGalleryOpen
-    {
-        get => (bool)GetValue(IsLocalGalleryOpenProperty);
-        set => SetValue(IsLocalGalleryOpenProperty, value);
-    }
-
-    public static readonly DependencyProperty IsOnlineGalleryOpenProperty =
-        DependencyProperty.Register(nameof(IsOnlineGalleryOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
-
-    public bool IsOnlineGalleryOpen
-    {
-        get => (bool)GetValue(IsOnlineGalleryOpenProperty);
-        set => SetValue(IsOnlineGalleryOpenProperty, value);
-    }
-
-    public static readonly DependencyProperty IsYouTubeMusicOpenProperty =
-        DependencyProperty.Register(nameof(IsYouTubeMusicOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
-
-    public bool IsYouTubeMusicOpen
-    {
-        get => (bool)GetValue(IsYouTubeMusicOpenProperty);
-        set => SetValue(IsYouTubeMusicOpenProperty, value);
-    }
-
-    public static readonly DependencyProperty IsBrowserOpenProperty =
-        DependencyProperty.Register(nameof(IsBrowserOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
-
-    public bool IsBrowserOpen
-    {
-        get => (bool)GetValue(IsBrowserOpenProperty);
-        set => SetValue(IsBrowserOpenProperty, value);
-    }
-
-    public static readonly DependencyProperty IsPowerWindowOpenProperty =
-        DependencyProperty.Register(nameof(IsPowerWindowOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
-
-    public bool IsPowerWindowOpen
-    {
-        get => (bool)GetValue(IsPowerWindowOpenProperty);
-        set => SetValue(IsPowerWindowOpenProperty, value);
-    }
-
-    public static readonly DependencyProperty IsMutedActiveProperty =
-        DependencyProperty.Register(nameof(IsMutedActive), typeof(bool), typeof(DockWindow), new PropertyMetadata(false));
-
-    public bool IsMutedActive
-    {
-        get => (bool)GetValue(IsMutedActiveProperty);
-        set => SetValue(IsMutedActiveProperty, value);
-    }
-
-    public static readonly DependencyProperty IsPinnedFlyoutOpenProperty =
-        DependencyProperty.Register(nameof(IsPinnedFlyoutOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
 
     public bool IsPinnedFlyoutOpen
     {
-        get => (bool)GetValue(IsPinnedFlyoutOpenProperty);
-        set => SetValue(IsPinnedFlyoutOpenProperty, value);
+        get => _viewModel.IsPinnedFlyoutOpen;
+        set => _viewModel.IsPinnedFlyoutOpen = value;
     }
 
-    public static readonly DependencyProperty IsSettingsOpenProperty =
-        DependencyProperty.Register(nameof(IsSettingsOpen), typeof(bool), typeof(DockWindow), new PropertyMetadata(false, OnOpenStateChanged));
+    public bool IsLocalGalleryOpen
+    {
+        get => _viewModel.IsLocalGalleryOpen;
+        set => _viewModel.IsLocalGalleryOpen = value;
+    }
+
+    public bool IsOnlineGalleryOpen
+    {
+        get => _viewModel.IsOnlineGalleryOpen;
+        set => _viewModel.IsOnlineGalleryOpen = value;
+    }
+
+    public bool IsYouTubeMusicOpen
+    {
+        get => _viewModel.IsYouTubeMusicOpen;
+        set => _viewModel.IsYouTubeMusicOpen = value;
+    }
+
+    public bool IsAiAssistantOpen
+    {
+        get => _viewModel.IsAiAssistantOpen;
+        set => _viewModel.IsAiAssistantOpen = value;
+    }
+
+    public bool IsPowerWindowOpen
+    {
+        get => _viewModel.IsPowerWindowOpen;
+        set => _viewModel.IsPowerWindowOpen = value;
+    }
+
+    public bool IsMutedActive
+    {
+        get => _viewModel.IsMutedActive;
+        set => _viewModel.IsMutedActive = value;
+    }
 
     public bool IsSettingsOpen
     {
-        get => (bool)GetValue(IsSettingsOpenProperty);
-        set => SetValue(IsSettingsOpenProperty, value);
+        get => _viewModel.IsSettingsOpen;
+        set => _viewModel.IsSettingsOpen = value;
     }
 
     // ===== Private Fields =====
@@ -328,9 +268,6 @@ public partial class DockWindow : Window, IApplicationHost
     private System.Windows.Threading.DispatcherTimer? _autoHideDelayTimer;
     private System.Windows.Threading.DispatcherTimer? _mousePollTimer;
 
-    private IntPtr _focusHook;
-    private IntPtr _lifecycleHook;
-    private WinEventProc? _hookDelegate;
     private List<WindowItem> _currentItems = new();
     private IntPtr _currentActiveHwnd = IntPtr.Zero;
     private readonly Dictionary<IntPtr, ImageSource> _iconCache = new();
@@ -338,7 +275,6 @@ public partial class DockWindow : Window, IApplicationHost
     private int _statusUpdateCounter = 0;
     private bool _isMutedLocally = false;
     private bool _allMinimized = false;
-    private bool _isClosing = false;
     private bool _isManuallyKeptOpen = false;
     private int _animationGeneration = 0;
     private bool _isToggleAnimating = false;
@@ -348,57 +284,23 @@ public partial class DockWindow : Window, IApplicationHost
     private IntPtr _contextMenuHwnd = IntPtr.Zero;
     public bool IsContextMenuOpen { get; set; } = false;
 
-    // Reference to toggle online gallery window
-    private Windows.OnlineGalleryWindow? _onlineGalleryWindow;
-
-    // Reference to toggle YouTube Music window
-    private Windows.YouTubeMusicWindow? _youtubeMusicWindow;
-
-    // Reference to toggle Web Browser windows
-    private readonly List<System.Windows.Window> _browserWindows = new();
-
-    // Reference to toggle power options window
-    private Windows.PowerWindow? _powerWindow;
-
-    // Reference to toggle weather effects window
-    private Windows.WeatherEffectsWindow? _weatherEffectsWindow;
-
-    // Reference to toggle calendar window
-    private Windows.CalendarWindow? _calendarWindow;
-
-    // Reference to toggle pinned apps window
-    private Windows.PinnedAppsWindow? _pinnedAppsWindow;
-
-    // Reference to toggle settings window
-    private Windows.SettingsWindow? _settingsWindow;
-
     private DateTime _lastClosedTime = DateTime.MinValue;
 
-    // Reference to persistent floating clipboard widget
-    private Windows.ClipboardWidgetWindow? _clipboardWidgetWindow;
-
-    // Performance monitor state variables
-    private System.Runtime.InteropServices.ComTypes.FILETIME _prevIdleTime;
-    private System.Runtime.InteropServices.ComTypes.FILETIME _prevKernelTime;
-    private System.Runtime.InteropServices.ComTypes.FILETIME _prevUserTime;
-    private bool _firstCpuCall = true;
     private bool _isUpdatingWeather;
-
-    private long _prevBytesReceived = 0;
-    private long _prevBytesSent = 0;
-    private DateTime _prevNetTime = DateTime.UtcNow;
-
-    private readonly List<System.Net.NetworkInformation.NetworkInterface> _cachedNetworkInterfaces = new();
-    private readonly object _netCacheLock = new();
-    private bool _netCacheInitialized = false;
     private string _cachedDateString = string.Empty;
 
     private void OnNetworkChanged(object? sender, EventArgs e)
     {
-        lock (_netCacheLock)
+
+        try
         {
-            _netCacheInitialized = false;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                Services.WeatherService.Instance.ResetCache();
+                UpdateWeather();
+            }));
         }
+        catch { }
     }
 
 
@@ -411,16 +313,22 @@ public partial class DockWindow : Window, IApplicationHost
     // Media Playback Session variables (global:: to avoid namespace clashes)
     private global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager? _mediaSessionManager;
     private global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? _currentMediaSession;
+    internal global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? CurrentMediaSession => _currentMediaSession;
     private System.Threading.CancellationTokenSource? _mediaUpdateCts;
     private Storyboard? _soundWavesStoryboard;
+    private DispatcherTimer? _soundWaveRestartTimer;
     private bool _isMediaPlaying = false;
+    private readonly DockViewModel _viewModel;
 
     public static DockWindow? Instance { get; private set; }
 
     // ===== Constructor =====
 
-    public DockWindow()
+    public DockWindow(DockViewModel viewModel)
     {
+        _viewModel = viewModel;
+        DataContext = _viewModel;
+
         InitializeComponent();
         Instance = this;
         ApplicationHost.Instance = this;
@@ -430,17 +338,17 @@ public partial class DockWindow : Window, IApplicationHost
         _clockTimer.Tick += ClockTimer_Tick;
         _clockTimer.Start();
 
-        // Mouse polling timer (300ms) to ensure Auto-Hide is robust and doesn't get stuck hidden
-        _mousePollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        // Mouse polling timer (500ms) to ensure Auto-Hide is robust and doesn't get stuck hidden
+        _mousePollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _mousePollTimer.Tick += MousePollTimer_Tick;
-        _mousePollTimer.Start();
+        
+        UpdateMousePollTimerState();
 
 
 
         // Initial state
         UpdateClock();
         UpdateBattery();
-        UpdateRecycleBin();
 
         // Initial weather icon based on day/night
         bool isDay = DateTime.Now.Hour >= 6 && DateTime.Now.Hour < 18;
@@ -468,7 +376,7 @@ public partial class DockWindow : Window, IApplicationHost
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         BackdropHelper.ApplyAcrylic(this);
-        BackdropHelper.UpdateWindowRegion(this, 8);
+        // BackdropHelper.UpdateWindowRegion(this, 8);
 
         // Hover events for Auto-Hide
         MouseEnter += DockWindow_MouseEnter;
@@ -485,25 +393,7 @@ public partial class DockWindow : Window, IApplicationHost
             HideWindowsTaskbar();
         }
 
-        if (s.AutoHide)
-        {
-            var screens = System.Windows.Forms.Screen.AllScreens;
-            var screenIndex = Math.Clamp(s.DockMonitorIndex, 0, screens.Length - 1);
-            var screen = screens[screenIndex];
-            var dpi = VisualTreeHelper.GetDpi(this);
-
-            Width = screen.Bounds.Width / dpi.DpiScaleX;
-            Height = s.DockHeight;
-            Left = screen.Bounds.X / dpi.DpiScaleX;
-            Top = GetDockHiddenTop();
-            TaskbarBorder.Width = Width;
-            TaskbarBorder.Height = s.DockHeight;
-        }
-        else
-        {
-            RegisterAppBar();
-        }
-        RegisterHooks();
+        ApplyDockLocation();
         RefreshWindows();
 
         // Initialize Media Playback
@@ -512,24 +402,12 @@ public partial class DockWindow : Window, IApplicationHost
         // Load Weather
         UpdateWeather();
 
-        // Register network change event handlers to invalidate network interface cache
+        // Register network change event handlers to invalidate network interface cache and refresh weather
         System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
 
-        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (netSender, netArgs) =>
-        {
-            if (netArgs.IsAvailable)
-            {
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    Services.WeatherService.Instance.ResetCache();
-                    UpdateWeather();
-                }));
-            }
-        };
-
-        // Register MainWindow visibility observer to lock hover state
-        var main = MainWindow.Instance;
+        // Register LocalGalleryWindow visibility observer to lock hover state
+        var main = LocalGalleryWindow.Instance;
         if (main != null)
         {
             main.IsVisibleChanged += (sender_main, args) =>
@@ -547,7 +425,7 @@ public partial class DockWindow : Window, IApplicationHost
         // Initialize widget visibilities from settings
         ApplyWidgetVisibilities();
 
-        // Initialize global hotkeys and WndProc hook
+        // Register WndProc hook for AppBar messages
         try
         {
             var hWnd = new WindowInteropHelper(this).Handle;
@@ -555,8 +433,6 @@ public partial class DockWindow : Window, IApplicationHost
             {
                 HwndSource.FromHwnd(hWnd)?.AddHook(WndProc);
             }
-            HotkeyService.Instance.Initialize(hWnd);
-            RegisterGlobalHotkeys();
         }
         catch { /* ignored */ }
 
@@ -564,6 +440,14 @@ public partial class DockWindow : Window, IApplicationHost
         try
         {
             ClipboardService.Instance.HistoryChanged += OnClipboardHistoryChanged;
+        }
+        catch { /* ignored */ }
+
+        // Subscribe to settings changes modularly via EventBus
+        try
+        {
+            EventBus.Subscribe<SettingsChangedEvent>(OnSettingsChanged);
+            EventBus.Subscribe<PreviewColorsRequestedEvent>(OnPreviewColorsRequested);
         }
         catch { /* ignored */ }
     }
@@ -578,11 +462,9 @@ public partial class DockWindow : Window, IApplicationHost
             {
                 RegisterAppBar();
             }
-            RegisterHooks();
         }
         else
         {
-            UnregisterHooks();
             UnregisterAppBar();
         }
     }
@@ -591,7 +473,7 @@ public partial class DockWindow : Window, IApplicationHost
     {
         try
         {
-            BackdropHelper.UpdateWindowRegion(this, 8);
+            // BackdropHelper.UpdateWindowRegion(this, 8);
         }
         catch { /* ignored */ }
     }
@@ -602,10 +484,11 @@ public partial class DockWindow : Window, IApplicationHost
         _clockTimer.Stop();
         _mousePollTimer?.Stop();
         _autoHideDelayTimer?.Stop();
-        UnregisterHooks();
         UnregisterAppBar();
         
         try { ClipboardService.Instance.HistoryChanged -= OnClipboardHistoryChanged; } catch { }
+        try { EventBus.Unsubscribe<SettingsChangedEvent>(OnSettingsChanged); } catch { }
+        try { EventBus.Unsubscribe<PreviewColorsRequestedEvent>(OnPreviewColorsRequested); } catch { }
         try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkChanged; } catch { }
         try { System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged; } catch { }
 
@@ -622,12 +505,9 @@ public partial class DockWindow : Window, IApplicationHost
         // Unregister global hotkeys
         try { HotkeyService.Instance.UnregisterAll(); } catch { }
         
-        if (_weatherEffectsWindow != null)
-        {
-            _weatherEffectsWindow.Close();
-            _weatherEffectsWindow = null;
-        }
-
+        WidgetManager.Instance.CloseWallpaperEffects();
+        WidgetManager.Instance.CloseAllWidgets();
+ 
         // Clean media session events
         if (_currentMediaSession != null)
         {
@@ -639,44 +519,28 @@ public partial class DockWindow : Window, IApplicationHost
             _mediaSessionManager.CurrentSessionChanged -= MediaSessionManager_CurrentSessionChanged;
         }
 
-        if (_clipboardWidgetWindow != null)
-        {
-            try { _clipboardWidgetWindow.Close(); } catch { }
-            _clipboardWidgetWindow = null;
-        }
-
-
-        if (_youtubeMusicWindow != null)
-        {
-            try { _youtubeMusicWindow.ForceClose(); } catch { }
-            _youtubeMusicWindow = null;
-        }
-
-        SaveBrowserSession();
-        _isClosing = true;
-
-        foreach (var win in _browserWindows.ToArray())
-        {
-            try { win.ForceClose(); } catch { }
-        }
-        _browserWindows.Clear();
-
         base.OnClosed(e);
     }
 
     // ===== Window Enumeration =====
 
-    private void RefreshWindows()
+    public void RefreshWindows()
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(RefreshWindows); return; }
 
-        var activeHwnd = GetForegroundWindow();
-        var ourHwnd = new WindowInteropHelper(this).Handle;
-
-        // Exclude our dock from being tracked as the active user app window.
-        if (activeHwnd != ourHwnd && activeHwnd != IntPtr.Zero)
+        var rawActive = GetForegroundWindow();
+        if (rawActive != IntPtr.Zero)
         {
-            _currentActiveHwnd = activeHwnd;
+            IntPtr root = GetAncestor(rawActive, GA_ROOTOWNER);
+            IntPtr activeHwnd = (root != IntPtr.Zero) ? root : rawActive;
+
+            GetWindowThreadProcessId(activeHwnd, out uint activePid);
+
+            // Exclude our own WallFlow process windows from replacing the active user app window
+            if (activePid != (uint)Environment.ProcessId)
+            {
+                _currentActiveHwnd = activeHwnd;
+            }
         }
 
         var tempItems = new List<WindowItem>();
@@ -685,12 +549,15 @@ public partial class DockWindow : Window, IApplicationHost
         {
             if (IsTaskbarWindow(hwnd))
             {
+                IntPtr rootOwner = GetAncestor(rawActive, GA_ROOTOWNER);
+                bool isActive = (hwnd == _currentActiveHwnd || hwnd == rawActive || (rootOwner != IntPtr.Zero && hwnd == rootOwner));
+
                 tempItems.Add(new WindowItem
                 {
                     Hwnd = hwnd,
                     Title = GetWindowTextHelper(hwnd),
                     Icon = GetWindowIcon(hwnd),
-                    IsActive = hwnd == _currentActiveHwnd,
+                    IsActive = isActive,
                     IsMinimized = IsIconic(hwnd)
                 });
             }
@@ -746,7 +613,10 @@ public partial class DockWindow : Window, IApplicationHost
         var ourHwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == ourHwnd) return false;
         GetWindowThreadProcessId(hwnd, out var pid);
-        if (pid == Environment.ProcessId) return false;
+        if (pid == Environment.ProcessId)
+        {
+            return false;
+        }
         if (GetWindow(hwnd, GW_OWNER) != IntPtr.Zero) return false;
         if ((GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return false;
 
@@ -815,48 +685,7 @@ public partial class DockWindow : Window, IApplicationHost
         finally { CloseHandle(handle); }
     }
 
-    // ===== WinEvent Hooks =====
-
-    private void RegisterHooks()
-    {
-        if (_hookDelegate != null) return;
-        _hookDelegate = new WinEventProc(EventCallback);
-        _focusHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _hookDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
-        _lifecycleHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE, IntPtr.Zero, _hookDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
-
-        try
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            if (hwnd != IntPtr.Zero)
-            {
-                AddClipboardFormatListener(hwnd);
-            }
-        }
-        catch { /* ignored */ }
-    }
-
-    private void UnregisterHooks()
-    {
-        if (_hookDelegate == null) return;
-        if (_focusHook != IntPtr.Zero) { UnhookWinEvent(_focusHook); _focusHook = IntPtr.Zero; }
-        if (_lifecycleHook != IntPtr.Zero) { UnhookWinEvent(_lifecycleHook); _lifecycleHook = IntPtr.Zero; }
-        _hookDelegate = null;
-
-        try
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            if (hwnd != IntPtr.Zero)
-            {
-                RemoveClipboardFormatListener(hwnd);
-            }
-        }
-        catch { /* ignored */ }
-    }
-
-    private void EventCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
-    {
-        if (idObject == OBJID_WINDOW && idChild == CHILDID_SELF) RefreshWindows();
-    }
+    // WinEvent hooks removed (moved to SystemCoordinator)
 
     // ===== AppBar =====
 
@@ -908,6 +737,19 @@ public partial class DockWindow : Window, IApplicationHost
                 if (secondary != IntPtr.Zero) ShowWindow(secondary, SW_SHOW);
         }
         catch { /* ignored */ }
+    }
+
+    public void ApplyTaskbarVisibility()
+    {
+        var s = Services.SettingsService.Instance;
+        if (s.HideWindowsTaskbar)
+        {
+            HideWindowsTaskbar();
+        }
+        else
+        {
+            ShowWindowsTaskbar();
+        }
     }
 
     private (System.Windows.Forms.Screen Screen, System.Windows.DpiScale Dpi) GetCurrentScreenInfo()
@@ -996,13 +838,14 @@ public partial class DockWindow : Window, IApplicationHost
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == _appBarMessageId && wParam.ToInt32() == 1) { SetAppBarPosition(); handled = true; }
-        if (msg == WM_CLIPBOARDUPDATE)
+        const int WM_SETTINGCHANGE = 0x001A;
+        if (msg == WM_SETTINGCHANGE)
         {
-            ClipboardService.Instance.OnClipboardUpdated();
-            handled = true;
+            WallpaperThemeService.Instance.UpdateThemeFromWallpaper();
         }
-        else if (msg == WM_COPYDATA)
+
+        if (msg == _appBarMessageId && wParam.ToInt32() == 1) { SetAppBarPosition(); handled = true; }
+        if (msg == WM_COPYDATA)
         {
             try
             {
@@ -1010,7 +853,15 @@ public partial class DockWindow : Window, IApplicationHost
                 string? url = Marshal.PtrToStringUni(cds.lpData);
                 if (!string.IsNullOrEmpty(url))
                 {
-                    OpenNewBrowserWindow(url);
+                    try
+                    {
+                        using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = url,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { }
                 }
             }
             catch { /* ignored */ }
@@ -1026,12 +877,6 @@ public partial class DockWindow : Window, IApplicationHost
     {
         _statusUpdateCounter++;
 
-        // Check Game Mode every 3 seconds
-        if (_statusUpdateCounter % 3 == 0)
-        {
-            CheckGameMode();
-        }
-
         // If we are suspended for game mode, do not waste CPU updating UI clocks/battery/recycle bin
         if (_isSuspendedForGameMode)
         {
@@ -1040,10 +885,7 @@ public partial class DockWindow : Window, IApplicationHost
 
         UpdateClock();
         if (_statusUpdateCounter % 10 == 0) UpdateBattery();      // Every 10s
-        if (_statusUpdateCounter % 3 == 0) UpdateRecycleBin();    // Every 3s
         if (_statusUpdateCounter % 900 == 0) UpdateWeather();     // Every 15m
-
-        UpdatePerformanceStats();
     }
 
     public void ApplyWidgetVisibilities()
@@ -1071,14 +913,7 @@ public partial class DockWindow : Window, IApplicationHost
         // Show/Hide Weather
         WeatherButton.Visibility = s.ShowWeather ? Visibility.Visible : Visibility.Collapsed;
 
-        // Show/Hide Performance sub-widgets
-        CpuWidget.Visibility = s.ShowPerfCpu ? Visibility.Visible : Visibility.Collapsed;
-        RamWidget.Visibility = s.ShowPerfRam ? Visibility.Visible : Visibility.Collapsed;
-        NetWidget.Visibility = s.ShowPerfNet ? Visibility.Visible : Visibility.Collapsed;
 
-        bool anyPerfVisible = s.ShowPerfCpu || s.ShowPerfRam || s.ShowPerfNet;
-        PerfMonitorPanel.Visibility = anyPerfVisible ? Visibility.Visible : Visibility.Collapsed;
-        PerfSeparator.Visibility = anyPerfVisible ? Visibility.Visible : Visibility.Collapsed;
 
         // If media player should not be shown, make sure it is hidden
         if (!s.ShowMediaPlayer)
@@ -1095,12 +930,11 @@ public partial class DockWindow : Window, IApplicationHost
         LocalGalleryButton.Visibility = s.ShowIconLocalGallery ? Visibility.Visible : Visibility.Collapsed;
         OnlineGalleryButton.Visibility = s.ShowIconOnlineGallery ? Visibility.Visible : Visibility.Collapsed;
         YouTubeMusicButton.Visibility = s.ShowIconYouTubeMusic ? Visibility.Visible : Visibility.Collapsed;
-        WebBrowserButton.Visibility = s.ShowIconWebBrowser ? Visibility.Visible : Visibility.Collapsed;
+        ChatGPTButton.Visibility = s.ShowIconChatGPT ? Visibility.Visible : Visibility.Collapsed;
         SettingsButton.Visibility = s.ShowIconSettings ? Visibility.Visible : Visibility.Collapsed;
 
         VolumeButton.Visibility = s.ShowIconVolume ? Visibility.Visible : Visibility.Collapsed;
         NotificationsButton.Visibility = s.ShowIconNotifications ? Visibility.Visible : Visibility.Collapsed;
-        RecycleBinButton.Visibility = s.ShowIconRecycleBin ? Visibility.Visible : Visibility.Collapsed;
         ShowDesktopButton.Visibility = s.ShowIconShowDesktop ? Visibility.Visible : Visibility.Collapsed;
         PowerButton.Visibility = s.ShowIconPower ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1114,7 +948,7 @@ public partial class DockWindow : Window, IApplicationHost
         
         // Left apps separator: visible if at least one left icon is visible AND windows list has items
         bool anyLeftVisible = s.ShowIconPinnedApps || s.ShowIconLocalGallery || s.ShowIconOnlineGallery ||
-                              s.ShowIconYouTubeMusic || s.ShowIconWebBrowser || s.ShowIconSettings;
+                              s.ShowIconYouTubeMusic || s.ShowIconChatGPT || s.ShowIconSettings;
                               
         bool hasOpenWindows = false;
         if (WindowsList != null && WindowsList.ItemsSource is System.Collections.IEnumerable enumerable)
@@ -1131,9 +965,9 @@ public partial class DockWindow : Window, IApplicationHost
             LeftAppsSeparator.Visibility = (anyLeftVisible && hasOpenWindows) ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        // Right separator 1 (between notifications and recycle bin)
+        // Right separator 1 (between notifications and show desktop)
         bool group1Visible = s.ShowIconVolume || s.ShowIconNotifications;
-        bool group2Visible = s.ShowIconRecycleBin || s.ShowIconShowDesktop;
+        bool group2Visible = s.ShowIconShowDesktop;
         if (RightSeparator1 != null)
         {
             RightSeparator1.Visibility = (group1Visible && group2Visible) ? Visibility.Visible : Visibility.Collapsed;
@@ -1147,239 +981,9 @@ public partial class DockWindow : Window, IApplicationHost
         }
     }
 
-    private void UpdatePerformanceStats()
-    {
-        var s = Services.SettingsService.Instance;
-        if (!s.ShowPerfCpu && !s.ShowPerfRam && !s.ShowPerfNet) return;
 
-        try
-        {
-            if (s.ShowPerfCpu)
-            {
-                double cpu = GetCpuUsage();
-                CpuText.Text = $"{cpu:F0}%";
-            }
-            if (s.ShowPerfRam)
-            {
-                double ram = GetRamUsage();
-                RamText.Text = $"{ram:F0}%";
-            }
-            if (s.ShowPerfNet)
-            {
-                var (down, up) = GetNetworkSpeed();
-                NetText.Text = FormatNetSpeed(down);
-            }
-        }
-        catch { /* ignored */ }
-    }
 
-    private double GetCpuUsage()
-    {
-        if (!GetSystemTimes(out var idleTime, out var kernelTime, out var userTime))
-            return 0;
 
-        if (_firstCpuCall)
-        {
-            _firstCpuCall = false;
-            _prevIdleTime = idleTime;
-            _prevKernelTime = kernelTime;
-            _prevUserTime = userTime;
-            return 0;
-        }
-
-        ulong idle = ((ulong)idleTime.dwHighDateTime << 32) | (uint)idleTime.dwLowDateTime;
-        ulong kernel = ((ulong)kernelTime.dwHighDateTime << 32) | (uint)kernelTime.dwLowDateTime;
-        ulong user = ((ulong)userTime.dwHighDateTime << 32) | (uint)userTime.dwLowDateTime;
-
-        ulong prevIdle = ((ulong)_prevIdleTime.dwHighDateTime << 32) | (uint)_prevIdleTime.dwLowDateTime;
-        ulong prevKernel = ((ulong)_prevKernelTime.dwHighDateTime << 32) | (uint)_prevKernelTime.dwLowDateTime;
-        ulong prevUser = ((ulong)_prevUserTime.dwHighDateTime << 32) | (uint)_prevUserTime.dwLowDateTime;
-
-        _prevIdleTime = idleTime;
-        _prevKernelTime = kernelTime;
-        _prevUserTime = userTime;
-
-        ulong idleDiff = idle - prevIdle;
-        ulong kernelDiff = kernel - prevKernel;
-        ulong userDiff = user - prevUser;
-
-        ulong totalDiff = kernelDiff + userDiff;
-        if (totalDiff == 0) return 0;
-
-        double cpu = (double)(totalDiff - idleDiff) / totalDiff * 100.0;
-        return Math.Clamp(cpu, 0.0, 100.0);
-    }
-
-    private double GetRamUsage()
-    {
-        var memStatus = new MEMORYSTATUSEX();
-        if (GlobalMemoryStatusEx(memStatus))
-        {
-            return memStatus.dwMemoryLoad;
-        }
-        return 0;
-    }
-
-    private (double downloadSpeedBytes, double uploadSpeedBytes) GetNetworkSpeed()
-    {
-        long bytesReceived = 0;
-        long bytesSent = 0;
-
-        List<NetworkInterface> interfaces;
-        lock (_netCacheLock)
-        {
-            if (!_netCacheInitialized)
-            {
-                _cachedNetworkInterfaces.Clear();
-                try
-                {
-                    foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
-                    {
-                        if (ni.OperationalStatus == OperationalStatus.Up && 
-                            (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet || 
-                             ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211))
-                        {
-                            _cachedNetworkInterfaces.Add(ni);
-                        }
-                    }
-                }
-                catch { /* ignored */ }
-                _netCacheInitialized = true;
-            }
-            interfaces = new List<NetworkInterface>(_cachedNetworkInterfaces);
-        }
-
-        foreach (var ni in interfaces)
-        {
-            try
-            {
-                var stats = ni.GetIPStatistics();
-                bytesReceived += stats.BytesReceived;
-                bytesSent += stats.BytesSent;
-            }
-            catch { /* ignored */ }
-        }
-
-        var now = DateTime.UtcNow;
-        double secDiff = (now - _prevNetTime).TotalSeconds;
-        if (secDiff <= 0) secDiff = 1.0;
-
-        long rxDiff = bytesReceived - _prevBytesReceived;
-        long txDiff = bytesSent - _prevBytesSent;
-
-        if (_prevBytesReceived == 0 || rxDiff < 0) rxDiff = 0;
-        if (_prevBytesSent == 0 || txDiff < 0) txDiff = 0;
-
-        _prevBytesReceived = bytesReceived;
-        _prevBytesSent = bytesSent;
-        _prevNetTime = now;
-
-        double downSpeed = rxDiff / secDiff;
-        double upSpeed = txDiff / secDiff;
-
-        return (downSpeed, upSpeed);
-    }
-
-    private string FormatNetSpeed(double bytesPerSec)
-    {
-        if (bytesPerSec < 1024)
-            return $"{bytesPerSec:F0} B/s";
-        else if (bytesPerSec < 1024 * 1024)
-            return $"{(bytesPerSec / 1024.0):F0} KB/s";
-        else
-            return $"{(bytesPerSec / (1024.0 * 1024.0)):F1} MB/s";
-    }
-
-    private void ContextEmptyRecycleBin_Click(object sender, RoutedEventArgs e)
-    {
-        Task.Run(() =>
-        {
-            try
-            {
-                SHEmptyRecycleBin(IntPtr.Zero, null, SHERB_NOCONFIRMATION);
-                Dispatcher.Invoke(() =>
-                {
-                    UpdateRecycleBin();
-                });
-            }
-            catch { /* ignored */ }
-        });
-    }
-
-    private void UpdateRecycleBin()
-    {
-        Task.Run(() =>
-        {
-            try
-            {
-                var info = new SHQUERYRBINFO();
-                info.cbSize = Marshal.SizeOf(info);
-                int hr = SHQueryRecycleBin(null, ref info);
-                if (hr == 0)
-                {
-                    long itemCount = info.i64NumItems;
-                    Dispatcher.Invoke(() =>
-                    {
-                        try
-                        {
-                            bool isEmpty = itemCount == 0;
-                            
-                            // Expose visual elements of the black hole
-                            if (RecycleBinButton.Template != null)
-                            {
-                                var eventHorizon = RecycleBinButton.Template.FindName("EventHorizon", RecycleBinButton) as System.Windows.Shapes.Ellipse;
-                                var accretionDisk = RecycleBinButton.Template.FindName("AccretionDisk", RecycleBinButton) as System.Windows.Shapes.Ellipse;
-                                var accretionDiskInner = RecycleBinButton.Template.FindName("AccretionDiskInner", RecycleBinButton) as System.Windows.Shapes.Ellipse;
-                                var accretionGlow = RecycleBinButton.Template.FindName("AccretionGlow", RecycleBinButton) as System.Windows.Shapes.Ellipse;
-
-                                if (eventHorizon != null && accretionDisk != null && accretionDiskInner != null && accretionGlow != null)
-                                {
-                                    double itemsCount = itemCount;
-                                    double baseHorizonSize = 8;
-                                    double maxHorizonSize = 22;
-                                    double newHorizonSize = baseHorizonSize + Math.Min(itemsCount * 0.4, maxHorizonSize - baseHorizonSize);
-                                    
-                                    eventHorizon.Width = newHorizonSize;
-                                    eventHorizon.Height = newHorizonSize;
-
-                                    if (isEmpty)
-                                    {
-                                        accretionGlow.Opacity = 0.25;
-                                        accretionDisk.StrokeThickness = 2.0;
-                                        accretionDiskInner.StrokeThickness = 1.0;
-                                        accretionDiskInner.Opacity = 0.4;
-                                        
-                                        var glowBrush = new RadialGradientBrush();
-                                        glowBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0x35, 0xAF, 0x52, 0xDE), 0));
-                                        glowBrush.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-                                        accretionGlow.Fill = glowBrush;
-                                    }
-                                    else
-                                    {
-                                        accretionGlow.Opacity = Math.Min(0.4 + (itemsCount * 0.02), 0.95);
-                                        accretionDisk.StrokeThickness = Math.Min(3.0 + (itemsCount * 0.1), 6.5);
-                                        accretionDiskInner.StrokeThickness = Math.Min(1.5 + (itemsCount * 0.05), 3.0);
-                                        accretionDiskInner.Opacity = Math.Min(0.6 + (itemsCount * 0.01), 0.9);
-                                        
-                                        // Accretion disk glow shifts color dynamically if very full (purple -> magenta)
-                                        var glowBrush = new RadialGradientBrush();
-                                        Color coreColor = itemsCount > 40 ? Color.FromRgb(0xFF, 0x00, 0x7F) : Color.FromRgb(0xAF, 0x52, 0xDE);
-                                        glowBrush.GradientStops.Add(new GradientStop(coreColor, 0));
-                                        glowBrush.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-                                        accretionGlow.Fill = glowBrush;
-                                    }
-                                }
-                            }
-
-                            RecycleBinButton.ToolTip = isEmpty ? "Singularidad de Basura (Vacía)" : $"Singularidad de Basura ({itemCount} elementos)";
-                        }
-                        catch { /* ignored */ }
-                    });
-                }
-            }
-            catch { /* ignored */ }
-        });
-    }
 
     internal async void UpdateWeather()
     {
@@ -1393,25 +997,7 @@ public partial class DockWindow : Window, IApplicationHost
             WeatherButton.ToolTip = $"Clima: {weather.Condition}, {Math.Round(weather.Temperature)}°C\nUbicación: {weather.City}";
 
             // Apply custom wallpaper effects selection
-            string selectedEffect = SettingsService.Instance.SelectedWallpaperEffect ?? "Ninguno";
-            if (selectedEffect != "Ninguno")
-            {
-                if (_weatherEffectsWindow == null)
-                {
-                    _weatherEffectsWindow = new Windows.WeatherEffectsWindow();
-                    _weatherEffectsWindow.Closed += (s, args) => { _weatherEffectsWindow = null; };
-                    _weatherEffectsWindow.Show();
-                }
-                _weatherEffectsWindow.SetEffect(selectedEffect);
-            }
-            else
-            {
-                if (_weatherEffectsWindow != null)
-                {
-                    _weatherEffectsWindow.Close();
-                    _weatherEffectsWindow = null;
-                }
-            }
+            WidgetManager.Instance.UpdateWallpaperEffects();
         }
         catch { /* ignored */ }
         finally { _isUpdatingWeather = false; }
@@ -1419,7 +1005,7 @@ public partial class DockWindow : Window, IApplicationHost
 
     private void WeatherButton_Click(object sender, RoutedEventArgs e)
     {
-        ShowWidget("Weather");
+        WidgetManager.Instance.ToggleWidget("Weather");
     }
 
     public void UpdateClock()
@@ -1436,13 +1022,10 @@ public partial class DockWindow : Window, IApplicationHost
         }
 
         var s = Services.SettingsService.Instance;
-        if (s.Use24HourFormat)
+        string newTime = s.Use24HourFormat ? now.ToString("HH:mm:ss") : now.ToString("hh:mm:ss tt");
+        if (TimeText.Text != newTime)
         {
-            TimeText.Text = now.ToString("HH:mm:ss");
-        }
-        else
-        {
-            TimeText.Text = now.ToString("hh:mm:ss tt");
+            TimeText.Text = newTime;
         }
     }
 
@@ -1689,7 +1272,7 @@ public partial class DockWindow : Window, IApplicationHost
     {
         if (e.ChangedButton == MouseButton.Left)
         {
-            ShowWidget("Media");
+            WidgetManager.Instance.ToggleWidget("Media");
         }
     }
 
@@ -1699,387 +1282,96 @@ public partial class DockWindow : Window, IApplicationHost
     {
         if (e.ChangedButton == MouseButton.Left)
         {
-            ShowWidget("Calendar");
+            WidgetManager.Instance.ToggleWidget("Calendar");
         }
     }
-
+ 
     private void PinnedAppsButton_Click(object sender, RoutedEventArgs e)
     {
-        ShowWidget("PinnedApps");
+        WidgetManager.Instance.ToggleWidget("PinnedApps");
     }
 
+    /// <summary>
+    /// Binds the matrix ripple animation to MouseEnter hover to avoid
+    /// continuous background CPU usage in idle.
+    /// </summary>
+    private void PinnedAppsButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var button = sender as Button;
+            if (button?.Template == null) return;
+
+            // Resolve named borders inside the applied template
+            var cells = new System.Windows.Controls.Border?[9];
+            for (int i = 0; i < 9; i++)
+                cells[i] = button.Template.FindName($"Cell{i + 1}", button) as System.Windows.Controls.Border;
+
+            if (cells[0] == null) return; // Template not ready
+
+            // Diagonal ripple delay mapping (Manhattan distance from top-left)
+            // Cell1=0, Cell2/4=0.15, Cell3/5/7=0.3, Cell6/8=0.45, Cell9=0.6
+            double[] delays = { 0, 0.15, 0.3, 0.15, 0.3, 0.45, 0.3, 0.45, 0.6 };
+
+            var storyboard = new Storyboard();
+            var scalePath = new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)");
+            var scaleYPath = new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)");
+            var opacityPath = new PropertyPath("Opacity");
+            var dur = new Duration(TimeSpan.FromSeconds(0.35));
+
+            for (int i = 0; i < 9; i++)
+            {
+                if (cells[i] == null) continue;
+                var begin = TimeSpan.FromSeconds(delays[i]);
+
+                var sx = new DoubleAnimation(1, 1.35, dur) { AutoReverse = true, BeginTime = begin };
+                Storyboard.SetTarget(sx, cells[i]);
+                Storyboard.SetTargetProperty(sx, scalePath);
+                storyboard.Children.Add(sx);
+
+                var sy = new DoubleAnimation(1, 1.35, dur) { AutoReverse = true, BeginTime = begin };
+                Storyboard.SetTarget(sy, cells[i]);
+                Storyboard.SetTargetProperty(sy, scaleYPath);
+                storyboard.Children.Add(sy);
+
+                var op = new DoubleAnimation(0.6, 1.0, dur) { AutoReverse = true, BeginTime = begin };
+                Storyboard.SetTarget(op, cells[i]);
+                Storyboard.SetTargetProperty(op, opacityPath);
+                storyboard.Children.Add(op);
+            }
+
+            // Trigger ripple animation on hover instead of continuous infinite loop
+            button.MouseEnter += (s, args) =>
+            {
+                try { storyboard.Begin(button, true); } catch { }
+            };
+        }
+        catch { /* Animation is non-critical; don't crash the app */ }
+    }
+ 
     private void WallFlowLogoButton_Click(object sender, RoutedEventArgs e)
     {
-        var main = MainWindow.Instance;
-        if (main == null) return;
-        if (main.Visibility == Visibility.Visible)
-        {
-            main.Visibility = Visibility.Hidden;
-            IsLocalGalleryOpen = false;
-        }
-        else
-        {
-            main.Visibility = Visibility.Visible;
-            try { main.Activate(); } catch { }
-            IsLocalGalleryOpen = true;
-        }
+        WidgetManager.Instance.ToggleWidget("LocalGallery");
     }
-
+ 
     private void OnlineGalleryButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            // Toggle online gallery window: if already open, close it!
-            if (_onlineGalleryWindow != null)
-            {
-                _onlineGalleryWindow.Close();
-                _onlineGalleryWindow = null;
-                IsOnlineGalleryOpen = false;
-            }
-            else
-            {
-                _onlineGalleryWindow = new Windows.OnlineGalleryWindow();
-                IsOnlineGalleryOpen = true;
-                _onlineGalleryWindow.Closed += (s, args) => {
-                    _onlineGalleryWindow = null;
-                    IsOnlineGalleryOpen = false;
-                    ForceTopmost();
-                    CheckAutoHide();
-                };
-                _onlineGalleryWindow.Show();
-                _onlineGalleryWindow.Activate();
-            }
-        }
-        catch
-        {
-            _onlineGalleryWindow = null;
-            IsOnlineGalleryOpen = false;
-        }
+        WidgetManager.Instance.ToggleWidget("OnlineGallery");
     }
-
+ 
     private void YouTubeMusicButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_youtubeMusicWindow != null)
-            {
-                // Debounce: If closed within the last 250ms (e.g. from losing focus/deactivating on this click),
-                // ignore this toggle request to prevent it from reopening immediately.
-                if ((DateTime.Now - _youtubeMusicWindow.LastHiddenTime).TotalMilliseconds < 250)
-                {
-                    return;
-                }
-
-                if (_youtubeMusicWindow.Visibility == Visibility.Visible)
-                {
-                    _youtubeMusicWindow.SafeHide();
-                    IsYouTubeMusicOpen = false;
-                }
-                else
-                {
-                    IsYouTubeMusicOpen = true;
-                    _youtubeMusicWindow.ShowWithAnimation();
-                }
-            }
-            else
-            {
-                _youtubeMusicWindow = new Windows.YouTubeMusicWindow();
-                IsYouTubeMusicOpen = true;
-                _youtubeMusicWindow.Closed += (s, args) => {
-                    _youtubeMusicWindow = null;
-                    IsYouTubeMusicOpen = false;
-                    ForceTopmost();
-                    CheckAutoHide();
-                };
-                _youtubeMusicWindow.ShowWithAnimation();
-            }
-        }
-        catch
-        {
-            _youtubeMusicWindow = null;
-            IsYouTubeMusicOpen = false;
-        }
+        WidgetManager.Instance.ToggleWidget("YouTube");
     }
 
-    private void WebBrowserButton_Click(object sender, RoutedEventArgs e)
+    private void ChatGPTButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            OpenNewBrowserWindow();
-        }
-        catch
-        {
-            IsBrowserOpen = false;
-        }
+        WidgetManager.Instance.ToggleWidget("ChatGPT");
     }
-
-    public void OpenNewBrowserWindow(string? initialUrl = null)
-    {
-        try
-        {
-            string exePath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "NavegadorFlow.exe");
-
-            if (File.Exists(exePath))
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = exePath,
-                    Arguments = initialUrl ?? "",
-                    UseShellExecute = true
-                };
-                Process.Start(psi);
-            }
-            else
-            {
-                // Fallback: try to find it relative to the solution structure
-                string fallback = @"C:\Users\Lenovo\OneDrive\Documentos\Proyectos\NavegadorFlow\bin\Release\net8.0-windows10.0.19041.0\NavegadorFlow.exe";
-                if (File.Exists(fallback))
-                {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = fallback,
-                        Arguments = initialUrl ?? "",
-                        UseShellExecute = true
-                    };
-                    Process.Start(psi);
-                }
-            }
-
-            IsBrowserOpen = true;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error al abrir NavegadorFlow: {ex.Message}");
-        }
-    }
-
-    private void AttachBrowserWindowClosedHandler(System.Windows.Window win)
-    {
-        // No-op: NavegadorFlow manages its own windows
-    }
-
-    private void NewBrowserWindowMenu_Click(object sender, RoutedEventArgs e)
-    {
-        OpenNewBrowserWindow();
-    }
-
-    public void UpdateBrowserOpenState()
-    {
-        IsBrowserOpen = _browserWindows.Any(w => w.Visibility == Visibility.Visible);
-    }
-
-    public void SaveBrowserSession()
-    {
-        try
-        {
-            var folder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "WallFlow");
-            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
-            var filePath = Path.Combine(folder, "browser_session.json");
-
-            var workspaces = _browserWindows
-                .Select(w => w.ExportWorkspace())
-                .ToList();
-
-            var json = System.Text.Json.JsonSerializer.Serialize(workspaces);
-            File.WriteAllText(filePath, json);
-        }
-        catch { /* ignored */ }
-    }
-
-    private void RestoreBrowserSession()
-    {
-        // If launched with an initial URL, open that instead of restoring session
-        if (!string.IsNullOrEmpty(App.InitialUrl))
-        {
-            string url = App.InitialUrl;
-            App.InitialUrl = null; // Clear it
-            OpenNewBrowserWindow(url);
-            return;
-        }
-
-        try
-        {
-            var filePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "WallFlow",
-                "browser_session.json");
-
-            if (File.Exists(filePath))
-            {
-                var json = File.ReadAllText(filePath);
-                try
-                {
-                    var workspaces = System.Text.Json.JsonSerializer.Deserialize<List<Windows.WorkspaceSessionData>>(json);
-                    if (workspaces != null && workspaces.Count > 0)
-                    {
-                        foreach (var ws in workspaces)
-                        {
-                            OpenNewBrowserWindowWithWorkspace(ws);
-                        }
-                        return;
-                    }
-                }
-                catch
-                {
-                    var urls = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
-                    if (urls != null && urls.Count > 0)
-                    {
-                        foreach (var url in urls)
-                        {
-                            OpenNewBrowserWindow(url);
-                        }
-                        return;
-                    }
-                }
-            }
-        }
-        catch { /* ignored */ }
-
-        // Fallback to a single window with Google
-        OpenNewBrowserWindow();
-    }
-
-    public void OpenNewBrowserWindowWithWorkspace(Windows.WorkspaceSessionData wsData)
-    {
-        try
-        {
-            var win = new Windows.BrowserWindow();
-            win.RestoreWorkspace(wsData);
-            
-            double offset = 25 * (_browserWindows.Count % 6);
-            win.CascadeOffset = offset;
-            
-            _browserWindows.Add(win);
-            IsBrowserOpen = true;
-
-            AttachBrowserWindowClosedHandler(win);
-
-            win.ShowWithAnimation();
-        }
-        catch { /* ignored */ }
-    }
-
-    public void AddBrowserWindow(Windows.BrowserWindow win)
-    {
-        try
-        {
-            _browserWindows.Add(win);
-            IsBrowserOpen = true;
-
-            AttachBrowserWindowClosedHandler(win);
-        }
-        catch { /* ignored */ }
-    }
-
-    System.Windows.FrameworkElement? IApplicationHost.WebBrowserButton => this.WebBrowserButton;
-
-    void IApplicationHost.AddBrowserWindow(System.Windows.Window window)
-    {
-        if (window is Windows.BrowserWindow win)
-        {
-            AddBrowserWindow(win);
-        }
-    }
-
-    public int GetBrowserWindowsCount()
-    {
-        return _browserWindows.Count;
-    }
-
-    public void OrganizeBrowserWindows()
-    {
-        double currentLeft = -1;
-        double currentTop = -1;
-        var workArea = SystemParameters.WorkArea;
-
-        for (int i = 0; i < _browserWindows.Count; i++)
-        {
-            var win = _browserWindows[i];
-            
-            if (i == 0)
-            {
-                win.ResetSizeAndPosition();
-                currentLeft = win.Left;
-                currentTop = win.Top;
-            }
-            else
-            {
-                win.Left = currentLeft + win.Width + 2;
-                win.Top = currentTop;
-
-                // Keep within screen work area
-                if (win.Left + win.Width > workArea.Right - 10)
-                {
-                    win.Left = workArea.Left + 10;
-                    win.Top = currentTop + 30;
-                }
-
-                currentLeft = win.Left;
-                currentTop = win.Top;
-            }
-        }
-    }
-
-    private void BrowserContextMenu_Opened(object sender, RoutedEventArgs e)
-    {
-        IsContextMenuOpen = true;
-        var menu = sender as ContextMenu;
-        if (menu == null) return;
-
-        menu.Items.Clear();
-
-        var newWinItem = new MenuItem { Header = "Nueva ventana" };
-        newWinItem.Icon = new TextBlock 
-        { 
-            Text = "\xE710", 
-            FontFamily = new FontFamily("Segoe MDL2 Assets"), 
-            FontSize = 12, 
-            VerticalAlignment = VerticalAlignment.Center 
-        };
-        newWinItem.Click += (s, args) => OpenNewBrowserWindow();
-        menu.Items.Add(newWinItem);
-    }
-
+ 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_settingsWindow != null)
-            {
-                _settingsWindow.Close();
-                _settingsWindow = null;
-                IsSettingsOpen = false;
-            }
-            else
-            {
-                _settingsWindow = new Windows.SettingsWindow();
-                IsSettingsOpen = true;
-                _settingsWindow.Closed += (s, args) => {
-                    _settingsWindow = null;
-                    IsSettingsOpen = false;
-                    ForceTopmost();
-                    CheckAutoHide();
-                };
-                _settingsWindow.Show();
-                _settingsWindow.Activate();
-            }
-        }
-        catch (Exception ex)
-        {
-            try
-            {
-                var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow");
-                Directory.CreateDirectory(folder);
-                File.WriteAllText(Path.Combine(folder, "crash.txt"), ex.ToString());
-            }
-            catch { /* ignored */ }
-            _settingsWindow = null;
-            IsSettingsOpen = false;
-        }
+        WidgetManager.Instance.ToggleWidget("Settings");
     }
 
     private void WindowItemButton_Click(object sender, RoutedEventArgs e)
@@ -2122,212 +1414,7 @@ public partial class DockWindow : Window, IApplicationHost
         e.Handled = true;
     }
 
-    private void RecycleBinButton_Click(object sender, RoutedEventArgs e)
-    {
-        try { Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = "shell:RecycleBinFolder", UseShellExecute = true }); }
-        catch { /* ignored */ }
-    }
 
-    private static bool SendToRecycleBin(string path)
-    {
-        try
-        {
-            var shf = new SHFILEOPSTRUCT();
-            shf.wFunc = FO_DELETE;
-            shf.pFrom = path + '\0' + '\0'; // Double-null terminated
-            shf.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION;
-            int result = SHFileOperation(ref shf);
-            return result == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private void RecycleBinButton_DragOver(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-        {
-            e.Effects = DragDropEffects.Move;
-            e.Handled = true;
-
-            // Make the black hole pull visually (grow and intensify glow)
-            if (RecycleBinButton.Template != null)
-            {
-                var scale = RecycleBinButton.Template.FindName("SingularityScale", RecycleBinButton) as ScaleTransform;
-                var glow = RecycleBinButton.Template.FindName("AccretionGlow", RecycleBinButton) as System.Windows.Shapes.Ellipse;
-                if (scale != null)
-                {
-                    scale.ScaleX = 1.35;
-                    scale.ScaleY = 1.35;
-                }
-                if (glow != null)
-                {
-                    glow.Opacity = 0.95;
-                }
-            }
-        }
-    }
-
-    private void RecycleBinButton_DragLeave(object sender, DragEventArgs e)
-    {
-        ResetSingularityScale();
-    }
-
-    private void ResetSingularityScale()
-    {
-        if (RecycleBinButton.Template != null)
-        {
-            var scale = RecycleBinButton.Template.FindName("SingularityScale", RecycleBinButton) as ScaleTransform;
-            if (scale != null)
-            {
-                scale.ScaleX = 1.0;
-                scale.ScaleY = 1.0;
-            }
-            UpdateRecycleBin(); // Restore original size/glow based on fullness
-        }
-    }
-
-    private void RecycleBinButton_Drop(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-        {
-            string[]? files = e.Data.GetData(DataFormats.FileDrop) as string[];
-            e.Handled = true;
-
-            ResetSingularityScale();
-
-            if (files != null && files.Length > 0)
-            {
-                Task.Run(() =>
-                {
-                    bool success = false;
-                    foreach (var file in files)
-                    {
-                        if (File.Exists(file) || Directory.Exists(file))
-                        {
-                            if (SendToRecycleBin(file))
-                            {
-                                success = true;
-                            }
-                        }
-                    }
-
-                    if (success)
-                    {
-                        Dispatcher.Invoke(() =>
-                        {
-                            PlaySingularitySuctionSound();
-                            TriggerImplosionAnimation();
-                            UpdateRecycleBin();
-                        });
-                    }
-                });
-            }
-        }
-    }
-
-    private void TriggerImplosionAnimation()
-    {
-        try
-        {
-            if (RecycleBinButton.Template != null)
-            {
-                var scale = RecycleBinButton.Template.FindName("SingularityScale", RecycleBinButton) as ScaleTransform;
-                var flash = RecycleBinButton.Template.FindName("FlashOverlay", RecycleBinButton) as System.Windows.Shapes.Ellipse;
-
-                if (scale != null && flash != null)
-                {
-                    // 1. Implosion: shrink black hole down to 0.1 scale rapidly
-                    var shrinkX = new DoubleAnimation(1.0, 0.1, new Duration(TimeSpan.FromMilliseconds(200)))
-                    {
-                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-                    };
-                    var shrinkY = new DoubleAnimation(1.0, 0.1, new Duration(TimeSpan.FromMilliseconds(200)))
-                    {
-                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-                    };
-
-                    // When shrink completes, trigger flash and scale back up (explosion)
-                    shrinkX.Completed += (s, ev) =>
-                    {
-                        // 2. Flash overlay fade in and out
-                        var flashAnim = new DoubleAnimation(0.0, 1.0, new Duration(TimeSpan.FromMilliseconds(60)))
-                        {
-                            AutoReverse = true
-                        };
-                        flash.BeginAnimation(System.Windows.Shapes.Ellipse.OpacityProperty, flashAnim);
-
-                        // 3. Bounce back to normal scale
-                        var expandX = new DoubleAnimation(0.1, 1.0, new Duration(TimeSpan.FromMilliseconds(300)))
-                        {
-                            EasingFunction = new ElasticEase { Oscillations = 2, Springiness = 4 }
-                        };
-                        var expandY = new DoubleAnimation(0.1, 1.0, new Duration(TimeSpan.FromMilliseconds(300)))
-                        {
-                            EasingFunction = new ElasticEase { Oscillations = 2, Springiness = 4 }
-                        };
-                        scale.BeginAnimation(ScaleTransform.ScaleXProperty, expandX);
-                        scale.BeginAnimation(ScaleTransform.ScaleYProperty, expandY);
-                    };
-
-                    scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrinkX);
-                    scale.BeginAnimation(ScaleTransform.ScaleYProperty, shrinkY);
-                }
-            }
-        }
-        catch { /* ignored */ }
-    }
-
-    private void PlaySingularitySuctionSound()
-    {
-        Task.Run(() =>
-        {
-            try
-            {
-                int sampleRate = 44100;
-                double duration = 0.65;
-                int totalSamples = (int)(sampleRate * duration);
-                float[] buffer = new float[totalSamples];
-
-                for (int i = 0; i < totalSamples; i++)
-                {
-                    double t = (double)i / sampleRate;
-                    // Linear frequency sweep from 650Hz down to 60Hz (suction effect)
-                    double frequency = 650.0 - (590.0 * (t / duration));
-                    
-                    // Suction sound volume shape: swells slightly at start, then fades to zero
-                    double volume = 0.0;
-                    if (t < 0.15)
-                        volume = (t / 0.15) * 0.18; // Swell
-                    else
-                        volume = (1.0 - ((t - 0.15) / (duration - 0.15))) * 0.18; // Fade
-
-                    buffer[i] = (float)(volume * Math.Sin(2.0 * Math.PI * frequency * t));
-                }
-
-                byte[] byteBuffer = new byte[buffer.Length * 4];
-                Buffer.BlockCopy(buffer, 0, byteBuffer, 0, byteBuffer.Length);
-                
-                var waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 1);
-                var ms = new MemoryStream(byteBuffer);
-                var rawSource = new RawSourceWaveStream(ms, waveFormat);
-                var waveOut = new WaveOutEvent();
-                
-                waveOut.PlaybackStopped += (s, ev) =>
-                {
-                    waveOut.Dispose();
-                    rawSource.Dispose();
-                    ms.Dispose();
-                };
-                
-                waveOut.Init(rawSource);
-                waveOut.Play();
-            }
-            catch { /* ignored */ }
-        });
-    }
 
     private void ShowDesktopButton_Click(object sender, RoutedEventArgs e)
     {
@@ -2341,11 +1428,13 @@ public partial class DockWindow : Window, IApplicationHost
                 {
                     shellType.InvokeMember("MinimizeAll", System.Reflection.BindingFlags.InvokeMethod, null, shell, null);
                     _allMinimized = true;
+                    SystemCoordinator.Instance.ForceRecheck();
                 }
                 else
                 {
                     shellType.InvokeMember("UndoMinimizeALL", System.Reflection.BindingFlags.InvokeMethod, null, shell, null);
                     _allMinimized = false;
+                    SystemCoordinator.Instance.ForceRecheck();
                 }
             }
         }
@@ -2367,33 +1456,7 @@ public partial class DockWindow : Window, IApplicationHost
 
     private void PowerButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_powerWindow != null)
-            {
-                _powerWindow.Close();
-                _powerWindow = null;
-                IsPowerWindowOpen = false;
-            }
-            else
-            {
-                _powerWindow = new Windows.PowerWindow();
-                IsPowerWindowOpen = true;
-                _powerWindow.Closed += (s, args) => {
-                    _powerWindow = null;
-                    IsPowerWindowOpen = false;
-                    ForceTopmost();
-                    CheckAutoHide();
-                };
-                _powerWindow.Show();
-                _powerWindow.Activate();
-            }
-        }
-        catch
-        {
-            _powerWindow = null;
-            IsPowerWindowOpen = false;
-        }
+        WidgetManager.Instance.ToggleWidget("Power");
     }
 
     // ===== Context Menu =====
@@ -2536,7 +1599,7 @@ public partial class DockWindow : Window, IApplicationHost
         {
             if (string.IsNullOrEmpty(wallpaperPath))
             {
-                wallpaperPath = MainWindow.GetCurrentWallpaper();
+                wallpaperPath = LocalGalleryWindow.GetCurrentWallpaper();
             }
 
             if (string.IsNullOrEmpty(wallpaperPath) || !System.IO.File.Exists(wallpaperPath))
@@ -2782,79 +1845,11 @@ public partial class DockWindow : Window, IApplicationHost
 
     // ===== Custom Color Overrides from Settings =====
 
-    private bool _isSuspendedForBrowserFullScreen = false;
-
-    public bool IsAnyBrowserFullScreen()
-    {
-        try
-        {
-            foreach (Window window in Application.Current.Windows)
-            {
-                if (window is Windows.BrowserWindow browserWindow && browserWindow.IsFullScreen)
-                {
-                    return true;
-                }
-            }
-        }
-        catch { /* ignored */ }
-        return false;
-    }
-
-    public void OnBrowserFullScreenChanged(bool isFullScreen)
-    {
-        try
-        {
-            bool anyFullScreen = IsAnyBrowserFullScreen();
-            var s = Services.SettingsService.Instance;
-
-            if (anyFullScreen)
-            {
-                if (_isSuspendedForBrowserFullScreen) return;
-                _isSuspendedForBrowserFullScreen = true;
-
-                Topmost = false;
-                Visibility = Visibility.Collapsed;
-
-                if (_isRegistered)
-                {
-                    UnregisterAppBar();
-                }
-            }
-            else
-            {
-                if (!_isSuspendedForBrowserFullScreen) return;
-                _isSuspendedForBrowserFullScreen = false;
-
-                if (_isDockToggledVisible)
-                {
-                    Visibility = Visibility.Visible;
-                    if (s.AutoHide)
-                    {
-                        Top = IsMousePhysicallyOverDock() ? GetDockVisibleTop() : GetDockHiddenTop();
-                    }
-                    else
-                    {
-                        Top = GetDockVisibleTop();
-                    }
-                }
-
-                if (!s.AutoHide && !_isRegistered && _isDockToggledVisible)
-                {
-                    RegisterAppBar();
-                }
-
-                ForceTopmost();
-            }
-        }
-        catch { /* ignored */ }
-    }
-
     public void ForceTopmost()
     {
         try
         {
             if (Visibility != Visibility.Visible) return;
-            if (IsAnyBrowserFullScreen()) return;
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd != IntPtr.Zero)
             {
@@ -2868,26 +1863,7 @@ public partial class DockWindow : Window, IApplicationHost
 
     public void ApplySpotlightSettings()
     {
-        if (_pinnedAppsWindow != null)
-        {
-            try
-            {
-                _pinnedAppsWindow.ApplySettings();
-            }
-            catch { /* ignored */ }
-        }
-    }
-
-    public void ApplyBrowserColors()
-    {
-        foreach (var win in _browserWindows.ToArray())
-        {
-            try
-            {
-                win.ApplyBrowserColors();
-            }
-            catch { /* ignored */ }
-        }
+        // PinnedAppsWindow state is now managed via WidgetManager
     }
 
     public void ApplyCustomColors()
@@ -2948,7 +1924,7 @@ public partial class DockWindow : Window, IApplicationHost
                 Height = s.DockHeight;
                 Left = screen.Bounds.X / dpi.DpiScaleX;
 
-                double targetTop = (IsMousePhysicallyOverDock() || IsAnyWindowOpen()) ? GetDockVisibleTop() : GetDockHiddenTop();
+                double targetTop = (IsMousePhysicallyOverDock() || WidgetManager.Instance.IsAnyWidgetOpen()) ? GetDockVisibleTop() : GetDockHiddenTop();
                 AnimateDock(targetTop);
                 if (TaskbarBorder != null) TaskbarBorder.Width = Width;
                 ForceTopmost();
@@ -2977,7 +1953,7 @@ public partial class DockWindow : Window, IApplicationHost
                 Application.Current.Resources["AccentGlowBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
                 Application.Current.Resources["AccentActiveBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, accent.R, accent.G, accent.B));
 
-                // Update media visualizer wave bars
+                // Update visualizer wave bars via DynamicResource
                 var waveBrush = new LinearGradientBrush
                 {
                     StartPoint = new Point(0, 0),
@@ -2985,17 +1961,10 @@ public partial class DockWindow : Window, IApplicationHost
                 };
                 waveBrush.GradientStops.Add(new GradientStop(hover, 0));
                 waveBrush.GradientStops.Add(new GradientStop(accent, 1));
-
-                if (WaveBar1 != null) WaveBar1.Background = waveBrush;
-                if (WaveBar2 != null) WaveBar2.Background = waveBrush;
-                if (WaveBar3 != null) WaveBar3.Background = waveBrush;
-                if (WaveBar4 != null) WaveBar4.Background = waveBrush;
-                if (WaveBar5 != null) WaveBar5.Background = waveBrush;
-                if (WaveBar6 != null) WaveBar6.Background = waveBrush;
+                Application.Current.Resources["VisualizerWaveBrush"] = waveBrush;
             }
 
-            // Determine and apply custom border brush (gradient or accent)
-            Brush finalBorderBrush;
+            // Determine and apply custom border colors via DynamicResource
             if (!string.IsNullOrEmpty(s.UserBorderColor1) &&
                 !string.IsNullOrEmpty(s.UserBorderColor2) &&
                 !string.IsNullOrEmpty(s.UserBorderColor3) &&
@@ -3003,33 +1972,147 @@ public partial class DockWindow : Window, IApplicationHost
                 TryParseColor(s.UserBorderColor2, out var c2) &&
                 TryParseColor(s.UserBorderColor3, out var c3))
             {
+                Application.Current.Resources["BorderColor1"] = c1;
+                Application.Current.Resources["BorderColor2"] = c2;
+                Application.Current.Resources["BorderColor3"] = c3;
+
                 var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
                 lgb.GradientStops.Add(new GradientStop(c1, 0));
                 lgb.GradientStops.Add(new GradientStop(c2, 0.5));
                 lgb.GradientStops.Add(new GradientStop(c3, 1));
-                finalBorderBrush = lgb;
+                try { Application.Current.Resources["DockBorderBrush"] = lgb; } catch { }
+                if (TaskbarBorder != null) TaskbarBorder.BorderBrush = lgb;
             }
             else
             {
-                finalBorderBrush = Application.Current.Resources["AccentBrush"] as Brush 
+                var defaultBrush = Application.Current.Resources["AccentBrush"] as Brush 
                     ?? new SolidColorBrush(Color.FromRgb(0xAF, 0x52, 0xDE));
+                try { Application.Current.Resources["DockBorderBrush"] = defaultBrush; } catch { }
+                if (TaskbarBorder != null) TaskbarBorder.BorderBrush = defaultBrush;
             }
 
-            try
-            {
-                Application.Current.Resources["DockBorderBrush"] = finalBorderBrush;
-            }
-            catch { /* ignored */ }
-
-            if (TaskbarBorder != null)
-            {
-                TaskbarBorder.BorderBrush = finalBorderBrush;
-            }
-
-            // Force recalculate window clipping region after dynamic scale updates
-            BackdropHelper.UpdateWindowRegion(this, 8);
+            // Apply dock icon theme and color styling
+            ApplyDockIconThemeAndColor();
         }
         catch { /* ignored */ }
+    }
+
+    public void ApplyDockIconThemeAndColor()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ApplyDockIconThemeAndColor)); return; }
+        try
+        {
+            Brush restBadgeBg = Brushes.Transparent;
+            Brush hoverBadgeBg = new SolidColorBrush(Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+
+            Button[] buttons = new[]
+            {
+                PinnedAppsButton, LocalGalleryButton, OnlineGalleryButton, YouTubeMusicButton,
+                SettingsButton, VolumeButton, NotificationsButton, ShowDesktopButton, PowerButton
+            };
+
+            foreach (var btn in buttons)
+            {
+                if (btn == null) continue;
+                btn.ApplyTemplate();
+                btn.Tag = Tuple.Create(restBadgeBg, hoverBadgeBg);
+
+                btn.MouseEnter -= Button_Glow_MouseEnter;
+                btn.MouseEnter += Button_Glow_MouseEnter;
+                btn.MouseLeave -= Button_Glow_MouseLeave;
+                btn.MouseLeave += Button_Glow_MouseLeave;
+
+                var children = FindVisualChildren<DependencyObject>(btn);
+                foreach (var child in children)
+                {
+                    string elemName = child.GetType().GetProperty("Name")?.GetValue(child) as string ?? "";
+
+                    if (elemName == "IconStyle_Minimal" && child is UIElement minimalIcon)
+                    {
+                        minimalIcon.Visibility = Visibility.Visible;
+                        if (child is TextBlock tb)
+                        {
+                            tb.Foreground = new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
+                        }
+                    }
+                    else if (elemName.StartsWith("IconStyle_") && child is UIElement nonMinimalPack)
+                    {
+                        nonMinimalPack.Visibility = Visibility.Collapsed;
+                    }
+
+                    if (child is Border b && (b.Name.EndsWith("TileBadge") || b.Name == "TileBadge"))
+                    {
+                        b.Background = restBadgeBg;
+                        b.BorderBrush = Brushes.Transparent;
+                        b.BorderThickness = new Thickness(0);
+                        b.CornerRadius = new CornerRadius(16);
+                    }
+
+                    if ((child is System.Windows.Shapes.Ellipse || child is Border) && elemName.EndsWith("Glow"))
+                    {
+                        if (child is UIElement glowElement)
+                        {
+                            glowElement.Opacity = 0.0;
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void Button_Glow_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is Tuple<Brush, Brush> t)
+        {
+            var badge = FindVisualChildren<Border>(btn).FirstOrDefault(x => x.Name.EndsWith("TileBadge") || x.Name == "TileBadge");
+            if (badge != null)
+            {
+                badge.Background = t.Item2;
+            }
+            var tb = FindVisualChildren<TextBlock>(btn).FirstOrDefault(x => x.Name == "IconStyle_Minimal");
+            if (tb != null)
+            {
+                tb.Foreground = Brushes.White;
+            }
+        }
+    }
+
+    private void Button_Glow_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is Tuple<Brush, Brush> t)
+        {
+            var badge = FindVisualChildren<Border>(btn).FirstOrDefault(x => x.Name.EndsWith("TileBadge") || x.Name == "TileBadge");
+            if (badge != null)
+            {
+                badge.Background = t.Item1;
+            }
+            var tb = FindVisualChildren<TextBlock>(btn).FirstOrDefault(x => x.Name == "IconStyle_Minimal");
+            if (tb != null)
+            {
+                tb.Foreground = new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
+            }
+        }
+    }
+
+    private static System.Collections.Generic.IEnumerable<T> FindVisualChildren<T>(DependencyObject depObj) where T : DependencyObject
+    {
+        if (depObj != null)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(depObj);
+            for (int i = 0; i < count; i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(depObj, i);
+                if (child is T t)
+                {
+                    yield return t;
+                }
+                foreach (T childOfChild in FindVisualChildren<T>(child))
+                {
+                    yield return childOfChild;
+                }
+            }
+        }
     }
 
     private static System.Windows.Media.Color Lighten(System.Windows.Media.Color color)
@@ -3059,173 +2142,27 @@ public partial class DockWindow : Window, IApplicationHost
         return false;
     }
 
-    private Window? _activeWidget;
-    private string? _activeWidgetType; // "Calendar", "PinnedApps", "Weather"
-    private DateTime _lastWidgetCloseTime = DateTime.MinValue;
-    private string? _lastClosedWidgetType;
-
-    private void ShowWidget(string type)
+    internal void CheckAutoHide()
     {
-        // Ignorar el clic si el mismo widget fue cerrado recientemente por pérdida de foco (evita condición de carrera de deactivación-click)
-        if (_lastClosedWidgetType == type && (DateTime.Now - _lastWidgetCloseTime).TotalMilliseconds < 250)
+        var s = Services.SettingsService.Instance;
+        if (!s.AutoHide) return;
+
+        // Clear manual override when no widgets/settings windows are open
+        if (!WidgetManager.Instance.IsAnyWidgetOpen())
         {
-            _lastWidgetCloseTime = DateTime.MinValue;
-            _lastClosedWidgetType = null;
+            _isManuallyKeptOpen = false;
+        }
+        else if (_isManuallyKeptOpen)
+        {
             return;
         }
 
-        if (_activeWidget != null)
+        double hiddenTop = GetDockHiddenTop();
+        if (Math.Abs(Top - hiddenTop) < 2) return;
+        if (!IsMousePhysicallyOverDock() && !WidgetManager.Instance.IsAnyWidgetOpen())
         {
-            if (_activeWidgetType == type)
-            {
-                CloseActiveWidget();
-                return;
-            }
-            else
-            {
-                CloseActiveWidget();
-            }
+            AnimateDock(hiddenTop);
         }
-
-        _activeWidgetType = type;
-
-        // Play transition whoosh sound
-        SoundService.Play(SoundType.Whoosh);
-
-        try
-        {
-            if (type == "Calendar")
-            {
-                if (_activeWidget != null && _activeWidgetType == type) return;
-
-                var dpi = VisualTreeHelper.GetDpi(this);
-                var screenPos = ClockBlock.PointToScreen(new Point(0, 0));
-                double left = screenPos.X / dpi.DpiScaleX;
-                double targetLeft = left - (410 - ClockBlock.ActualWidth) / 2;
-
-                var win = new Windows.CalendarWindow(targetLeft);
-                _calendarWindow = win;
-                _activeWidget = win;
-                win.Closed += (s, args) => { 
-                    _calendarWindow = null;
-                    if (_activeWidget == win) ClearActiveWidget(); 
-                };
-                win.Show();
-                win.Activate();
-            }
-            else if (type == "PinnedApps")
-            {
-                if (_activeWidget != null && _activeWidgetType == type) return;
-
-                var win = new Windows.PinnedAppsWindow();
-                _pinnedAppsWindow = win;
-                _activeWidget = win;
-                IsPinnedFlyoutOpen = true;
-                win.Closed += (s, args) =>
-                {
-                    _pinnedAppsWindow = null;
-                    IsPinnedFlyoutOpen = false;
-                    if (_activeWidget == win) ClearActiveWidget();
-                };
-                win.Show();
-                win.Activate();
-            }
-            else if (type == "Weather")
-            {
-                if (_activeWidget != null && _activeWidgetType == type) return;
-
-                var dpi = VisualTreeHelper.GetDpi(this);
-                var screenPos = WeatherButton.PointToScreen(new Point(0, 0));
-                double left = screenPos.X / dpi.DpiScaleX;
-                
-                var win = new WeatherWindow(left - (310 - WeatherButton.ActualWidth) / 2);
-                _activeWidget = win;
-                win.Closed += (s, args) => { if (_activeWidget == win) ClearActiveWidget(); };
-                win.Show();
-                win.Activate();
-            }
-            else if (type == "Media")
-            {
-                if (_activeWidget != null && _activeWidgetType == type) return;
-
-                var dpi = VisualTreeHelper.GetDpi(this);
-                var screenPos = MediaWidget.PointToScreen(new Point(0, 0));
-                double left = screenPos.X / dpi.DpiScaleX;
-                double targetLeft = left - (300 - MediaWidget.ActualWidth) / 2;
-
-                var win = new Windows.MediaFlyoutWindow(_currentMediaSession, targetLeft);
-                _mediaFlyoutWindow = win;
-                _activeWidget = win;
-                win.Closed += (s, args) => { 
-                    _mediaFlyoutWindow = null;
-                    if (_activeWidget == win) ClearActiveWidget(); 
-                };
-                win.Show();
-                win.Activate();
-            }
-        }
-        catch
-        {
-            ClearActiveWidget();
-        }
-    }
-
-    private void ClearActiveWidget()
-    {
-        _lastWidgetCloseTime = DateTime.Now;
-        _lastClosedWidgetType = _activeWidgetType;
-
-        _activeWidget = null;
-        _activeWidgetType = null;
-        CheckAutoHide();
-    }
-
-    public void RecordWidgetClose(string type)
-    {
-        _lastWidgetCloseTime = DateTime.Now;
-        _lastClosedWidgetType = type;
-    }
-
-    private void CloseActiveWidget()
-    {
-        if (_activeWidget != null)
-        {
-            SoundService.Play(SoundType.Whoosh);
-            
-            bool animated = false;
-            try
-            {
-                var method = _activeWidget.GetType().GetMethod("SafeClose", 
-                    System.Reflection.BindingFlags.Public | 
-                    System.Reflection.BindingFlags.NonPublic | 
-                    System.Reflection.BindingFlags.Instance);
-                if (method != null)
-                {
-                    method.Invoke(_activeWidget, null);
-                    animated = true;
-                }
-            }
-            catch { /* ignored */ }
-
-            if (!animated)
-            {
-                try { _activeWidget.Close(); } catch { }
-            }
-            ClearActiveWidget();
-        }
-    }
-
-    private bool IsAnyWindowOpen()
-    {
-        return IsLocalGalleryOpen || 
-               IsOnlineGalleryOpen || 
-               IsPowerWindowOpen || 
-               IsPinnedFlyoutOpen || 
-               IsSettingsOpen ||
-               IsContextMenuOpen ||
-               (_calendarWindow != null && _calendarWindow.IsVisible) ||
-               (_mediaFlyoutWindow != null && _mediaFlyoutWindow.IsVisible) ||
-               (WeatherWindow.Instance != null && WeatherWindow.Instance.IsVisible);
     }
 
     private void AnimateDock(double targetTop, Action? onCompleted = null)
@@ -3307,16 +2244,81 @@ public partial class DockWindow : Window, IApplicationHost
         }
     }
 
-    private void CheckAutoHide()
+    [DllImport("user32.dll", EntryPoint = "FindWindowW", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowW(string? lpClassName, string? lpWindowName);
+
+    private static bool IsWindowCloaked(IntPtr hwnd)
     {
-        var s = Services.SettingsService.Instance;
-        if (!s.AutoHide || _isManuallyKeptOpen) return;
-        double hiddenTop = GetDockHiddenTop();
-        if (Math.Abs(Top - hiddenTop) < 2) return;
-        if (!IsMousePhysicallyOverDock() && !IsAnyWindowOpen())
+        if (hwnd == IntPtr.Zero) return true;
+        if (DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0)
         {
-            AnimateDock(hiddenTop);
+            return cloaked != 0;
         }
+        return false;
+    }
+
+    private bool IsStartMenuOpenOrFocused()
+    {
+        try
+        {
+            // 1. Check Foreground Window
+            IntPtr fg = GetForegroundWindow();
+            if (fg != IntPtr.Zero)
+            {
+                if (IsStartMenuHwnd(fg)) return true;
+
+                IntPtr root = GetAncestor(fg, GA_ROOTOWNER);
+                if (root != IntPtr.Zero && IsStartMenuHwnd(root)) return true;
+            }
+
+            // 2. Fallback: Check known visible Windows Start Menu / Search windows directly ONLY IF NOT CLOAKED BY DWM
+            IntPtr startWin = FindWindowW("Windows.UI.Core.CoreWindow", "Start");
+            if (startWin == IntPtr.Zero) startWin = FindWindowW("Windows.UI.Core.CoreWindow", "Inicio");
+            if (startWin != IntPtr.Zero && IsWindowVisible(startWin) && !IsIconic(startWin) && !IsWindowCloaked(startWin)) return true;
+
+            IntPtr xamlWin = FindWindowW("XamlExplorerHostIslandWindow", null);
+            if (xamlWin != IntPtr.Zero && IsWindowVisible(xamlWin) && !IsIconic(xamlWin) && !IsWindowCloaked(xamlWin)) return true;
+
+            return false;
+        }
+        catch { return false; }
+    }
+
+    private bool IsStartMenuHwnd(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+
+        var clsSb = new StringBuilder(256);
+        GetClassNameW(hwnd, clsSb, 256);
+        string cls = clsSb.ToString();
+
+        var titleSb = new StringBuilder(256);
+        GetWindowTextW(hwnd, titleSb, 256);
+        string title = titleSb.ToString().ToLower();
+
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        string procName = GetProcessPath((int)pid);
+        if (!string.IsNullOrEmpty(procName))
+        {
+            procName = Path.GetFileName(procName).ToLower();
+        }
+
+        if (procName == "startmenuexperiencehost.exe" || 
+            procName == "searchhost.exe" || 
+            procName == "searchapp.exe" || 
+            procName == "shellexperiencehost.exe")
+            return true;
+
+        if (cls == "Windows.UI.Core.CoreWindow" || 
+            cls == "XamlExplorerHostIslandWindow" || 
+            cls == "Windows.UI.Composition.DesktopWindowContentBridge" || 
+            cls == "TopLevelWindowForOverflowSearch" || 
+            cls == "LauncherSystemWindow")
+        {
+            if (title == "start" || title == "inicio" || title == "búsqueda" || title == "search" || string.IsNullOrEmpty(title))
+                return true;
+        }
+
+        return false;
     }
 
     private void MousePollTimer_Tick(object? sender, EventArgs e)
@@ -3327,7 +2329,13 @@ public partial class DockWindow : Window, IApplicationHost
             if (_isSuspendedForGameMode) return;
             if (Visibility != Visibility.Visible) return;
 
-            bool isOver = IsMousePhysicallyOverDock();
+            if (s.HideWindowsTaskbar)
+            {
+                HideWindowsTaskbar();
+            }
+
+            bool isStartOpen = IsStartMenuOpenOrFocused();
+            bool isOver = IsMousePhysicallyOverDock() || isStartOpen;
 
             if (isOver)
             {
@@ -3341,10 +2349,10 @@ public partial class DockWindow : Window, IApplicationHost
                 {
                     if (_autoHideDelayTimer != null) _autoHideDelayTimer.Stop();
                     
-                    // If it is hidden or lost topmost, force show/bring to front
-                    if (!isAtVisiblePosition || !Topmost)
+                    // If it is hidden, animate open (do NOT call ForceTopmost while Start menu is open to prevent Z-order fights)
+                    if (!isAtVisiblePosition)
                     {
-                        ForceTopmost();
+                        if (!isStartOpen) ForceTopmost();
                         AnimateDock(GetDockVisibleTop());
                     }
                 }
@@ -3363,14 +2371,14 @@ public partial class DockWindow : Window, IApplicationHost
                 }
 
                 // Adjust polling interval dynamically:
-                // Fast (100ms) when hidden so hover triggers instantly,
-                // Normal (300ms) when visible to save CPU resources.
+                // Fast (250ms) when hidden so hover triggers smoothly,
+                // Normal (500ms) when visible to minimize background CPU usage.
                 double currentTop = Top;
                 bool isHidden = s.DockPosition == "Bottom"
                     ? currentTop >= GetDockHiddenTop() - 5
                     : currentTop <= GetDockHiddenTop() + 5;
 
-                TimeSpan targetInterval = isHidden ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromMilliseconds(300);
+                TimeSpan targetInterval = isHidden ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromMilliseconds(500);
                 if (_mousePollTimer != null && _mousePollTimer.Interval != targetInterval)
                 {
                     _mousePollTimer.Interval = targetInterval;
@@ -3378,9 +2386,9 @@ public partial class DockWindow : Window, IApplicationHost
             }
             else
             {
-                if (_mousePollTimer != null && _mousePollTimer.Interval != TimeSpan.FromMilliseconds(300))
+                if (_mousePollTimer != null && _mousePollTimer.Interval != TimeSpan.FromMilliseconds(500))
                 {
-                    _mousePollTimer.Interval = TimeSpan.FromMilliseconds(300);
+                    _mousePollTimer.Interval = TimeSpan.FromMilliseconds(500);
                 }
             }
         }
@@ -3428,9 +2436,10 @@ public partial class DockWindow : Window, IApplicationHost
     private void DockWindow_MouseLeave(object sender, MouseEventArgs e)
     {
         var s = Services.SettingsService.Instance;
-        if (s.AutoHide && !IsAnyWindowOpen() && !_isManuallyKeptOpen)
+        if (s.AutoHide && !WidgetManager.Instance.IsAnyWidgetOpen() && !_isManuallyKeptOpen)
         {
-            // Do not hide if the mouse is physically over the dock
+            // Do not hide if Start Menu is open or mouse is physically over dock
+            if (IsStartMenuOpenOrFocused()) return;
             if (IsMousePhysicallyOverDock()) return;
 
             double targetTop = GetDockHiddenTop();
@@ -3442,7 +2451,7 @@ public partial class DockWindow : Window, IApplicationHost
                     _autoHideDelayTimer = new System.Windows.Threading.DispatcherTimer();
                     _autoHideDelayTimer.Tick += (snd, args) => {
                         _autoHideDelayTimer.Stop();
-                        if (!IsAnyWindowOpen() && !IsMousePhysicallyOverDock())
+                        if (!WidgetManager.Instance.IsAnyWidgetOpen() && !IsMousePhysicallyOverDock())
                         {
                             AnimateDock(GetDockHiddenTop());
                         }
@@ -3463,134 +2472,63 @@ public partial class DockWindow : Window, IApplicationHost
 
     private bool _isSuspendedForGameMode = false;
 
-    private void CheckGameMode()
+    public void SuspendForGameMode()
     {
-        try
-        {
-            bool isGameActive = IsForegroundWindowFullScreen();
-            if (isGameActive && !_isSuspendedForGameMode)
-            {
-                _isSuspendedForGameMode = true;
-                
-                // Stop audio animation
-                StopSoundWavesAnimationOnly();
-
-                // Unregister AppBar to immediately free the desktop work area layout so other windows can expand
-                if (_isRegistered)
-                {
-                    UnregisterAppBar();
-                }
-                
-                // Hide dock to stop all rendering
-                Visibility = Visibility.Collapsed;
-
-                // Suspend weather effects rendering to save CPU/GPU for gaming
-                if (_weatherEffectsWindow != null)
-                {
-                    try { _weatherEffectsWindow.StopRendering(); } catch { }
-                }
-            }
-            else if (!isGameActive && _isSuspendedForGameMode)
-            {
-                _isSuspendedForGameMode = false;
-                
-                // Clear any active animation on TopProperty to release the dependency property lock
-                BeginAnimation(TopProperty, null);
-                
-                // Pre-position window offscreen if auto-hide is enabled to prevent visual jumping/displacement on show
-                if (Services.SettingsService.Instance.AutoHide)
-                {
-                    double targetTop = (IsMousePhysicallyOverDock() || IsAnyWindowOpen()) ? GetDockVisibleTop() : GetDockHiddenTop();
-                    Top = targetTop;
-                }
-                
-                // Restore dock visibility
-                if (_isDockToggledVisible)
-                {
-                    Visibility = Visibility.Visible;
-                }
-
-                // Re-apply styles, layout and AppBar registration
-                ApplyCustomColors();
-                
-                // Force check if dock should hide
-                CheckAutoHide();
-                
-                // Resume audio loopback if music is playing
-                UpdateSoundWavesAnimationState();
-
-                // Resume weather effects rendering
-                if (_weatherEffectsWindow != null)
-                {
-                    try { _weatherEffectsWindow.StartRendering(); } catch { }
-                }
-            }
-        }
-        catch { /* ignored */ }
-    }
-
-    private bool IsForegroundWindowFullScreen()
-    {
-        IntPtr hWnd = GetForegroundWindow();
-        if (hWnd == IntPtr.Zero) return false;
-
-        // Skip all windows belonging to our own process
-        GetWindowThreadProcessId(hWnd, out uint windowProcessId);
-        uint currentProcessId = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
-        if (windowProcessId == currentProcessId)
-            return false;
-
-        // Get class name
-        var className = new StringBuilder(256);
-        GetClassNameW(hWnd, className, 256);
-        string cls = className.ToString();
+        _isSuspendedForGameMode = true;
+        _clockTimer?.Stop();
+        _mousePollTimer?.Stop();
         
-        // Skip Windows Shell, Taskbar and Desktop windows
-        if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
-            return false;
+        // Stop audio animation
+        StopSoundWavesAnimationOnly();
 
-        RECT rect;
-        if (GetWindowRect(hWnd, out rect))
+        // Unregister AppBar to immediately free the desktop work area layout so other windows can expand
+        if (_isRegistered)
         {
-            int screenWidth = (int)SystemParameters.PrimaryScreenWidth;
-            int screenHeight = (int)SystemParameters.PrimaryScreenHeight;
-
-            int width = rect.Right - rect.Left;
-            int height = rect.Bottom - rect.Top;
-
-            // If the window covers the primary screen exactly
-            if (rect.Left <= 0 && rect.Top <= 0 && rect.Right >= screenWidth && rect.Bottom >= screenHeight)
-            {
-                // Verify it doesn't have WS_CAPTION style (standard title bar).
-                // Maximized standard windows retain the caption style. Fullscreen games/videos do NOT.
-                int style = GetWindowLong(hWnd, GWL_STYLE);
-                if ((style & WS_CAPTION) == WS_CAPTION)
-                {
-                    return false;
-                }
-
-                // Verify it has a valid title so we don't catch empty popups
-                var title = new StringBuilder(256);
-                GetWindowTextW(hWnd, title, 256);
-                string titleStr = title.ToString().ToLower();
-                
-                if (titleStr == "program manager" || titleStr == "start" || string.IsNullOrEmpty(titleStr))
-                    return false;
-
-                return true;
-            }
+            UnregisterAppBar();
         }
-        return false;
+        
+        // Hide dock to stop all rendering
+        Visibility = Visibility.Collapsed;
+        // Suspend wallpaper effects rendering to save CPU/GPU for gaming
+        WidgetManager.Instance.StopWallpaperEffectsRendering();
+ 
+        // Close all auxiliary windows to save memory and avoid focus stealing
+        WidgetManager.Instance.CloseAllWidgets();
     }
 
-    public void ToggleCalendar()
+    public void ResumeFromGameMode()
     {
-        ShowWidget("Calendar");
-    }
+        _isSuspendedForGameMode = false;
+        _clockTimer?.Start();
+        UpdateMousePollTimerState();
+        
+        // Clear any active animation on TopProperty to release the dependency property lock
+        BeginAnimation(TopProperty, null);
+        
+        // Pre-position window offscreen if auto-hide is enabled to prevent visual jumping/displacement on show
+        if (Services.SettingsService.Instance.AutoHide)
+        {
+            double targetTop = (IsMousePhysicallyOverDock() || WidgetManager.Instance.IsAnyWidgetOpen()) ? GetDockVisibleTop() : GetDockHiddenTop();
+            Top = targetTop;
+        }
+        
+        // Restore dock visibility
+        if (_isDockToggledVisible)
+        {
+            Visibility = Visibility.Visible;
+        }
 
-    public void ToggleMedia()
-    {
-        ShowWidget("Media");
+        // Re-apply styles, layout and AppBar registration
+        ApplyCustomColors();
+        
+        // Force check if dock should hide
+        CheckAutoHide();
+        
+        // Resume audio loopback if music is playing
+        UpdateSoundWavesAnimationState();
+
+        // Resume wallpaper effects rendering
+        WidgetManager.Instance.StartWallpaperEffectsRendering();
     }
 
     public void ToggleDockVisibility()
@@ -3679,115 +2617,130 @@ public partial class DockWindow : Window, IApplicationHost
         }
     }
 
-    public void RegisterGlobalHotkeys()
-    {
-        var h = HotkeyService.Instance;
-        h.UnregisterAll();
-
-        var s = Services.SettingsService.Instance;
-
-        if (!string.IsNullOrEmpty(s.Hotkey_PinnedApps))
-            h.Register(s.Hotkey_PinnedApps, () => Dispatcher.Invoke(() => PinnedAppsButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_Weather))
-            h.Register(s.Hotkey_Weather, () => Dispatcher.Invoke(() => WeatherButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_Calendar))
-            h.Register(s.Hotkey_Calendar, () => Dispatcher.Invoke(() => ToggleCalendar()));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_Media))
-            h.Register(s.Hotkey_Media, () => Dispatcher.Invoke(() => ToggleMedia()));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_Power))
-            h.Register(s.Hotkey_Power, () => Dispatcher.Invoke(() => PowerButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_Settings))
-            h.Register(s.Hotkey_Settings, () => Dispatcher.Invoke(() => SettingsButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_LocalGallery))
-            h.Register(s.Hotkey_LocalGallery, () => Dispatcher.Invoke(() => WallFlowLogoButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_OnlineGallery))
-            h.Register(s.Hotkey_OnlineGallery, () => Dispatcher.Invoke(() => OnlineGalleryButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_NextWallpaper))
-            h.Register(s.Hotkey_NextWallpaper, () => Dispatcher.Invoke(() => MainWindow.Instance?.NextWallpaperExternal()));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_PrevWallpaper))
-            h.Register(s.Hotkey_PrevWallpaper, () => Dispatcher.Invoke(() => MainWindow.Instance?.PreviousWallpaperExternal()));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_ToggleDock))
-            h.Register(s.Hotkey_ToggleDock, () => Dispatcher.Invoke(() => ToggleDockVisibility()));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_Clipboard))
-            h.Register(s.Hotkey_Clipboard, () => Dispatcher.Invoke(() => ToggleClipboard()));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_YouTube))
-            h.Register(s.Hotkey_YouTube, () => Dispatcher.Invoke(() => YouTubeMusicButton_Click(null!, null!)));
-
-        if (!string.IsNullOrEmpty(s.Hotkey_WebBrowser))
-            h.Register(s.Hotkey_WebBrowser, () => Dispatcher.Invoke(() => WebBrowserButton_Click(null!, null!)));
-    }
-
     public void ToggleClipboard()
     {
-        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ToggleClipboard)); return; }
-
-        if (_pinnedAppsWindow != null && _pinnedAppsWindow.IsLoaded)
-        {
-            if (_pinnedAppsWindow.CurrentSearchMode == "Clipboard")
-            {
-                _pinnedAppsWindow.Close();
-                _pinnedAppsWindow = null;
-                _lastClosedTime = DateTime.Now;
-            }
-            else
-            {
-                _pinnedAppsWindow.SetSearchMode("Clipboard");
-                _pinnedAppsWindow.Activate();
-            }
-        }
-        else
-        {
-            ShowWidget("PinnedApps");
-            if (_pinnedAppsWindow != null)
-            {
-                _pinnedAppsWindow.SetSearchMode("Clipboard");
-            }
-        }
+        WidgetManager.Instance.ToggleWidget("Clipboard");
     }
 
     private void OnClipboardHistoryChanged()
     {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(new Action(OnClipboardHistoryChanged));
-            return;
-        }
-
-        try
-        {
-            // 1. Get global mouse cursor position (where copy event occurred)
-            if (GetCursorPos(out var mousePos))
-            {
-                // 2. Center of this DockWindow (or top center of the screen if hidden)
-                double targetX = Left + Width / 2;
-                double targetY = Math.Max(0.0, Top + Height / 2);
-
-                // 3. Spawn spiral energy particle window
-                ClipboardSpiralWindow.Spawn(mousePos.X, mousePos.Y, targetX, targetY);
-            }
-        }
-        catch { /* ignored */ }
+        // Option B: Clipboard history is captured silently in background.
+        // Particle overlay window spawning is disabled to prevent dock hiding/overlays.
     }
 
-    public void ForceReloadWeatherEffects()
+    public void ForceReloadWallpaperEffects()
     {
-        if (_weatherEffectsWindow != null)
-        {
-            try { _weatherEffectsWindow.Close(); } catch { }
-            _weatherEffectsWindow = null;
-        }
+        WidgetManager.Instance.CloseWallpaperEffects();
         UpdateWeather();
+    }
+ 
+    private void OnSettingsChanged(SettingsChangedEvent @event)
+    {
+        OnSettingsChanged();
+    }
+ 
+    private void OnSettingsChanged()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(OnSettingsChanged)); return; }
+        ApplyWidgetVisibilities();
+        ApplyDockLocation();
+        ApplyTaskbarVisibility();
+        UpdateClock();
+        UpdateWeather();
+        ForceReloadWallpaperEffects();
+        ApplyCustomColors();
+        ApplySpotlightSettings();
+        UpdateMousePollTimerState();
+    }
+
+    public void ApplyDockLocation()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ApplyDockLocation)); return; }
+
+        var s = Services.SettingsService.Instance;
+        var (screen, dpi) = GetCurrentScreenInfo();
+
+        if (s.AutoHide)
+        {
+            if (_isRegistered)
+            {
+                UnregisterAppBar();
+            }
+            ApplyTaskbarVisibility();
+            Width = screen.Bounds.Width / dpi.DpiScaleX;
+            Height = s.DockHeight;
+            Left = screen.Bounds.X / dpi.DpiScaleX;
+            
+            // Clear any active animation on TopProperty to release the dependency property lock
+            BeginAnimation(TopProperty, null);
+
+            bool isAnyWidgetOpen = WidgetManager.Instance.IsAnyWidgetOpen();
+            if (!isAnyWidgetOpen)
+            {
+                _isManuallyKeptOpen = false;
+            }
+
+            Top = (IsMousePhysicallyOverDock() || isAnyWidgetOpen) ? GetDockVisibleTop() : GetDockHiddenTop();
+
+            if (TaskbarBorder != null)
+            {
+                TaskbarBorder.Width = Width;
+                TaskbarBorder.Height = s.DockHeight;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() => CheckAutoHide()), System.Windows.Threading.DispatcherPriority.Background);
+        }
+        else
+        {
+            Width = screen.Bounds.Width / dpi.DpiScaleX;
+            Height = s.DockHeight;
+            Left = screen.Bounds.X / dpi.DpiScaleX;
+            
+            // Clear any active animation on TopProperty to release the dependency property lock
+            BeginAnimation(TopProperty, null);
+            Top = GetDockVisibleTop();
+
+            if (TaskbarBorder != null)
+            {
+                TaskbarBorder.Width = Width;
+                TaskbarBorder.Height = s.DockHeight;
+            }
+
+            if (!_isRegistered)
+            {
+                RegisterAppBar();
+            }
+            else
+            {
+                SetAppBarPosition();
+            }
+        }
+    }
+ 
+    private void OnPreviewColorsRequested(PreviewColorsRequestedEvent @event)
+    {
+        OnPreviewColorsRequested();
+    }
+ 
+    private void OnPreviewColorsRequested()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(OnPreviewColorsRequested)); return; }
+        ApplyCustomColors();
+    }
+
+    private void UpdateMousePollTimerState()
+    {
+        var s = Services.SettingsService.Instance;
+        if (s.AutoHide && !_isSuspendedForGameMode)
+        {
+            if (_mousePollTimer != null && !_mousePollTimer.IsEnabled)
+            {
+                _mousePollTimer.Start();
+            }
+        }
+        else
+        {
+            _mousePollTimer?.Stop();
+        }
     }
 }
