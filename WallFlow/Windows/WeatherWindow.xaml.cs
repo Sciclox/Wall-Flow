@@ -23,56 +23,8 @@ namespace WallFlow.Windows
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Apply acrylic blur
-            BackdropHelper.ApplyAcrylic(this);
-            BackdropHelper.UpdateWindowRegion(this, 8);
-
-            // Positioning relative to target screen
-            var screens = System.Windows.Forms.Screen.AllScreens;
-            var screenIndex = Math.Clamp(SettingsService.Instance.DockMonitorIndex, 0, screens.Length - 1);
-            var screen = screens[screenIndex];
-            var dpi = VisualTreeHelper.GetDpi(this);
-
-            double screenLeft = screen.Bounds.X / dpi.DpiScaleX;
-            double screenRight = (screen.Bounds.X + screen.Bounds.Width) / dpi.DpiScaleX;
-
-            Left = _targetLeft;
-            bool isBottom = SettingsService.Instance.DockPosition == "Bottom";
-            double finalTop;
-            if (isBottom)
-            {
-                finalTop = DockWindow.Instance != null 
-                    ? DockWindow.Instance.Top - Height 
-                    : (screen.Bounds.Y + screen.Bounds.Height) / dpi.DpiScaleY - Height - 56;
-            }
-            else
-            {
-                finalTop = DockWindow.Instance != null 
-                    ? DockWindow.Instance.Top + DockWindow.Instance.ActualHeight 
-                    : (screen.Bounds.Y / dpi.DpiScaleY) + 56;
-            }
-            
-            Top = isBottom ? finalTop + 15 : finalTop - 15;
-            Opacity = 0;
-
-            // Ensure window does not go off-screen on the target monitor
-            if (Left < screenLeft) Left = screenLeft + 10;
-            if (Left + Width > screenRight)
-            {
-                Left = screenRight - Width - 10;
-            }
-
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-            var slide = new System.Windows.Media.Animation.DoubleAnimation(isBottom ? finalTop + 15 : finalTop - 15, finalTop, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-
-            BeginAnimation(OpacityProperty, fadeIn);
-            BeginAnimation(TopProperty, slide);
+            FlyoutWindowHelper.ApplyFlyoutStyle(this, RootBorder, 8);
+            FlyoutWindowHelper.PositionAndAnimateFlyout(this, _targetLeft);
 
             // Load weather data
             await LoadWeatherDataAsync();

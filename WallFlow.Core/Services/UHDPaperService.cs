@@ -28,6 +28,9 @@ public class ListingResult
 
 public partial class UHDPaperService : IDisposable
 {
+    private static UHDPaperService? _instance;
+    public static UHDPaperService Instance => _instance ??= new UHDPaperService();
+
     private readonly HttpClient _http;
     private readonly string _cacheDir;
     private readonly string _previewCacheDir;

@@ -1,1179 +1,1181 @@
-<Window x:Class="WallFlow.DockWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Style="{StaticResource WallFlowWindow}"
-        Title="WallFlow Dock"
-        Width="1920"
-        Height="56"
-        WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
-        Topmost="True"
-        ShowInTaskbar="False"
-        ResizeMode="NoResize"
-        Loaded="Window_Loaded"
-        FontFamily="{DynamicResource AppFontFamily}">
-
-    <Window.Resources>
-        <!-- Storyboard for sound waves animation (Apple Music / iOS Symmetrical Pill Bars) -->
-        <Storyboard x:Key="SoundWavesPlaying" RepeatBehavior="Forever">
-            <DoubleAnimation Storyboard.TargetName="WaveBar1" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                             From="0.2" To="0.9" Duration="0:0:0.38" AutoReverse="True">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar2" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                             From="0.3" To="1.0" Duration="0:0:0.46" AutoReverse="True">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar3" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                             From="0.15" To="0.85" Duration="0:0:0.32" AutoReverse="True">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar4" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                             From="0.25" To="0.95" Duration="0:0:0.52" AutoReverse="True">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar5" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                             From="0.2" To="0.75" Duration="0:0:0.40" AutoReverse="True">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="WaveBar6" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
-                             From="0.15" To="0.8" Duration="0:0:0.35" AutoReverse="True">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-        </Storyboard>
-
-        <!-- ==================== WINDOW ICON BUTTON (macOS style: no box, pure scale) ==================== -->
-        <Style x:Key="WindowIconButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Width" Value="42" />
-            <Setter Property="Height" Value="42" />
-            <Setter Property="Margin" Value="2,0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-            <Setter Property="RenderTransform">
-                <Setter.Value>
-                    <ScaleTransform ScaleX="1" ScaleY="1" />
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="Transparent" SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <!-- Smooth macOS-like hover scale animation -->
-            <!-- Smooth macOS-like hover scale animation with elastic bounce -->
-            <Style.Triggers>
-                <EventTrigger RoutedEvent="MouseEnter">
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.22" Duration="0:0:0.35">
-                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.22" Duration="0:0:0.35">
-                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                        </Storyboard>
-                    </BeginStoryboard>
-                </EventTrigger>
-                <EventTrigger RoutedEvent="MouseLeave">
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.30">
-                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="5" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.30">
-                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="5" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                        </Storyboard>
-                    </BeginStoryboard>
-                </EventTrigger>
-                <EventTrigger RoutedEvent="PreviewMouseDown">
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="0.88" Duration="0:0:0.06" />
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="0.88" Duration="0:0:0.06" />
-                        </Storyboard>
-                    </BeginStoryboard>
-                </EventTrigger>
-                <EventTrigger RoutedEvent="PreviewMouseUp">
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.30">
-                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.30">
-                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
-                            </DoubleAnimation>
-                        </Storyboard>
-                    </BeginStoryboard>
-                </EventTrigger>
-            </Style.Triggers>
-        </Style>
-
-
-        <!-- ==================== WEATHER BUTTON STYLE (No hover box, hand cursor, large) ==================== -->
-        <Style x:Key="WeatherButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#FFFFFFFF" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Width" Value="40" />
-            <Setter Property="Height" Value="40" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-            <Setter Property="RenderTransform">
-                <Setter.Value>
-                    <ScaleTransform ScaleX="1" ScaleY="1" />
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Grid Background="Transparent">
-                            <!-- Animated Sun Grid -->
-                            <Grid x:Name="SunGrid" Width="38" Height="38" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="SunScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                
-                                <!-- Sun Glow -->
-                                <Ellipse x:Name="SunGlow" Width="30" Height="30" Opacity="0.35">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="6" />
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFFFD700" Offset="0" />
-                                            <GradientStop Color="#00FFD700" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-                                
-                                <!-- Expanding Heatwave Flare (Solar Flare) -->
-                                <Ellipse x:Name="SunFlare" Width="20" Height="20" Stroke="#FFFFE082" StrokeThickness="1.5" Opacity="0" RenderTransformOrigin="0.5,0.5">
-                                    <Ellipse.RenderTransform>
-                                        <ScaleTransform x:Name="FlareScale" ScaleX="0.8" ScaleY="0.8" />
-                                    </Ellipse.RenderTransform>
-                                </Ellipse>
-
-                                <!-- Rotating Sun Rays (8-spoke premium vector path) -->
-                                <Path x:Name="SunRays" Stroke="#FFFFA500" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 19,5 L 19,9 M 19,29 L 19,33 M 5,19 L 9,19 M 29,19 L 33,19 M 9.1,9.1 L 11.9,11.9 M 28.9,28.9 L 26.1,26.1 M 9.1,28.9 L 11.9,26.1 M 28.9,9.1 L 26.1,11.9" RenderTransformOrigin="0.5,0.5">
-                                    <Path.RenderTransform>
-                                        <RotateTransform x:Name="SunRaysRotation" Angle="0" />
-                                    </Path.RenderTransform>
-                                </Path>
-
-                                <!-- Sun Core -->
-                                <Ellipse x:Name="SunCore" Width="14" Height="14" Fill="#FFFFD700">
-                                    <Ellipse.Effect>
-                                        <DropShadowEffect Color="#FFFFA500" BlurRadius="6" ShadowDepth="0" Opacity="0.8" />
-                                    </Ellipse.Effect>
-                                </Ellipse>
-                            </Grid>
-
-                            <!-- Animated Moon Grid -->
-                            <Grid x:Name="MoonGrid" Width="38" Height="38" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <RotateTransform x:Name="MoonRotation" Angle="0" />
-                                </Grid.RenderTransform>
-
-                                <!-- Moon Glow -->
-                                <Ellipse x:Name="MoonGlow" Width="30" Height="30" Opacity="0.25">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="8" />
-                                    </Ellipse.Effect>
-                                    <Ellipse.Fill>
-                                        <RadialGradientBrush>
-                                            <GradientStop Color="#FFAF52DE" Offset="0" />
-                                            <GradientStop Color="#00AF52DE" Offset="1" />
-                                        </RadialGradientBrush>
-                                    </Ellipse.Fill>
-                                </Ellipse>
-
-                                <!-- Twinkling Stars next to moon -->
-                                <Ellipse x:Name="Star1" Width="2.5" Height="2.5" Fill="White" Margin="24,8,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
-                                <Ellipse x:Name="Star2" Width="2" Height="2" Fill="White" Margin="8,22,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
-
-                                <!-- Crescent Moon Path (using Exclude CombinedGeometry) -->
-                                <Path Fill="#FFECEFF1" Stroke="#FFAFB0B2" StrokeThickness="0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Path.Data>
-                                        <CombinedGeometry GeometryCombineMode="Exclude">
-                                            <CombinedGeometry.Geometry1>
-                                                <EllipseGeometry Center="18,18" RadiusX="8" RadiusY="8" />
-                                            </CombinedGeometry.Geometry1>
-                                            <CombinedGeometry.Geometry2>
-                                                <EllipseGeometry Center="14,14" RadiusX="8" RadiusY="8" />
-                                            </CombinedGeometry.Geometry2>
-                                        </CombinedGeometry>
-                                    </Path.Data>
-                                    <Path.Effect>
-                                        <DropShadowEffect Color="#FFB0BEC5" BlurRadius="4" ShadowDepth="0" Opacity="0.6" />
-                                    </Path.Effect>
-                                </Path>
-                            </Grid>
-
-                            <!-- Default text/glyph content presenter -->
-                            <Border x:Name="DefaultPresenterBorder" Visibility="Visible">
-                                <ContentPresenter x:Name="ContentPresenter" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextBlock.FontFamily="Segoe MDL2 Assets" />
-                            </Border>
-                        </Grid>
-
-                        <ControlTemplate.Triggers>
-                            <!-- Sun Content Trigger -->
-                            <Trigger Property="Content" Value="&#xE706;">
-                                <Setter TargetName="SunGrid" Property="Visibility" Value="Visible" />
-                                <Setter TargetName="DefaultPresenterBorder" Property="Visibility" Value="Collapsed" />
-                            </Trigger>
-
-                            <!-- Moon Content Trigger -->
-                            <Trigger Property="Content" Value="&#xE708;">
-                                <Setter TargetName="MoonGrid" Property="Visibility" Value="Visible" />
-                                <Setter TargetName="DefaultPresenterBorder" Property="Visibility" Value="Collapsed" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <!-- Gentle hover scale effect, but NO background box or glow -->
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Foreground" Value="#EEEEEEEE" />
-                </Trigger>
-                <EventTrigger RoutedEvent="MouseEnter">
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.15" Duration="0:0:0.12" />
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.15" Duration="0:0:0.12" />
-                        </Storyboard>
-                    </BeginStoryboard>
-                </EventTrigger>
-                <EventTrigger RoutedEvent="MouseLeave">
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.1" />
-                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.1" />
-                        </Storyboard>
-                    </BeginStoryboard>
-                </EventTrigger>
-            </Style.Triggers>
-        </Style>
-    </Window.Resources>
-
-
-
-    <!-- ==================== MAIN TASKBAR (Black translucent background with GPU animated border) ==================== -->
-    <Border x:Name="TaskbarBorder"
-            Width="1920" Height="56"
-            Background="#B40B0B0B"
-            BorderThickness="3.8"
-            CornerRadius="8"
-            VerticalAlignment="Top" HorizontalAlignment="Stretch">
-        
-        <!-- Bottom border: Rotating LinearGradient -->
-        <Border.BorderBrush>
-            <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                <LinearGradientBrush.RelativeTransform>
-                    <RotateTransform x:Name="BorderRotate" Angle="0" CenterX="0.5" CenterY="0.5" />
-                </LinearGradientBrush.RelativeTransform>
-                <GradientStop Color="{DynamicResource BorderColor1}" Offset="0" />
-                <GradientStop Color="{DynamicResource BorderColor2}" Offset="0.5" />
-                <GradientStop Color="{DynamicResource BorderColor3}" Offset="1" />
-            </LinearGradientBrush>
-        </Border.BorderBrush>
-
-        <Grid x:Name="MainGrid" Margin="16,0">
-            <Grid.ColumnDefinitions>
-                <!-- Column 0: Left side (Launcher logo + spacing + open windows list) -->
-                <ColumnDefinition Width="Auto" />
-                <!-- Column 1: Middle (Centered Clock, Date, separator, battery, and media player) -->
-                <ColumnDefinition Width="*" />
-                <!-- Column 2: Right side (System Status Bar widgets) -->
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <!-- ===== LEFT: WallFlow Launcher & Open Windows List (Left aligned together) ===== -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                
-                <!-- Pinned Apps Button -->
-                <Button x:Name="PinnedAppsButton"
-                        Click="PinnedAppsButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="2,0"
-                        ToolTip="Aplicaciones Fijadas">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="AppsIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="AppsIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="AppsTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsPinnedFlyoutOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveAppsState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Wallpaper Local Gallery Button -->
-                <Button x:Name="LocalGalleryButton"
-                        Click="WallFlowLogoButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="4,0,0,0"
-                        ToolTip="Galería de Wallpapers">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="GalleryIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="GalleryIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="GalleryTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M21 15l-5-5L5 21"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsLocalGalleryOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveGalleryState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Wallpaper Online Gallery Button -->
-                <Button x:Name="OnlineGalleryButton"
-                        Click="OnlineGalleryButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="4,0,0,0"
-                        ToolTip="Galería Online">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="OnlineIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="OnlineIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="OnlineTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsOnlineGalleryOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveOnlineState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- YouTube Music Button -->
-                <Button x:Name="YouTubeMusicButton"
-                        Click="YouTubeMusicButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="4,0,0,0"
-                        ToolTip="YouTube Music">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="MusicIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="MusicIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="MusicTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M9 18V5l12-2v13 M6 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsYouTubeMusicOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveMusicState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- AI Assistant Button (ChatGPT & Gemini) -->
-                <Button x:Name="ChatGPTButton"
-                        Click="ChatGPTButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="4,0,0,0"
-                        ToolTip="Asistente IA (ChatGPT &amp; Gemini)">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="ChatGptIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="ChatGptIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="ChatGptTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M12 8V4H8 M4 8h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z M2 14h2 M20 14h2 M15 13v2 M9 13v2"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsAiAssistantOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveChatGptState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Settings Button -->
-                <Button x:Name="SettingsButton"
-                        Click="SettingsButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="2,0"
-                        ToolTip="Ajustes de Interfaz">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="SettingsIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="SettingsIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="SettingsTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M21 4h-7 M10 4H3 M21 12h-9 M8 12H3 M21 20h-5 M12 20H3 M14 2v4 M8 10v4 M16 18v4"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsSettingsOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActiveSettingsState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Separator between logo and apps -->
-                <Border x:Name="LeftAppsSeparator" Width="1" Height="16" Background="#20FFFFFF" Margin="10,0" VerticalAlignment="Center" />
-
-                <!-- open apps dock, left-aligned, original shape/color icons with permanent purple tiles -->
-                <ItemsControl x:Name="WindowsList" VerticalAlignment="Center">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="1,0">
-                                <!-- Window Icon Button -->
-                                <Button x:Name="WindowBtn"
-                                        Style="{StaticResource WindowIconButtonStyle}"
-                                        Click="WindowItemButton_Click"
-                                        ContextMenuOpening="WindowButton_ContextMenuOpening"
-                                        Tag="{Binding Hwnd}"
-                                        ToolTip="{Binding Title}">
-                                    <Button.ContextMenu>
-                                        <ContextMenu Opened="ContextMenu_Opened" Closed="ContextMenu_Closed">
-                                            <MenuItem Header="Restaurar" Click="ContextRestore_Click" />
-                                            <MenuItem Header="Minimizar" Click="ContextMinimize_Click" />
-                                            <Separator />
-                                            <MenuItem Header="Cerrar ventana" Click="ContextClose_Click" />
-                                            <Separator />
-                                            <MenuItem Header="Anclar al Dock" Click="ContextPin_Click" />
-                                            <Separator />
-                                            <MenuItem Header="Minimizar todas" Click="ContextMinimizeAll_Click" />
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                    
-                                    <!-- Active/Running Purple Tile wrapper -->
-                                    <Border x:Name="ActiveBorder"
-                                            BorderBrush="#10FFFFFF"
-                                            BorderThickness="1"
-                                            CornerRadius="8"
-                                            Padding="4"
-                                            Background="{DynamicResource AccentGlowBrush}">
-                                        
-                                        <!-- Original Shape & Color App Icon -->
-                                        <Image x:Name="WindowIcon"
-                                               Source="{Binding Icon}"
-                                               Width="24" Height="24"
-                                               Stretch="Uniform"
-                                               RenderOptions.BitmapScalingMode="HighQuality" />
-                                    </Border>
-                                </Button>
-                            </Grid>
-
-                            <DataTemplate.Triggers>
-                                <!-- Active window: Show active purple border (#AF52DE) and brighter background -->
-                                <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                    <Setter TargetName="ActiveBorder" Property="Background" Value="{DynamicResource AccentActiveBrush}" />
-                                    <Setter TargetName="ActiveBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                    <Setter TargetName="ActiveBorder" Property="BorderThickness" Value="1.5" />
-                                </DataTrigger>
-                                <!-- Minimized window: reduce icon opacity -->
-                                <DataTrigger Binding="{Binding IsMinimized}" Value="True">
-                                    <Setter TargetName="WindowBtn" Property="Opacity" Value="0.45" />
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-
-            <!-- ===== MIDDLE: Centered Media, Clock, Date, Separator & Larger Vertical Battery Widget ===== -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                
-                <!-- Media Player Widget (Compact pill style, appears when media plays) -->
-                <Border x:Name="MediaWidget"
-                        Background="Transparent"
-                        CornerRadius="14"
-                        Padding="10,4"
-                        Margin="0,0,14,0"
-                        VerticalAlignment="Center"
-                        Visibility="Collapsed"
-                        PreviewMouseLeftButtonDown="MediaWidget_MouseDown"
-                        Cursor="Hand"
-                        ToolTip="Controlador de Música (Clic para abrir Controles)">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <!-- Sound Waves Visualizer (Apple Music / iOS Symmetrical Pill Bars) -->
-                        <Grid Width="26" Height="24" Margin="0,0,8,0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Border x:Name="WaveBar1" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
-                                <Border x:Name="WaveBar2" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
-                                <Border x:Name="WaveBar3" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
-                                <Border x:Name="WaveBar4" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
-                                <Border x:Name="WaveBar5" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
-                                <Border x:Name="WaveBar6" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Track info -->
-                        <Grid VerticalAlignment="Center" Width="110">
-                            <!-- Song title & Artist -->
-                            <StackPanel x:Name="MediaInfoPanel" VerticalAlignment="Center" Margin="0,0,2,0">
-                                <TextBlock x:Name="MediaTitleText"
-                                           Text="Sin Reproducir"
-                                           Foreground="White"
-                                           FontFamily="{DynamicResource AppFontFamily}"
-                                           FontSize="10.5"
-                                           FontWeight="Bold"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock x:Name="MediaArtistText"
-                                           Text="Silencio"
-                                           Foreground="#85FFFFFF"
-                                           FontFamily="{DynamicResource AppFontFamily}"
-                                           FontSize="8.5"
-                                           FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis"
-                                           Margin="0,0.5,0,0" />
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- Separator between media and clock (visible when media widget is visible) -->
-                <Border x:Name="MediaSeparator" Width="1" Height="26" Background="#20FFFFFF" Margin="0,0,14,0" VerticalAlignment="Center" Visibility="Collapsed" />
-
-                <!-- Date/Time Stack -->
-                <StackPanel x:Name="ClockBlock" VerticalAlignment="Center" Cursor="Hand"
-                            PreviewMouseLeftButtonDown="ClockBlock_MouseDown"
-                            ToolTip="Ver Calendario">
-                    <!-- Date text (Uppercase, clean opacity) -->
-                    <TextBlock x:Name="DateText"
-                               Text="VIERNES, 3 DE JULIO"
-                               Foreground="#A0FFFFFF"
-                               FontFamily="{DynamicResource AppFontFamily}"
-                               FontSize="10"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center" />
-                    <!-- Time text (Large, bold, prominent white) -->
-                    <TextBlock x:Name="TimeText"
-                               Text="00:00:00"
-                               Foreground="#FFFFFFFF"
-                               FontFamily="{DynamicResource AppFontFamily}"
-                               FontSize="15"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               Margin="0,1,0,0" />
-                </StackPanel>
-
-                <!-- Weather Button (Right of Clock) -->
-                 <Button x:Name="WeatherButton"
-                         Style="{StaticResource WeatherButtonStyle}"
-                         Content="&#xE706;" Click="WeatherButton_Click"
-                         ToolTip="Cargando clima..." Margin="10,0,0,0"
-                         FontSize="26" VerticalAlignment="Center" />
-
-
-
-                <!-- Separator between performance and battery -->
-                <Border x:Name="BatterySeparator" Width="1" Height="26" Background="#20FFFFFF" Margin="14,0" VerticalAlignment="Center" />
-
-                <!-- Custom Vector Battery (Vertical, larger size, next to the clock) -->
-                <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center" ToolTip="Estado de la Batería">
-                    <Grid VerticalAlignment="Center">
-                        <StackPanel VerticalAlignment="Center">
-                            <!-- Battery Tip -->
-                            <Border x:Name="BatteryTip" Width="4" Height="1.5"
-                                    Background="#FFFFFFFF"
-                                    CornerRadius="1,1,0,0"
-                                    HorizontalAlignment="Center" />
-                            <!-- Battery Outline Body (Vertical) -->
-                            <Border x:Name="BatteryOutline"
-                                    Width="14" Height="26"
-                                    BorderBrush="#FFFFFFFF"
-                                    BorderThickness="1"
-                                    CornerRadius="2.5"
-                                    Padding="1.5"
-                                    Background="Transparent"
-                                    HorizontalAlignment="Center"
-                                    Margin="0,0.5,0,0">
-                                <!-- Colored Fill progress bar (Vertical filling from bottom to top) -->
-                                <Border x:Name="BatteryFill"
-                                        Background="#FFFFFFFF"
-                                        CornerRadius="1"
-                                        VerticalAlignment="Bottom"
-                                        HorizontalAlignment="Stretch"
-                                        Height="21" />
-                            </Border>
-                        </StackPanel>
-                        <!-- Lightning Bolt Charging Overlay -->
-                        <TextBlock x:Name="BatteryChargeIndicator"
-                                   Text="&#xE945;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   Foreground="#34C759"
-                                   FontSize="8"
-                                   FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Margin="0,2,0,0"
-                                   Visibility="Collapsed" />
-                    </Grid>
-                    <!-- Battery percentage text (Styled matching battery height) -->
-                    <TextBlock x:Name="BatteryText" Text="--%"
-                               Foreground="#EEFFFFFF" FontFamily="{DynamicResource AppFontFamily}"
-                               FontSize="16" FontWeight="Bold"
-                               VerticalAlignment="Center" Margin="8,0,0,0" />
-                </StackPanel>
-
-            </StackPanel>
-
-            <!-- ===== RIGHT: System Status Bar (Clean volume, notifications, recycle bin, power) ===== -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <!-- Volume Button -->
-                <Button x:Name="VolumeButton"
-                        Click="VolumeButton_Click"
-                        PreviewMouseWheel="VolumeButton_PreviewMouseWheel"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="2,0"
-                        ToolTip="Volumen (Rueda del mouse cambia volumen)">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="VolumeIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="VolumeIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="VolumeTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-
-                                        <!-- Mute Slash -->
-                                        <Grid x:Name="MuteCross" Visibility="Collapsed">
-                                            <Path Stroke="Red" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 3,3 L 17,17" />
-                                        </Grid>
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="Content" Value="&#xE767;">
-                                    <Setter TargetName="MuteCross" Property="Visibility" Value="Collapsed" />
-                                </Trigger>
-
-                                <Trigger Property="Content" Value="&#xE74F;">
-                                    <Setter TargetName="MuteCross" Property="Visibility" Value="Visible" />
-                                </Trigger>
-
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsMutedActive}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Notifications Button -->
-                <Button x:Name="NotificationsButton"
-                        Click="NotificationsButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="2,0"
-                        ToolTip="Notificaciones">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="NotifyIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="NotifyIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="NotifyTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9 M10.3 21a1.94 1.94 0 0 0 3.4 0"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Separator -->
-                <Border x:Name="RightSeparator1" Width="1" Height="16" Background="#20FFFFFF" Margin="6,0" VerticalAlignment="Center" />
-
-                <!-- Show Desktop -->
-                <Button x:Name="ShowDesktopButton"
-                        Click="ShowDesktopButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="2,0"
-                        ToolTip="Mostrar Escritorio">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="DesktopIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="DesktopIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="DesktopTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M2 5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5z M8 21h8 M12 17v4"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-
-                <!-- Separator -->
-                <Border x:Name="RightSeparator2" Width="1" Height="16" Background="#20FFFFFF" Margin="6,0" VerticalAlignment="Center" />
-
-                <!-- Power Button -->
-                <Button x:Name="PowerButton"
-                        Click="PowerButton_Click"
-                        Width="42" Height="42"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Margin="2,0"
-                        ToolTip="Opciones de Energía">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Grid x:Name="PowerIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <ScaleTransform x:Name="PowerIconScale" ScaleX="1" ScaleY="1" />
-                                </Grid.RenderTransform>
-                                <Border x:Name="PowerTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Data="M12 2v10 M18.36 6.64a9 9 0 1 1-12.73 0"
-                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                                    </Canvas>
-                                </Viewbox>
-                            </Grid>
-
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Trigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.EnterActions>
-                                    <Trigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </Trigger.ExitActions>
-                                </Trigger>
-
-                                <DataTrigger Binding="{Binding IsPowerWindowOpen}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard Name="ActivePowerState">
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
-                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                </DataTrigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-            </StackPanel>
-        </Grid>
-    </Border>
-</Window>
+<Window x:Class="WallFlow.DockWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource WallFlowWindow}"
+        Title="WallFlow Dock"
+        Width="1920"
+        Height="56"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Loaded="Window_Loaded"
+        FontFamily="{DynamicResource AppFontFamily}">
+
+    <Window.Resources>
+        <!-- Storyboard for sound waves animation (Apple Music / iOS Symmetrical Pill Bars) -->
+        <Storyboard x:Key="SoundWavesPlaying" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="WaveBar1" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.2" To="0.9" Duration="0:0:0.38" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WaveBar2" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.3" To="1.0" Duration="0:0:0.46" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WaveBar3" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.15" To="0.85" Duration="0:0:0.32" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WaveBar4" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.25" To="0.95" Duration="0:0:0.52" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WaveBar5" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.2" To="0.75" Duration="0:0:0.40" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WaveBar6" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                             From="0.15" To="0.8" Duration="0:0:0.35" AutoReverse="True">
+                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- ==================== WINDOW ICON BUTTON (macOS style: no box, pure scale) ==================== -->
+        <Style x:Key="WindowIconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="42" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <!-- Smooth macOS-like hover scale animation -->
+            <!-- Smooth macOS-like hover scale animation with elastic bounce -->
+            <Style.Triggers>
+                <EventTrigger RoutedEvent="MouseEnter">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.22" Duration="0:0:0.35">
+                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.22" Duration="0:0:0.35">
+                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="MouseLeave">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.30">
+                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="5" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.30">
+                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="5" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="PreviewMouseDown">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="0.88" Duration="0:0:0.06" />
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="0.88" Duration="0:0:0.06" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="PreviewMouseUp">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.30">
+                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.30">
+                                <DoubleAnimation.EasingFunction><ElasticEase EasingMode="EaseOut" Oscillations="1" Springiness="4" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Style.Triggers>
+        </Style>
+
+
+        <!-- ==================== WEATHER BUTTON STYLE (No hover box, hand cursor, large) ==================== -->
+        <Style x:Key="WeatherButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <!-- Animated Sun Grid -->
+                            <Grid x:Name="SunGrid" Width="38" Height="38" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="SunScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                
+                                <!-- Sun Glow -->
+                                <Ellipse x:Name="SunGlow" Width="30" Height="30" Opacity="0.35">
+                                    <Ellipse.Effect>
+                                        <BlurEffect Radius="6" />
+                                    </Ellipse.Effect>
+                                    <Ellipse.Fill>
+                                        <RadialGradientBrush>
+                                            <GradientStop Color="#FFFFD700" Offset="0" />
+                                            <GradientStop Color="#00FFD700" Offset="1" />
+                                        </RadialGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                                
+                                <!-- Expanding Heatwave Flare (Solar Flare) -->
+                                <Ellipse x:Name="SunFlare" Width="20" Height="20" Stroke="#FFFFE082" StrokeThickness="1.5" Opacity="0" RenderTransformOrigin="0.5,0.5">
+                                    <Ellipse.RenderTransform>
+                                        <ScaleTransform x:Name="FlareScale" ScaleX="0.8" ScaleY="0.8" />
+                                    </Ellipse.RenderTransform>
+                                </Ellipse>
+
+                                <!-- Rotating Sun Rays (8-spoke premium vector path) -->
+                                <Path x:Name="SunRays" Stroke="#FFFFA500" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 19,5 L 19,9 M 19,29 L 19,33 M 5,19 L 9,19 M 29,19 L 33,19 M 9.1,9.1 L 11.9,11.9 M 28.9,28.9 L 26.1,26.1 M 9.1,28.9 L 11.9,26.1 M 28.9,9.1 L 26.1,11.9" RenderTransformOrigin="0.5,0.5">
+                                    <Path.RenderTransform>
+                                        <RotateTransform x:Name="SunRaysRotation" Angle="0" />
+                                    </Path.RenderTransform>
+                                </Path>
+
+                                <!-- Sun Core -->
+                                <Ellipse x:Name="SunCore" Width="14" Height="14" Fill="#FFFFD700">
+                                    <Ellipse.Effect>
+                                        <DropShadowEffect Color="#FFFFA500" BlurRadius="6" ShadowDepth="0" Opacity="0.8" />
+                                    </Ellipse.Effect>
+                                </Ellipse>
+                            </Grid>
+
+                            <!-- Animated Moon Grid -->
+                            <Grid x:Name="MoonGrid" Width="38" Height="38" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <RotateTransform x:Name="MoonRotation" Angle="0" />
+                                </Grid.RenderTransform>
+
+                                <!-- Moon Glow -->
+                                <Ellipse x:Name="MoonGlow" Width="30" Height="30" Opacity="0.25">
+                                    <Ellipse.Effect>
+                                        <BlurEffect Radius="8" />
+                                    </Ellipse.Effect>
+                                    <Ellipse.Fill>
+                                        <RadialGradientBrush>
+                                            <GradientStop Color="#FFAF52DE" Offset="0" />
+                                            <GradientStop Color="#00AF52DE" Offset="1" />
+                                        </RadialGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+
+                                <!-- Twinkling Stars next to moon -->
+                                <Ellipse x:Name="Star1" Width="2.5" Height="2.5" Fill="White" Margin="24,8,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                                <Ellipse x:Name="Star2" Width="2" Height="2" Fill="White" Margin="8,22,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" />
+
+                                <!-- Crescent Moon Path (using Exclude CombinedGeometry) -->
+                                <Path Fill="#FFECEFF1" Stroke="#FFAFB0B2" StrokeThickness="0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Path.Data>
+                                        <CombinedGeometry GeometryCombineMode="Exclude">
+                                            <CombinedGeometry.Geometry1>
+                                                <EllipseGeometry Center="18,18" RadiusX="8" RadiusY="8" />
+                                            </CombinedGeometry.Geometry1>
+                                            <CombinedGeometry.Geometry2>
+                                                <EllipseGeometry Center="14,14" RadiusX="8" RadiusY="8" />
+                                            </CombinedGeometry.Geometry2>
+                                        </CombinedGeometry>
+                                    </Path.Data>
+                                    <Path.Effect>
+                                        <DropShadowEffect Color="#FFB0BEC5" BlurRadius="4" ShadowDepth="0" Opacity="0.6" />
+                                    </Path.Effect>
+                                </Path>
+                            </Grid>
+
+                            <!-- Default text/glyph content presenter -->
+                            <Border x:Name="DefaultPresenterBorder" Visibility="Visible">
+                                <ContentPresenter x:Name="ContentPresenter" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextBlock.FontFamily="Segoe MDL2 Assets" />
+                            </Border>
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <!-- Sun Content Trigger -->
+                            <Trigger Property="Content" Value="&#xE706;">
+                                <Setter TargetName="SunGrid" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="DefaultPresenterBorder" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+
+                            <!-- Moon Content Trigger -->
+                            <Trigger Property="Content" Value="&#xE708;">
+                                <Setter TargetName="MoonGrid" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="DefaultPresenterBorder" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <!-- Gentle hover scale effect, but NO background box or glow -->
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#EEEEEEEE" />
+                </Trigger>
+                <EventTrigger RoutedEvent="MouseEnter">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.15" Duration="0:0:0.12" />
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.15" Duration="0:0:0.12" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+                <EventTrigger RoutedEvent="MouseLeave">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.0" Duration="0:0:0.1" />
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.0" Duration="0:0:0.1" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+
+
+    <!-- ==================== MAIN TASKBAR (Black translucent background with GPU animated border) ==================== -->
+    <Border x:Name="TaskbarBorder"
+            Width="1920" Height="56"
+            Background="#B40B0B0B"
+            BorderThickness="3.8"
+            CornerRadius="8"
+            VerticalAlignment="Top" HorizontalAlignment="Stretch">
+        
+        <!-- Bottom border: Rotating LinearGradient -->
+        <Border.BorderBrush>
+            <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                <LinearGradientBrush.RelativeTransform>
+                    <RotateTransform x:Name="BorderRotate" Angle="0" CenterX="0.5" CenterY="0.5" />
+                </LinearGradientBrush.RelativeTransform>
+                <GradientStop Color="{DynamicResource BorderColor1}" Offset="0" />
+                <GradientStop Color="{DynamicResource BorderColor2}" Offset="0.5" />
+                <GradientStop Color="{DynamicResource BorderColor3}" Offset="1" />
+            </LinearGradientBrush>
+        </Border.BorderBrush>
+
+        <Grid x:Name="MainGrid" Margin="16,0">
+            <Grid.ColumnDefinitions>
+                <!-- Column 0: Left side (Launcher logo + spacing + open windows list) -->
+                <ColumnDefinition Width="Auto" />
+                <!-- Column 1: Middle (Centered Clock, Date, separator, battery, and media player) -->
+                <ColumnDefinition Width="*" />
+                <!-- Column 2: Right side (System Status Bar widgets) -->
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ===== LEFT: WallFlow Launcher & Open Windows List (Left aligned together) ===== -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                
+                <!-- Pinned Apps Button -->
+                <Button x:Name="PinnedAppsButton"
+                        Click="PinnedAppsButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="2,0"
+                        ToolTip="Aplicaciones Fijadas">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="AppsIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="AppsIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="AppsTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsPinnedFlyoutOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActiveAppsState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="AppsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Wallpaper Local Gallery Button -->
+                <Button x:Name="LocalGalleryButton"
+                        Click="WallFlowLogoButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="4,0,0,0"
+                        ToolTip="Galería de Wallpapers">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="GalleryIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="GalleryIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="GalleryTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M21 15l-5-5L5 21"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsLocalGalleryOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActiveGalleryState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="GalleryIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Wallpaper Online Gallery Button -->
+                <Button x:Name="OnlineGalleryButton"
+                        Click="OnlineGalleryButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="4,0,0,0"
+                        ToolTip="Galería Online">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="OnlineIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="OnlineIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="OnlineTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsOnlineGalleryOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActiveOnlineState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="OnlineIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- YouTube Music Button -->
+                <Button x:Name="YouTubeMusicButton"
+                        Click="YouTubeMusicButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="4,0,0,0"
+                        ToolTip="YouTube Music">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="MusicIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="MusicIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="MusicTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M9 18V5l12-2v13 M6 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsYouTubeMusicOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActiveMusicState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="MusicIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- AI Assistant Button (ChatGPT & Gemini) -->
+                <Button x:Name="ChatGPTButton"
+                        Click="ChatGPTButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="4,0,0,0"
+                        ToolTip="Asistente IA (ChatGPT &amp; Gemini)">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="ChatGptIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="ChatGptIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="ChatGptTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M12 8V4H8 M4 8h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z M2 14h2 M20 14h2 M15 13v2 M9 13v2"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsAiAssistantOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActiveChatGptState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="ChatGptIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Settings Button -->
+                <Button x:Name="SettingsButton"
+                        Click="SettingsButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="2,0"
+                        ToolTip="Ajustes de Interfaz">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="SettingsIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="SettingsIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="SettingsTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M21 4h-7 M10 4H3 M21 12h-9 M8 12H3 M21 20h-5 M12 20H3 M14 2v4 M8 10v4 M16 18v4"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsSettingsOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActiveSettingsState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="SettingsIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Separator between logo and apps -->
+                <Border x:Name="LeftAppsSeparator" Width="1" Height="16" Background="#20FFFFFF" Margin="10,0" VerticalAlignment="Center" />
+
+                <!-- open apps dock, left-aligned, original shape/color icons with permanent purple tiles -->
+                <ItemsControl x:Name="WindowsList" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="1,0">
+                                <!-- Window Icon Button -->
+                                <Button x:Name="WindowBtn"
+                                        Style="{StaticResource WindowIconButtonStyle}"
+                                        Click="WindowItemButton_Click"
+                                        ContextMenuOpening="WindowButton_ContextMenuOpening"
+                                        Tag="{Binding Hwnd}"
+                                        ToolTip="{Binding Title}">
+                                    <Button.ContextMenu>
+                                        <ContextMenu Opened="ContextMenu_Opened" Closed="ContextMenu_Closed">
+                                            <MenuItem Header="Restaurar" Click="ContextRestore_Click" />
+                                            <MenuItem Header="Minimizar" Click="ContextMinimize_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Cerrar ventana" Click="ContextClose_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Anclar al Dock" Click="ContextPin_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Minimizar todas" Click="ContextMinimizeAll_Click" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    
+                                    <!-- Active/Running Purple Tile wrapper -->
+                                    <Border x:Name="ActiveBorder"
+                                            BorderBrush="#10FFFFFF"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="4"
+                                            Background="{DynamicResource AccentGlowBrush}">
+                                        
+                                        <!-- Original Shape & Color App Icon -->
+                                        <Image x:Name="WindowIcon"
+                                               Source="{Binding Icon}"
+                                               Width="24" Height="24"
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="HighQuality" />
+                                    </Border>
+                                </Button>
+                            </Grid>
+
+                            <DataTemplate.Triggers>
+                                <!-- Active window: Show active purple border (#AF52DE) and brighter background -->
+                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                    <Setter TargetName="ActiveBorder" Property="Background" Value="{DynamicResource AccentActiveBrush}" />
+                                    <Setter TargetName="ActiveBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter TargetName="ActiveBorder" Property="BorderThickness" Value="1.5" />
+                                </DataTrigger>
+                                <!-- Minimized window: reduce icon opacity -->
+                                <DataTrigger Binding="{Binding IsMinimized}" Value="True">
+                                    <Setter TargetName="WindowBtn" Property="Opacity" Value="0.45" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- ===== MIDDLE: Centered Media, Clock, Date, Separator & Larger Vertical Battery Widget ===== -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                
+                <!-- Media Player Widget (Dynamic Island / Apple Glass compact pill) -->
+                <Border x:Name="MediaWidget"
+                        Background="#16FFFFFF"
+                        BorderBrush="#25FFFFFF"
+                        BorderThickness="1"
+                        CornerRadius="15"
+                        Padding="10,4"
+                        Margin="0,0,14,0"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed"
+                        PreviewMouseLeftButtonDown="MediaWidget_MouseDown"
+                        Cursor="Hand"
+                        ToolTip="Controlador de Música (Clic para abrir Controles)">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Sound Waves Visualizer (Apple Music / iOS Symmetrical Pill Bars) -->
+                        <Grid Width="26" Height="24" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border x:Name="WaveBar1" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar2" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar3" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar4" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar5" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                                <Border x:Name="WaveBar6" Width="2.5" Height="18" CornerRadius="1.25" Margin="0.8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Background="{DynamicResource VisualizerWaveBrush}"><Border.RenderTransform><ScaleTransform ScaleY="0.2"/></Border.RenderTransform></Border>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Track info -->
+                        <Grid VerticalAlignment="Center" Width="110">
+                            <!-- Song title & Artist -->
+                            <StackPanel x:Name="MediaInfoPanel" VerticalAlignment="Center" Margin="0,0,2,0">
+                                <TextBlock x:Name="MediaTitleText"
+                                           Text="Sin Reproducir"
+                                           Foreground="White"
+                                           FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="10.5"
+                                           FontWeight="Bold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="MediaArtistText"
+                                           Text="Silencio"
+                                           Foreground="#85FFFFFF"
+                                           FontFamily="{DynamicResource AppFontFamily}"
+                                           FontSize="8.5"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,0.5,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Separator between media and clock (visible when media widget is visible) -->
+                <Border x:Name="MediaSeparator" Width="1" Height="26" Background="#20FFFFFF" Margin="0,0,14,0" VerticalAlignment="Center" Visibility="Collapsed" />
+
+                <!-- Date/Time Stack -->
+                <StackPanel x:Name="ClockBlock" VerticalAlignment="Center" Cursor="Hand"
+                            PreviewMouseLeftButtonDown="ClockBlock_MouseDown"
+                            ToolTip="Ver Calendario">
+                    <!-- Date text (Uppercase, clean opacity) -->
+                    <TextBlock x:Name="DateText"
+                               Text="VIERNES, 3 DE JULIO"
+                               Foreground="#A0FFFFFF"
+                               FontFamily="{DynamicResource AppFontFamily}"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center" />
+                    <!-- Time text (Large, bold, prominent white) -->
+                    <TextBlock x:Name="TimeText"
+                               Text="00:00:00"
+                               Foreground="#FFFFFFFF"
+                               FontFamily="{DynamicResource AppFontFamily}"
+                               FontSize="15"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Margin="0,1,0,0" />
+                </StackPanel>
+
+                <!-- Weather Button (Right of Clock) -->
+                 <Button x:Name="WeatherButton"
+                         Style="{StaticResource WeatherButtonStyle}"
+                         Content="&#xE706;" Click="WeatherButton_Click"
+                         ToolTip="Cargando clima..." Margin="10,0,0,0"
+                         FontSize="26" VerticalAlignment="Center" />
+
+
+
+                <!-- Separator between performance and battery -->
+                <Border x:Name="BatterySeparator" Width="1" Height="26" Background="#20FFFFFF" Margin="14,0" VerticalAlignment="Center" />
+
+                <!-- Custom Vector Battery (Vertical, larger size, next to the clock) -->
+                <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center" ToolTip="Estado de la Batería">
+                    <Grid VerticalAlignment="Center">
+                        <StackPanel VerticalAlignment="Center">
+                            <!-- Battery Tip -->
+                            <Border x:Name="BatteryTip" Width="4" Height="1.5"
+                                    Background="#FFFFFFFF"
+                                    CornerRadius="1,1,0,0"
+                                    HorizontalAlignment="Center" />
+                            <!-- Battery Outline Body (Vertical) -->
+                            <Border x:Name="BatteryOutline"
+                                    Width="14" Height="26"
+                                    BorderBrush="#FFFFFFFF"
+                                    BorderThickness="1"
+                                    CornerRadius="2.5"
+                                    Padding="1.5"
+                                    Background="Transparent"
+                                    HorizontalAlignment="Center"
+                                    Margin="0,0.5,0,0">
+                                <!-- Colored Fill progress bar (Vertical filling from bottom to top) -->
+                                <Border x:Name="BatteryFill"
+                                        Background="#FFFFFFFF"
+                                        CornerRadius="1"
+                                        VerticalAlignment="Bottom"
+                                        HorizontalAlignment="Stretch"
+                                        Height="21" />
+                            </Border>
+                        </StackPanel>
+                        <!-- Lightning Bolt Charging Overlay -->
+                        <TextBlock x:Name="BatteryChargeIndicator"
+                                   Text="&#xE945;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   Foreground="#34C759"
+                                   FontSize="8"
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Margin="0,2,0,0"
+                                   Visibility="Collapsed" />
+                    </Grid>
+                    <!-- Battery percentage text (Styled matching battery height) -->
+                    <TextBlock x:Name="BatteryText" Text="--%"
+                               Foreground="#EEFFFFFF" FontFamily="{DynamicResource AppFontFamily}"
+                               FontSize="16" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="8,0,0,0" />
+                </StackPanel>
+
+            </StackPanel>
+
+            <!-- ===== RIGHT: System Status Bar (Clean volume, notifications, recycle bin, power) ===== -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Volume Button -->
+                <Button x:Name="VolumeButton"
+                        Click="VolumeButton_Click"
+                        PreviewMouseWheel="VolumeButton_PreviewMouseWheel"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="2,0"
+                        ToolTip="Volumen (Rueda del mouse cambia volumen)">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="VolumeIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="VolumeIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="VolumeTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+
+                                        <!-- Mute Slash -->
+                                        <Grid x:Name="MuteCross" Visibility="Collapsed">
+                                            <Path Stroke="Red" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 3,3 L 17,17" />
+                                        </Grid>
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="Content" Value="&#xE767;">
+                                    <Setter TargetName="MuteCross" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+
+                                <Trigger Property="Content" Value="&#xE74F;">
+                                    <Setter TargetName="MuteCross" Property="Visibility" Value="Visible" />
+                                </Trigger>
+
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsMutedActive}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="VolumeIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Notifications Button -->
+                <Button x:Name="NotificationsButton"
+                        Click="NotificationsButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="2,0"
+                        ToolTip="Notificaciones">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="NotifyIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="NotifyIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="NotifyTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9 M10.3 21a1.94 1.94 0 0 0 3.4 0"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="NotifyIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Separator -->
+                <Border x:Name="RightSeparator1" Width="1" Height="16" Background="#20FFFFFF" Margin="6,0" VerticalAlignment="Center" />
+
+                <!-- Show Desktop -->
+                <Button x:Name="ShowDesktopButton"
+                        Click="ShowDesktopButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="2,0"
+                        ToolTip="Mostrar Escritorio">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="DesktopIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="DesktopIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="DesktopTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M2 5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5z M8 21h8 M12 17v4"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="DesktopIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Separator -->
+                <Border x:Name="RightSeparator2" Width="1" Height="16" Background="#20FFFFFF" Margin="6,0" VerticalAlignment="Center" />
+
+                <!-- Power Button -->
+                <Button x:Name="PowerButton"
+                        Click="PowerButton_Click"
+                        Width="42" Height="42"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Margin="2,0"
+                        ToolTip="Opciones de Energía">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="PowerIconGrid" Width="42" Height="42" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="PowerIconScale" ScaleX="1" ScaleY="1" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="PowerTileBadge" Width="32" Height="32" CornerRadius="16" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <Viewbox Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M12 2v10 M18.36 6.64a9 9 0 1 1-12.73 0"
+                                              Stroke="#D0FFFFFF" StrokeThickness="1.8" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+
+                                <DataTrigger Binding="{Binding IsPowerWindowOpen}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard Name="ActivePowerState">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.15" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.15" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleX" To="1.0" Duration="0:0:0.2" />
+                                                <DoubleAnimation Storyboard.TargetName="PowerIconScale" Storyboard.TargetProperty="ScaleY" To="1.0" Duration="0:0:0.2" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

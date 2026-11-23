@@ -39,56 +39,8 @@ public partial class MediaFlyoutWindow : Window, IWidget
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // Apply acrylic blur
-        BackdropHelper.ApplyAcrylic(this);
-        BackdropHelper.UpdateWindowRegion(this, 0);
-
-        // Position window relative to Media player section of the dock
-        if (DockWindow.Instance != null)
-        {
-            var screens = System.Windows.Forms.Screen.AllScreens;
-            var screenIndex = Math.Clamp(SettingsService.Instance.DockMonitorIndex, 0, screens.Length - 1);
-            var screen = screens[screenIndex];
-            var dpi = VisualTreeHelper.GetDpi(this);
-
-            double screenLeft = screen.Bounds.X / dpi.DpiScaleX;
-            double screenRight = (screen.Bounds.X + screen.Bounds.Width) / dpi.DpiScaleX;
-
-            Left = _targetLeft;
-
-            // Ensure window does not go off-screen on the target monitor
-            if (Left < screenLeft) Left = screenLeft + 10;
-            if (Left + Width > screenRight)
-            {
-                Left = screenRight - Width - 10;
-            }
-
-            bool isBottom = SettingsService.Instance.DockPosition == "Bottom";
-            double finalTop = isBottom 
-                ? DockWindow.Instance.Top - Height 
-                : DockWindow.Instance.Top + DockWindow.Instance.ActualHeight;
-
-            Top = isBottom ? finalTop + 15 : finalTop - 15;
-            Opacity = 0;
-
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-            var slide = new System.Windows.Media.Animation.DoubleAnimation(isBottom ? finalTop + 15 : finalTop - 15, finalTop, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-
-            BeginAnimation(OpacityProperty, fadeIn);
-            BeginAnimation(TopProperty, slide);
-        }
-        else
-        {
-            Left = _targetLeft;
-            bool isBottom = SettingsService.Instance.DockPosition == "Bottom";
-            Top = isBottom ? SystemParameters.PrimaryScreenHeight - Height - 56 : 56;
-        }
+        FlyoutWindowHelper.ApplyFlyoutStyle(this, RootBorder, 8);
+        FlyoutWindowHelper.PositionAndAnimateFlyout(this, _targetLeft);
 
         InitSessions();
     }
@@ -268,7 +220,7 @@ public partial class MediaFlyoutWindow : Window, IWidget
             {
                 TitleText.Text = GetAppFriendlyName(session);
                 ArtistText.Text = "Reproduciendo audio";
-                PlayPauseButton.Content = "\uE769";
+                PlayPauseButton.Content = "\uE12E";
                 BgImageBorder.Visibility = Visibility.Collapsed;
                 return;
             }
@@ -276,9 +228,9 @@ public partial class MediaFlyoutWindow : Window, IWidget
             TitleText.Text = props.Title;
             ArtistText.Text = props.Artist;
 
-            // Set play/pause button state (Play: \uE768, Pause: \uE769)
+            // Set play/pause button state (Play: \uE13C, Pause: \uE12E - Lucide Icons)
             bool isPlaying = playback != null && playback.PlaybackStatus == global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            PlayPauseButton.Content = isPlaying ? "\uE769" : "\uE768";
+            PlayPauseButton.Content = isPlaying ? "\uE12E" : "\uE13C";
 
             // Load album art thumbnail as background overlay
             if (props.Thumbnail != null)
@@ -358,6 +310,12 @@ public partial class MediaFlyoutWindow : Window, IWidget
 
     private async void Prev_Click(object sender, RoutedEventArgs e)
     {
+        if (YouTubeMusicWindow.Instance?.IsLoaded == true && YouTubeMusicWindow.Instance.HasActiveTrack)
+        {
+            await YouTubeMusicWindow.Instance.PreviousTrackAsync();
+            return;
+        }
+
         var session = CurrentSession;
         if (session != null)
         {
@@ -367,6 +325,12 @@ public partial class MediaFlyoutWindow : Window, IWidget
 
     private async void PlayPause_Click(object sender, RoutedEventArgs e)
     {
+        if (YouTubeMusicWindow.Instance?.IsLoaded == true && YouTubeMusicWindow.Instance.HasActiveTrack)
+        {
+            await YouTubeMusicWindow.Instance.TogglePlayPauseAsync();
+            return;
+        }
+
         var session = CurrentSession;
         if (session != null)
         {
@@ -391,6 +355,12 @@ public partial class MediaFlyoutWindow : Window, IWidget
 
     private async void Next_Click(object sender, RoutedEventArgs e)
     {
+        if (YouTubeMusicWindow.Instance?.IsLoaded == true && YouTubeMusicWindow.Instance.HasActiveTrack)
+        {
+            await YouTubeMusicWindow.Instance.NextTrackAsync();
+            return;
+        }
+
         var session = CurrentSession;
         if (session != null)
         {

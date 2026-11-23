@@ -16,6 +16,8 @@ public partial class SettingsViewModel : ObservableObject
 
     public void LoadFromSettings()
     {
+        EnableDock = _settings.EnableDock;
+        EnableSpotlight = _settings.EnableSpotlight;
         AutoHide = _settings.AutoHide;
         HideWindowsTaskbar = _settings.HideWindowsTaskbar;
         DockPosition = _settings.DockPosition;
@@ -39,6 +41,12 @@ public partial class SettingsViewModel : ObservableObject
         DockIconColorMode = _settings.DockIconColorMode;
         DockIconCustomColor = _settings.DockIconCustomColor;
     }
+
+    [ObservableProperty]
+    private bool _enableDock;
+
+    [ObservableProperty]
+    private bool _enableSpotlight;
 
     [ObservableProperty]
     private bool _autoHide;
@@ -102,6 +110,8 @@ public partial class SettingsViewModel : ObservableObject
 
     public void SaveToSettings()
     {
+        _settings.EnableDock = EnableDock;
+        _settings.EnableSpotlight = EnableSpotlight;
         _settings.AutoHide = AutoHide;
         _settings.HideWindowsTaskbar = HideWindowsTaskbar;
         _settings.DockPosition = DockPosition;

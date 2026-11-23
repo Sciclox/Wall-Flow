@@ -19,6 +19,8 @@ using WallFlow.Windows;
 using WallFlow.ViewModels;
 using NAudio.Wave;
 using System.Net.NetworkInformation;
+using WallFlow.Native;
+using static WallFlow.Native.NativeMethods;
 
 namespace WallFlow;
 
@@ -76,131 +78,9 @@ public partial class DockWindow : Window, IApplicationHost
 
     // ===== Win32 Structs =====
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT { public int Left, Top, Right, Bottom; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct APPBARDATA
-    {
-        public int cbSize; public IntPtr hWnd; public int uCallbackMessage;
-        public int uEdge; public RECT rc; public IntPtr lParam;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SYSTEM_POWER_STATUS
-    {
-        public byte ACLineStatus; public byte BatteryFlag; public byte BatteryLifePercent;
-        public byte SystemStatusFlag; public uint BatteryLifeTime; public uint BatteryFullLifeTime;
-    }
-
-    // ===== P/Invoke =====
-
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    private delegate bool EnumChildProc(IntPtr hwnd, IntPtr lParam);
-    private delegate void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
-
-    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr hwndParent, EnumChildProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hWnd, int uCmd);
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassNameW(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
-    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr hObject);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool QueryFullProcessImageNameW(IntPtr hProcess, int dwFlags, StringBuilder lpExeName, ref int lpdwSize);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string? lpszWindow);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern int GetApplicationUserModelId(IntPtr hProcess, ref uint AppUserModelIdLength, StringBuilder sb);
 
 
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct SHFILEOPSTRUCT
-    {
-        public IntPtr hwnd;
-        public uint wFunc;
-        [MarshalAs(UnmanagedType.LPWStr)]
-        public string pFrom;
-        [MarshalAs(UnmanagedType.LPWStr)]
-        public string? pTo;
-        public ushort fFlags;
-        public bool fAnyOperationsAborted;
-        public IntPtr hNameMappings;
-        [MarshalAs(UnmanagedType.LPWStr)]
-        public string? lpszProgressTitle;
-    }
-
-    private const uint FO_DELETE = 0x0003;
-    private const ushort FOF_ALLOWUNDO = 0x0040;
-    private const ushort FOF_NOCONFIRMATION = 0x0010;
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool AddClipboardFormatListener(IntPtr hwnd);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
-
-    private const int WM_CLIPBOARDUPDATE = 0x031D;
-    [DllImport("user32.dll", EntryPoint = "SendMessageW")] private static extern IntPtr SendMessageW(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-    [DllImport("user32.dll", EntryPoint = "PostMessageW")] private static extern bool PostMessageW(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-    [DllImport("user32.dll", EntryPoint = "GetClassLongW")] private static extern uint GetClassLong32(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] private static extern IntPtr GetClassLongPtr64(IntPtr hWnd, int nIndex);
-    [DllImport("shell32.dll")] private static extern uint SHAppBarMessage(int dwMessage, ref APPBARDATA pData);
-    [DllImport("user32.dll")] private static extern int RegisterWindowMessageW([MarshalAs(UnmanagedType.LPWStr)] string lpString);
-    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventProc lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
-    [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
-    [DllImport("kernel32.dll")] private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
-    [DllImport("user32.dll")] private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
-    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
-    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
-    private const uint GA_ROOTOWNER = 3;
-    private const int DWMWA_CLOAKED = 14;
-    private const int WM_COPYDATA = 0x004A;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct COPYDATASTRUCT
-    {
-        public IntPtr dwData;
-        public int cbData;
-        public IntPtr lpData;
-    }
-
-
-
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Win32Point
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out Win32Point lpPoint);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-    private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-    private const uint SWP_NOSIZE = 0x0001;
-    private const uint SWP_NOMOVE = 0x0002;
-    private const uint SWP_NOACTIVATE = 0x0010;
-    private const uint SWP_SHOWWINDOW = 0x0040;
-
-    private static int GetWindowLong(IntPtr hWnd, int nIndex) =>
-        IntPtr.Size == 8 ? (int)GetWindowLongPtr64(hWnd, nIndex) : GetWindowLong32(hWnd, nIndex);
+    // ===== P/Invoke (centralized in NativeMethods) =====
 
     private static IntPtr GetClassLongPtr(IntPtr hWnd, int nIndex) =>
         IntPtr.Size == 8 ? GetClassLongPtr64(hWnd, nIndex) : new IntPtr(GetClassLong32(hWnd, nIndex));
@@ -210,6 +90,134 @@ public partial class DockWindow : Window, IApplicationHost
     public void RecordWidgetClose(string widgetType)
     {
         WidgetManager.Instance.RecordWidgetClose(widgetType);
+    }
+
+    public void ToggleWidget(string widgetType)
+    {
+        WidgetManager.Instance.ToggleWidget(widgetType);
+    }
+
+    public void SearchMusic(string query)
+    {
+        PlayMusic(query, showWindow: true);
+    }
+
+    public void PlayMusic(string trackIdOrQuery, bool showWindow = false)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var win = Windows.YouTubeMusicWindow.Instance;
+            if (win == null || !win.IsLoaded)
+            {
+                win = new Windows.YouTubeMusicWindow();
+                HookYouTubeMusicWindow(win);
+            }
+            win.PlayMusic(trackIdOrQuery, showWindow);
+        });
+    }
+
+    public bool IsInternalMusicActive => Windows.YouTubeMusicWindow.Instance?.IsLoaded == true && Windows.YouTubeMusicWindow.Instance.HasActiveTrack;
+
+    public bool IsInternalMusicPlaying => Windows.YouTubeMusicWindow.Instance?.CurrentIsPlaying ?? false;
+
+    public string? InternalMusicTitle => Windows.YouTubeMusicWindow.Instance?.CurrentTitle;
+
+    public string? InternalMusicArtist => Windows.YouTubeMusicWindow.Instance?.CurrentArtist;
+
+    public string? InternalMusicTime => Windows.YouTubeMusicWindow.Instance?.CurrentTimeStr;
+
+    public double InternalMusicProgress => Windows.YouTubeMusicWindow.Instance?.CurrentProgress ?? 0;
+
+    public System.Windows.Media.ImageSource? InternalMusicArtwork => Windows.YouTubeMusicWindow.Instance?.CurrentArtwork;
+
+    public event EventHandler? InternalMusicStateChanged;
+
+    public void HookYouTubeMusicWindow(Windows.YouTubeMusicWindow win)
+    {
+        win.TrackChanged -= OnYouTubeMusicTrackChanged;
+        win.TrackChanged += OnYouTubeMusicTrackChanged;
+    }
+
+    private void OnYouTubeMusicTrackChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            InternalMusicStateChanged?.Invoke(this, EventArgs.Empty);
+            UpdateMediaDetails();
+
+            if (IsInternalMusicActive && IsInternalMusicPlaying)
+            {
+                try
+                {
+                    WallFlow.Windows.FloatingMediaOrbWindow.ShowOrb(
+                        InternalMusicTitle ?? "",
+                        InternalMusicArtist ?? "",
+                        InternalMusicArtwork,
+                        isPlaying: true);
+                }
+                catch { }
+            }
+        });
+    }
+
+    public async Task<bool> TogglePlayPauseMusicAsync()
+    {
+        var win = Windows.YouTubeMusicWindow.Instance;
+        if (win != null && win.IsLoaded)
+        {
+            return await win.TogglePlayPauseAsync();
+        }
+        return false;
+    }
+
+    public async Task NextMusicTrackAsync()
+    {
+        var win = Windows.YouTubeMusicWindow.Instance;
+        if (win != null && win.IsLoaded)
+        {
+            await win.NextTrackAsync();
+        }
+    }
+
+    public async Task PreviousMusicTrackAsync()
+    {
+        var win = Windows.YouTubeMusicWindow.Instance;
+        if (win != null && win.IsLoaded)
+        {
+            await win.PreviousTrackAsync();
+        }
+    }
+
+    public bool IsInternalMusicRepeat => Windows.YouTubeMusicWindow.Instance?.IsRepeatTrack ?? false;
+
+    public async Task<bool> ToggleRepeatMusicAsync(bool? forceState = null)
+    {
+        var win = Windows.YouTubeMusicWindow.Instance;
+        if (win != null && win.IsLoaded)
+        {
+            return await win.ToggleRepeatTrackAsync(forceState);
+        }
+        return false;
+    }
+
+    public async Task<string?> GetInternalMusicQueueJsonAsync()
+    {
+        var win = Windows.YouTubeMusicWindow.Instance;
+        if (win != null && win.IsLoaded)
+        {
+            return await win.GetQueueJsonAsync();
+        }
+        return null;
+    }
+
+    public async Task<bool> PlayInternalMusicQueueIndexAsync(int index, string? videoId = null)
+    {
+        var win = Windows.YouTubeMusicWindow.Instance;
+        if (win != null && win.IsLoaded)
+        {
+            return await win.PlayQueueTrackAsync(index, videoId);
+        }
+        return false;
     }
 
     public bool IsPinnedFlyoutOpen
@@ -262,8 +270,8 @@ public partial class DockWindow : Window, IApplicationHost
 
     // ===== Private Fields =====
 
-    private int _appBarMessageId;
-    private bool _isRegistered = false;
+    private int _appBarMessageId => WindowsAppBarService.Instance.CallbackMessageId;
+    private bool _isRegistered => WindowsAppBarService.Instance.IsRegistered;
     private readonly DispatcherTimer _clockTimer;
     private System.Windows.Threading.DispatcherTimer? _autoHideDelayTimer;
     private System.Windows.Threading.DispatcherTimer? _mousePollTimer;
@@ -307,16 +315,12 @@ public partial class DockWindow : Window, IApplicationHost
 
 
 
-    // Reference to toggle media controller flyout
-    private Windows.MediaFlyoutWindow? _mediaFlyoutWindow;
-
     // Media Playback Session variables (global:: to avoid namespace clashes)
     private global::Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager? _mediaSessionManager;
     private global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? _currentMediaSession;
     internal global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession? CurrentMediaSession => _currentMediaSession;
     private System.Threading.CancellationTokenSource? _mediaUpdateCts;
     private Storyboard? _soundWavesStoryboard;
-    private DispatcherTimer? _soundWaveRestartTimer;
     private bool _isMediaPlaying = false;
     private readonly DockViewModel _viewModel;
 
@@ -388,12 +392,21 @@ public partial class DockWindow : Window, IApplicationHost
         RegisterButtonHoverSounds(this);
 
         var s = Services.SettingsService.Instance;
+        if (!s.EnableDock)
+        {
+            Visibility = Visibility.Collapsed;
+            _isDockToggledVisible = false;
+        }
+
         if (s.HideWindowsTaskbar)
         {
             HideWindowsTaskbar();
         }
 
-        ApplyDockLocation();
+        if (s.EnableDock)
+        {
+            ApplyDockLocation();
+        }
         RefreshWindows();
 
         // Initialize Media Playback
@@ -527,6 +540,7 @@ public partial class DockWindow : Window, IApplicationHost
     public void RefreshWindows()
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(RefreshWindows); return; }
+        if (!Services.SettingsService.Instance.EnableDock) return;
 
         var rawActive = GetForegroundWindow();
         if (rawActive != IntPtr.Zero)
@@ -617,7 +631,7 @@ public partial class DockWindow : Window, IApplicationHost
         {
             return false;
         }
-        if (GetWindow(hwnd, GW_OWNER) != IntPtr.Zero) return false;
+        if (NativeMethods.GetWindow(hwnd, GW_OWNER) != IntPtr.Zero) return false;
         if ((GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) return false;
 
         // Filter out DWM cloaked windows (suspended UWP apps like settings or store)
@@ -687,70 +701,24 @@ public partial class DockWindow : Window, IApplicationHost
 
     // WinEvent hooks removed (moved to SystemCoordinator)
 
-    // ===== AppBar =====
+    // ===== AppBar & Taskbar (Delegated to WindowsAppBarService) =====
 
     private void RegisterAppBar()
     {
-        if (_isRegistered) return;
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero) return;
-        _appBarMessageId = RegisterWindowMessageW("WallFlowAppBarMessage");
-        var data = new APPBARDATA { cbSize = Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd, uCallbackMessage = _appBarMessageId };
-        SHAppBarMessage(ABM_NEW, ref data);
-        _isRegistered = true;
+        WindowsAppBarService.Instance.Register(this);
         SetAppBarPosition();
     }
 
     private void UnregisterAppBar()
     {
-        if (!_isRegistered) return;
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero) return;
-        var data = new APPBARDATA { cbSize = Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
-        SHAppBarMessage(ABM_REMOVE, ref data);
-        _isRegistered = false;
+        WindowsAppBarService.Instance.Unregister(this);
     }
 
-    // ===== Windows Taskbar Hide/Show =====
+    public void HideWindowsTaskbar() => WindowsAppBarService.Instance.HideWindowsTaskbar();
 
-    public void HideWindowsTaskbar()
-    {
-        try
-        {
-            var taskbar = FindWindow("Shell_TrayWnd", null);
-            if (taskbar != IntPtr.Zero && IsWindowVisible(taskbar)) 
-                ShowWindow(taskbar, SW_HIDE);
-            var secondary = FindWindow("Shell_SecondaryTrayWnd", null);
-            if (secondary != IntPtr.Zero && IsWindowVisible(secondary)) 
-                ShowWindow(secondary, SW_HIDE);
-        }
-        catch { /* ignored */ }
-    }
+    public void ShowWindowsTaskbar() => WindowsAppBarService.Instance.ShowWindowsTaskbar();
 
-    public void ShowWindowsTaskbar()
-    {
-        try
-        {
-            var taskbar = FindWindow("Shell_TrayWnd", null);
-            if (taskbar != IntPtr.Zero) ShowWindow(taskbar, SW_SHOW);
-            var secondary = FindWindow("Shell_SecondaryTrayWnd", null);
-                if (secondary != IntPtr.Zero) ShowWindow(secondary, SW_SHOW);
-        }
-        catch { /* ignored */ }
-    }
-
-    public void ApplyTaskbarVisibility()
-    {
-        var s = Services.SettingsService.Instance;
-        if (s.HideWindowsTaskbar)
-        {
-            HideWindowsTaskbar();
-        }
-        else
-        {
-            ShowWindowsTaskbar();
-        }
-    }
+    public void ApplyTaskbarVisibility() => WindowsAppBarService.Instance.ApplyTaskbarVisibility();
 
     private (System.Windows.Forms.Screen Screen, System.Windows.DpiScale Dpi) GetCurrentScreenInfo()
     {
@@ -790,50 +758,7 @@ public partial class DockWindow : Window, IApplicationHost
 
     private void SetAppBarPosition()
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero) return;
-        var s = Services.SettingsService.Instance;
-        var (screen, dpi) = GetCurrentScreenInfo();
-
-        int h = (int)Math.Round(s.DockHeight * dpi.DpiScaleY);
-        RECT rc;
-        int edge;
-
-        if (s.DockPosition == "Bottom")
-        {
-            rc = new RECT
-            {
-                Left = screen.Bounds.X,
-                Top = screen.Bounds.Y + screen.Bounds.Height - h,
-                Right = screen.Bounds.X + screen.Bounds.Width,
-                Bottom = screen.Bounds.Y + screen.Bounds.Height
-            };
-            edge = ABE_BOTTOM;
-        }
-        else
-        {
-            rc = new RECT
-            {
-                Left = screen.Bounds.X,
-                Top = screen.Bounds.Y,
-                Right = screen.Bounds.X + screen.Bounds.Width,
-                Bottom = screen.Bounds.Y + h
-            };
-            edge = ABE_TOP;
-        }
-
-        var data = new APPBARDATA { cbSize = Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd, uEdge = edge, rc = rc };
-        SHAppBarMessage(ABM_QUERYPOS, ref data);
-        SHAppBarMessage(ABM_SETPOS, ref data);
-        Left = data.rc.Left / dpi.DpiScaleX; Top = data.rc.Top / dpi.DpiScaleY;
-        Width = (data.rc.Right - data.rc.Left) / dpi.DpiScaleX; Height = (data.rc.Bottom - data.rc.Top) / dpi.DpiScaleY;
-        TaskbarBorder.Width = Width;
-        TaskbarBorder.Height = Height;
-
-        if (s.HideWindowsTaskbar)
-        {
-            HideWindowsTaskbar();
-        }
+        WindowsAppBarService.Instance.SetPosition(this, TaskbarBorder);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -877,8 +802,8 @@ public partial class DockWindow : Window, IApplicationHost
     {
         _statusUpdateCounter++;
 
-        // If we are suspended for game mode, do not waste CPU updating UI clocks/battery/recycle bin
-        if (_isSuspendedForGameMode)
+        // If we are suspended for game mode or dock is disabled, do not waste CPU updating UI clocks/battery/recycle bin
+        if (_isSuspendedForGameMode || !Services.SettingsService.Instance.EnableDock)
         {
             return;
         }
@@ -926,7 +851,7 @@ public partial class DockWindow : Window, IApplicationHost
         }
 
         // --- Dock Icon Visibilities ---
-        PinnedAppsButton.Visibility = s.ShowIconPinnedApps ? Visibility.Visible : Visibility.Collapsed;
+        PinnedAppsButton.Visibility = (s.EnableSpotlight && s.ShowIconPinnedApps) ? Visibility.Visible : Visibility.Collapsed;
         LocalGalleryButton.Visibility = s.ShowIconLocalGallery ? Visibility.Visible : Visibility.Collapsed;
         OnlineGalleryButton.Visibility = s.ShowIconOnlineGallery ? Visibility.Visible : Visibility.Collapsed;
         YouTubeMusicButton.Visibility = s.ShowIconYouTubeMusic ? Visibility.Visible : Visibility.Collapsed;
@@ -1171,6 +1096,34 @@ public partial class DockWindow : Window, IApplicationHost
             return;
         }
 
+        if (IsInternalMusicActive)
+        {
+            var title = InternalMusicTitle;
+            if (!string.IsNullOrEmpty(title))
+            {
+                MediaWidget.Visibility = Visibility.Visible;
+                MediaSeparator.Visibility = Visibility.Visible;
+                MediaTitleText.Text = title;
+                MediaArtistText.Text = InternalMusicArtist ?? "YouTube Music";
+                _isMediaPlaying = IsInternalMusicPlaying;
+                UpdateSoundWavesAnimationState();
+
+                if (_isMediaPlaying)
+                {
+                    try
+                    {
+                        WallFlow.Windows.FloatingMediaOrbWindow.ShowOrb(
+                            title,
+                            InternalMusicArtist ?? "",
+                            InternalMusicArtwork,
+                            isPlaying: true);
+                    }
+                    catch { }
+                }
+                return;
+            }
+        }
+
         if (session == null)
         {
             HideMediaWidget();
@@ -1202,6 +1155,20 @@ public partial class DockWindow : Window, IApplicationHost
 
             // Control animated sound waves
             UpdateSoundWavesAnimationState();
+
+            if (_isMediaPlaying && !string.IsNullOrWhiteSpace(props.Title))
+            {
+                try
+                {
+                    WallFlow.Windows.FloatingMediaOrbWindow.ShowOrb(
+                        props.Title,
+                        props.Artist ?? "",
+                        null,
+                        true,
+                        session);
+                }
+                catch { }
+            }
         }
         catch
         {
@@ -1701,6 +1668,8 @@ public partial class DockWindow : Window, IApplicationHost
                             Application.Current.Resources["AccentHoverColor"] = color1;
                             Application.Current.Resources["AccentBrush"] = new SolidColorBrush(color2);
                             Application.Current.Resources["AccentHoverBrush"] = new SolidColorBrush(color1);
+                            Application.Current.Resources["AccentHoverTileBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, color1.R, color1.G, color1.B));
+                            Application.Current.Resources["AccentHoverBorderBrush"] = System.Windows.Media.Brushes.Transparent;
                             Application.Current.Resources["AccentGlowBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, color2.R, color2.G, color2.B));
                             Application.Current.Resources["AccentActiveBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, color2.R, color2.G, color2.B));
 
@@ -1762,6 +1731,8 @@ public partial class DockWindow : Window, IApplicationHost
         Application.Current.Resources["AccentHoverColor"] = c1;
         Application.Current.Resources["AccentBrush"] = new SolidColorBrush(c2);
         Application.Current.Resources["AccentHoverBrush"] = new SolidColorBrush(c1);
+        Application.Current.Resources["AccentHoverTileBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, c1.R, c1.G, c1.B));
+        Application.Current.Resources["AccentHoverBorderBrush"] = System.Windows.Media.Brushes.Transparent;
         Application.Current.Resources["AccentGlowBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, c2.R, c2.G, c2.B));
         Application.Current.Resources["AccentActiveBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, c2.R, c2.G, c2.B));
 
@@ -1950,6 +1921,8 @@ public partial class DockWindow : Window, IApplicationHost
                 Application.Current.Resources["AccentHoverColor"] = hover;
                 Application.Current.Resources["AccentBrush"] = new SolidColorBrush(accent);
                 Application.Current.Resources["AccentHoverBrush"] = new SolidColorBrush(hover);
+                Application.Current.Resources["AccentHoverTileBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, hover.R, hover.G, hover.B));
+                Application.Current.Resources["AccentHoverBorderBrush"] = System.Windows.Media.Brushes.Transparent;
                 Application.Current.Resources["AccentGlowBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
                 Application.Current.Resources["AccentActiveBrush"] = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x65, accent.R, accent.G, accent.B));
 
@@ -1985,10 +1958,15 @@ public partial class DockWindow : Window, IApplicationHost
             }
             else
             {
-                var defaultBrush = Application.Current.Resources["AccentBrush"] as Brush 
-                    ?? new SolidColorBrush(Color.FromRgb(0xAF, 0x52, 0xDE));
-                try { Application.Current.Resources["DockBorderBrush"] = defaultBrush; } catch { }
-                if (TaskbarBorder != null) TaskbarBorder.BorderBrush = defaultBrush;
+                var bc1 = Application.Current.Resources["BorderColor1"] as Color? ?? Color.FromRgb(0x00, 0x7A, 0xFF);
+                var bc2 = Application.Current.Resources["BorderColor2"] as Color? ?? Color.FromRgb(0x58, 0x56, 0xD6);
+                var bc3 = Application.Current.Resources["BorderColor3"] as Color? ?? Color.FromRgb(0xAF, 0x52, 0xDE);
+                var lgb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+                lgb.GradientStops.Add(new GradientStop(bc1, 0));
+                lgb.GradientStops.Add(new GradientStop(bc2, 0.5));
+                lgb.GradientStops.Add(new GradientStop(bc3, 1));
+                try { Application.Current.Resources["DockBorderBrush"] = lgb; } catch { }
+                if (TaskbarBorder != null) TaskbarBorder.BorderBrush = lgb;
             }
 
             // Apply dock icon theme and color styling
@@ -2002,20 +1980,16 @@ public partial class DockWindow : Window, IApplicationHost
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ApplyDockIconThemeAndColor)); return; }
         try
         {
-            Brush restBadgeBg = Brushes.Transparent;
-            Brush hoverBadgeBg = new SolidColorBrush(Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
-
             Button[] buttons = new[]
             {
                 PinnedAppsButton, LocalGalleryButton, OnlineGalleryButton, YouTubeMusicButton,
-                SettingsButton, VolumeButton, NotificationsButton, ShowDesktopButton, PowerButton
+                ChatGPTButton, SettingsButton, VolumeButton, NotificationsButton, ShowDesktopButton, PowerButton
             };
 
             foreach (var btn in buttons)
             {
                 if (btn == null) continue;
                 btn.ApplyTemplate();
-                btn.Tag = Tuple.Create(restBadgeBg, hoverBadgeBg);
 
                 btn.MouseEnter -= Button_Glow_MouseEnter;
                 btn.MouseEnter += Button_Glow_MouseEnter;
@@ -2042,10 +2016,9 @@ public partial class DockWindow : Window, IApplicationHost
 
                     if (child is Border b && (b.Name.EndsWith("TileBadge") || b.Name == "TileBadge"))
                     {
-                        b.Background = restBadgeBg;
+                        b.Background = Brushes.Transparent;
                         b.BorderBrush = Brushes.Transparent;
                         b.BorderThickness = new Thickness(0);
-                        b.CornerRadius = new CornerRadius(16);
                     }
 
                     if ((child is System.Windows.Shapes.Ellipse || child is Border) && elemName.EndsWith("Glow"))
@@ -2063,12 +2036,15 @@ public partial class DockWindow : Window, IApplicationHost
 
     private void Button_Glow_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is Tuple<Brush, Brush> t)
+        if (sender is Button btn)
         {
-            var badge = FindVisualChildren<Border>(btn).FirstOrDefault(x => x.Name.EndsWith("TileBadge") || x.Name == "TileBadge");
+            var badge = FindVisualChildren<Border>(btn).FirstOrDefault(x => x.Name.EndsWith("TileBadge") || x.Name == "TileBadge" || x.Name == "ActiveBorder");
             if (badge != null)
             {
-                badge.Background = t.Item2;
+                var hoverBrush = Application.Current.Resources["AccentHoverTileBrush"] as Brush 
+                    ?? new SolidColorBrush(Color.FromArgb(0x65, 0xC5, 0x7B, 0xFA));
+                badge.Background = hoverBrush;
+                badge.BorderThickness = new Thickness(0);
             }
             var tb = FindVisualChildren<TextBlock>(btn).FirstOrDefault(x => x.Name == "IconStyle_Minimal");
             if (tb != null)
@@ -2080,12 +2056,13 @@ public partial class DockWindow : Window, IApplicationHost
 
     private void Button_Glow_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is Tuple<Brush, Brush> t)
+        if (sender is Button btn)
         {
-            var badge = FindVisualChildren<Border>(btn).FirstOrDefault(x => x.Name.EndsWith("TileBadge") || x.Name == "TileBadge");
+            var badge = FindVisualChildren<Border>(btn).FirstOrDefault(x => x.Name.EndsWith("TileBadge") || x.Name == "TileBadge" || x.Name == "ActiveBorder");
             if (badge != null)
             {
-                badge.Background = t.Item1;
+                badge.Background = Brushes.Transparent;
+                badge.BorderThickness = new Thickness(0);
             }
             var tb = FindVisualChildren<TextBlock>(btn).FirstOrDefault(x => x.Name == "IconStyle_Minimal");
             if (tb != null)
@@ -2145,7 +2122,7 @@ public partial class DockWindow : Window, IApplicationHost
     internal void CheckAutoHide()
     {
         var s = Services.SettingsService.Instance;
-        if (!s.AutoHide) return;
+        if (!s.EnableDock || !s.AutoHide) return;
 
         // Clear manual override when no widgets/settings windows are open
         if (!WidgetManager.Instance.IsAnyWidgetOpen())
@@ -2244,7 +2221,7 @@ public partial class DockWindow : Window, IApplicationHost
         }
     }
 
-    [DllImport("user32.dll", EntryPoint = "FindWindowW", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowW(string? lpClassName, string? lpWindowName);
+
 
     private static bool IsWindowCloaked(IntPtr hwnd)
     {
@@ -2326,7 +2303,7 @@ public partial class DockWindow : Window, IApplicationHost
         try
         {
             var s = Services.SettingsService.Instance;
-            if (_isSuspendedForGameMode) return;
+            if (_isSuspendedForGameMode || !s.EnableDock) return;
             if (Visibility != Visibility.Visible) return;
 
             if (s.HideWindowsTaskbar)
@@ -2492,8 +2469,8 @@ public partial class DockWindow : Window, IApplicationHost
         // Suspend wallpaper effects rendering to save CPU/GPU for gaming
         WidgetManager.Instance.StopWallpaperEffectsRendering();
  
-        // Close all auxiliary windows to save memory and avoid focus stealing
-        WidgetManager.Instance.CloseAllWidgets();
+        // Close all auxiliary windows to save memory and avoid focus stealing, but preserve Spotlight if open
+        WidgetManager.Instance.CloseAllWidgets(excludeSpotlight: true);
     }
 
     public void ResumeFromGameMode()
@@ -2534,6 +2511,7 @@ public partial class DockWindow : Window, IApplicationHost
     public void ToggleDockVisibility()
     {
         var s = Services.SettingsService.Instance;
+        if (!s.EnableDock) return;
         if (s.AutoHide)
         {
             // Toggle sliding position if auto-hide is enabled
@@ -2642,6 +2620,27 @@ public partial class DockWindow : Window, IApplicationHost
     private void OnSettingsChanged()
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(OnSettingsChanged)); return; }
+
+        var s = Services.SettingsService.Instance;
+        if (!s.EnableDock)
+        {
+            if (_isRegistered)
+            {
+                UnregisterAppBar();
+            }
+            StopSoundWaves();
+            _isDockToggledVisible = false;
+            _isManuallyKeptOpen = false;
+            Visibility = Visibility.Collapsed;
+            ApplyTaskbarVisibility();
+            ApplySpotlightSettings();
+            ForceReloadWallpaperEffects();
+            UpdateMousePollTimerState();
+            return;
+        }
+
+        Visibility = Visibility.Visible;
+        _isDockToggledVisible = true;
         ApplyWidgetVisibilities();
         ApplyDockLocation();
         ApplyTaskbarVisibility();
@@ -2658,6 +2657,7 @@ public partial class DockWindow : Window, IApplicationHost
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ApplyDockLocation)); return; }
 
         var s = Services.SettingsService.Instance;
+        if (!s.EnableDock) return;
         var (screen, dpi) = GetCurrentScreenInfo();
 
         if (s.AutoHide)
@@ -2731,7 +2731,7 @@ public partial class DockWindow : Window, IApplicationHost
     private void UpdateMousePollTimerState()
     {
         var s = Services.SettingsService.Instance;
-        if (s.AutoHide && !_isSuspendedForGameMode)
+        if (s.EnableDock && s.AutoHide && !_isSuspendedForGameMode)
         {
             if (_mousePollTimer != null && !_mousePollTimer.IsEnabled)
             {

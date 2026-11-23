@@ -14,6 +14,8 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using WallFlow.Native;
+using static WallFlow.Native.NativeMethods;
 
 namespace WallFlow;
 
@@ -57,134 +59,7 @@ public partial class LocalGalleryWindow : Window
         TimeSpan.FromHours(1),
     ];
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern int SystemParametersInfo(int uAction, int uParam, StringBuilder lpvParam, int fuWinIni);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowLong(IntPtr hwnd, int index);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowLong(IntPtr hwnd, int index, int dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern bool RedrawWindow(IntPtr hwnd, IntPtr rcUpdate, IntPtr hrgnUpdate, uint flags);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr hrgn, bool bRedraw);
-
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int cx, int cy);
-
-    [DllImport("gdi32.dll")]
-    private static extern int DeleteObject(IntPtr hrgn);
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-    private static extern uint RegisterWindowMessage(string lpString);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(POINT pt);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
-
-    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-    private const int DWMWCP_ROUND = 2;
-
-    private const uint RDW_INVALIDATE = 0x0001;
-    private const uint RDW_ERASE = 0x0004;
-    private const uint RDW_UPDATENOW = 0x0100;
-    private const uint RDW_ALLCHILDREN = 0x0080;
-
-    private const int WH_MOUSE_LL = 14;
-    private const int WM_MOUSEWHEEL = 0x020A;
-
-    private const int SPI_SETDESKWALLPAPER = 20;
-    private const int SPI_GETDESKWALLPAPER = 0x0073;
-    private const int SPIF_UPDATEINIFILE = 0x01;
-    private const int SPIF_SENDCHANGE = 0x02;
-
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
-    private const int WM_SETTINGCHANGE = 0x001A;
-    private const int WM_COPYDATA = 0x004A;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct COPYDATASTRUCT
-    {
-        public IntPtr dwData;
-        public int cbData;
-        public IntPtr lpData;
-    }
-
-    private enum AccentState
-    {
-        ACCENT_DISABLED = 0,
-        ACCENT_ENABLE_GRADIENT = 1,
-        ACCENT_ENABLE_BLURBEHIND = 3,
-        ACCENT_ENABLE_ACRYLICBLURBEHIND = 4
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AccentPolicy
-    {
-        public AccentState AccentState;
-        public int AccentFlags;
-        public int GradientColor;
-        public int AnimationId;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WindowCompositionAttributeData
-    {
-        public WindowCompositionAttribute Attribute;
-        public IntPtr Data;
-        public int SizeOfData;
-    }
-
-    private enum WindowCompositionAttribute
-    {
-        WCA_ACCENT_POLICY = 19
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int x;
-        public int y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MSLLHOOKSTRUCT
-    {
-        public POINT pt;
-        public int mouseData;
-        public int flags;
-        public int time;
-        public IntPtr dwExtraInfo;
-    }
-
-    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     private static readonly DependencyProperty ScrollOffsetProperty =
         DependencyProperty.Register("ScrollOffset", typeof(double), typeof(LocalGalleryWindow),
@@ -192,8 +67,6 @@ public partial class LocalGalleryWindow : Window
 
     private static LocalGalleryWindow? _instance;
     public static LocalGalleryWindow? Instance => _instance;
-    private static IntPtr _mouseHookId;
-    private static LowLevelMouseProc? _mouseProc;
 
     private double ScrollOffset
     {
@@ -227,6 +100,12 @@ public partial class LocalGalleryWindow : Window
         _sequentialIntervalIndex = Math.Clamp(s.SequentialIntervalIndex, 0, AutoIntervals.Length - 1);
         _randomIntervalIndex = Math.Clamp(s.RandomIntervalIndex, 0, AutoIntervals.Length - 1);
         ApplyAutoChangeState();
+
+        PreviewMouseWheel += (s, e) =>
+        {
+            HandleMouseWheel(e.Delta);
+            e.Handled = true;
+        };
     }
 
     private void OnIsVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
@@ -236,14 +115,9 @@ public partial class LocalGalleryWindow : Window
             var h = new WindowInteropHelper(this).Handle;
             if (h != IntPtr.Zero)
             {
-                RefreshBackdrop(h);
-                UpdateWindowRegion(h);
+                BackdropHelper.RefreshBackdrop(this);
+                BackdropHelper.UpdateWindowRegion(this, 8);
             }
-            InstallMouseHook();
-        }
-        else
-        {
-            UninstallMouseHook();
         }
     }
 
@@ -275,34 +149,8 @@ public partial class LocalGalleryWindow : Window
 
         UpdateBorderClip(null, null);
 
-        var dpi = VisualTreeHelper.GetDpi(this);
-        int pixelW = (int)Math.Round(w * dpi.DpiScaleX);
-        int pixelH = (int)Math.Round(h * dpi.DpiScaleY);
-        int radiusPx = (int)Math.Round(8 * dpi.DpiScaleX);
-        var rgn = CreateRoundRectRgn(0, 0, pixelW, pixelH, radiusPx, radiusPx);
-        if (rgn != IntPtr.Zero)
-        {
-            SetWindowRgn(hwnd, rgn, true);
-            DeleteObject(rgn);
-        }
-
-        RefreshBackdrop(hwnd);
-
-        if (IsVisible)
-        {
-            InstallMouseHook();
-        }
-
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            var wallpaper = GetCurrentWallpaper();
-            if (!string.IsNullOrEmpty(wallpaper) && File.Exists(wallpaper))
-            {
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, wallpaper,
-                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                RefreshBackdrop(hwnd);
-            }
-        }), DispatcherPriority.ApplicationIdle);
+        BackdropHelper.UpdateWindowRegion(this, 8);
+        BackdropHelper.RefreshBackdrop(this);
     }
 
     private void UpdateBorderClip(object? sender, RoutedEventArgs? e)
@@ -312,8 +160,7 @@ public partial class LocalGalleryWindow : Window
         RootBorder.Clip = new RectangleGeometry(new Rect(0, 0, w, h), 8, 8);
         Clip = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight), 8, 8);
 
-        var hwnd = new WindowInteropHelper(this).Handle;
-        UpdateWindowRegion(hwnd);
+        BackdropHelper.UpdateWindowRegion(this, 8);
     }
 
     public static void ChangeDirectory(string newDir)
@@ -338,53 +185,6 @@ public partial class LocalGalleryWindow : Window
         RefreshWallpapers();
     }
 
-    private void UpdateWindowRegion(IntPtr hwnd)
-    {
-        var dpi = VisualTreeHelper.GetDpi(this);
-        int pixelW = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
-        int pixelH = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
-        int radius = (int)Math.Round(8 * dpi.DpiScaleX);
-
-        var rgn = CreateRoundRectRgn(0, 0, pixelW, pixelH, radius, radius);
-        if (rgn != IntPtr.Zero)
-        {
-            SetWindowRgn(hwnd, rgn, true);
-            DeleteObject(rgn);
-        }
-    }
-
-    private static void ApplyAccent(IntPtr hwnd, AccentState state)
-    {
-        var accent = new AccentPolicy { AccentState = state };
-        var size = Marshal.SizeOf(accent);
-        var ptr = Marshal.AllocHGlobal(size);
-
-        try
-        {
-            Marshal.StructureToPtr(accent, ptr, false);
-
-            var data = new WindowCompositionAttributeData
-            {
-                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                Data = ptr,
-                SizeOfData = size
-            };
-
-            SetWindowCompositionAttribute(hwnd, ref data);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(ptr);
-        }
-    }
-
-    private static void RefreshBackdrop(IntPtr hwnd)
-    {
-        ApplyAccent(hwnd, AccentState.ACCENT_ENABLE_BLURBEHIND);
-        RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
-            RDW_INVALIDATE | RDW_UPDATENOW);
-    }
-
     public static void RefreshAllBackdrops()
     {
         if (!Application.Current.Dispatcher.CheckAccess())
@@ -396,9 +196,7 @@ public partial class LocalGalleryWindow : Window
         // 1. Refresh LocalGalleryWindow
         if (_instance != null)
         {
-            var hwnd = new WindowInteropHelper(_instance).Handle;
-            if (hwnd != IntPtr.Zero)
-                RefreshBackdrop(hwnd);
+            BackdropHelper.RefreshBackdrop(_instance);
         }
 
         // 2. Refresh DockWindow
@@ -421,9 +219,7 @@ public partial class LocalGalleryWindow : Window
 
     public static string GetCurrentWallpaper()
     {
-        var sb = new StringBuilder(260);
-        SystemParametersInfo(SPI_GETDESKWALLPAPER, sb.Capacity, sb, 0);
-        return sb.ToString();
+        return WallpaperTransitionService.GetCurrentWallpaperPath();
     }
 
     private void StartWatching()
@@ -483,13 +279,15 @@ public partial class LocalGalleryWindow : Window
                     .OrderBy(f => f)
                     .ToList();
 
+                var favs = Services.SettingsService.Instance.FavoriteWallpapers;
                 var temp = new List<WallpaperEntry>();
                 foreach (var file in files)
                 {
                     temp.Add(new WallpaperEntry
                     {
                         FilePath = file,
-                        FileName = Path.GetFileNameWithoutExtension(file)
+                        FileName = Path.GetFileNameWithoutExtension(file),
+                        IsFavorite = favs != null && favs.Contains(file)
                     });
                 }
 
@@ -530,47 +328,6 @@ public partial class LocalGalleryWindow : Window
         BeginAnimation(ScrollOffsetProperty, anim);
     }
 
-    private void InstallMouseHook()
-    {
-        _instance = this;
-        _mouseProc = MouseHookCallback;
-        var moduleHandle = GetModuleHandle(null);
-        _mouseHookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, moduleHandle, 0);
-    }
-
-    private void UninstallMouseHook()
-    {
-        if (_mouseHookId != IntPtr.Zero)
-        {
-            UnhookWindowsHookEx(_mouseHookId);
-            _mouseHookId = IntPtr.Zero;
-        }
-        _mouseProc = null;
-    }
-
-    private static IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-    {
-        if (nCode >= 0 && wParam.ToInt32() == WM_MOUSEWHEEL)
-        {
-            var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-            var instance = _instance;
-
-            if (instance?.IsVisible == true)
-            {
-                var ourHwnd = new WindowInteropHelper(instance).Handle;
-                var hwndUnderMouse = WindowFromPoint(hookStruct.pt);
-
-                if (hwndUnderMouse == ourHwnd || IsChild(ourHwnd, hwndUnderMouse))
-                {
-                    int delta = (short)(hookStruct.mouseData >> 16);
-                    instance.Dispatcher.BeginInvoke(new Action(() => instance.HandleMouseWheel(delta)));
-                    return new IntPtr(1);
-                }
-            }
-        }
-
-        return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
-    }
 
     private static void HideFromAltTab(IntPtr hwnd)
     {
@@ -594,14 +351,14 @@ public partial class LocalGalleryWindow : Window
                 return dir;
         }
 
-        var defaultDir = @"C:\Users\Lenovo\OneDrive\Imágenes\Wallpapers";
+        var picturesDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+        var defaultDir = Path.Combine(picturesDir, "Wallpapers");
 
-        if (!Directory.Exists(defaultDir))
-        {
-            var picturesDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-            if (Directory.Exists(picturesDir))
-                return picturesDir;
-        }
+        if (Directory.Exists(defaultDir))
+            return defaultDir;
+
+        if (Directory.Exists(picturesDir))
+            return picturesDir;
 
         return defaultDir;
     }
@@ -615,12 +372,14 @@ public partial class LocalGalleryWindow : Window
             .OrderBy(f => f)
             .ToList();
 
+        var favs = Services.SettingsService.Instance.FavoriteWallpapers;
         foreach (var file in files)
         {
             _wallpapers.Add(new WallpaperEntry
             {
                 FilePath = file,
-                FileName = Path.GetFileNameWithoutExtension(file)
+                FileName = Path.GetFileNameWithoutExtension(file),
+                IsFavorite = favs != null && favs.Contains(file)
             });
         }
 
@@ -643,6 +402,85 @@ public partial class LocalGalleryWindow : Window
             Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20))
         };
 
+        // Favorite badge
+        var favBadge = new Border
+        {
+            Width = 28,
+            Height = 28,
+            CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0)),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 8, 8, 0),
+            Visibility = entry.IsFavorite ? Visibility.Visible : Visibility.Collapsed,
+            Child = new TextBlock
+            {
+                Text = "⭐",
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+
+        border.Child = new Grid { Children = { favBadge } };
+
+        // Context Menu
+        var cm = new ContextMenu();
+
+        var miApply = new MenuItem { Header = "🖼️ Establecer como fondo" };
+        miApply.Click += (_, _) => ChangeWallpaper(entry);
+
+        var miFav = new MenuItem();
+        void UpdateFavHeader() => miFav.Header = entry.IsFavorite ? "★ Quitar de favoritos" : "☆ Marcar como favorito";
+        UpdateFavHeader();
+
+        miFav.Click += (_, _) =>
+        {
+            entry.IsFavorite = !entry.IsFavorite;
+            var favList = Services.SettingsService.Instance.FavoriteWallpapers;
+            if (entry.IsFavorite)
+            {
+                if (!favList.Contains(entry.FilePath))
+                    favList.Add(entry.FilePath);
+            }
+            else
+            {
+                favList.Remove(entry.FilePath);
+            }
+            Services.SettingsService.Save();
+            UpdateFavHeader();
+            favBadge.Visibility = entry.IsFavorite ? Visibility.Visible : Visibility.Collapsed;
+        };
+
+        var miOpenExplorer = new MenuItem { Header = "📁 Mostrar en el Explorador" };
+        miOpenExplorer.Click += (_, _) =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{entry.FilePath}\"");
+            }
+            catch { }
+        };
+
+        var miCopyPath = new MenuItem { Header = "📋 Copiar ruta del archivo" };
+        miCopyPath.Click += (_, _) =>
+        {
+            try
+            {
+                Clipboard.SetText(entry.FilePath);
+            }
+            catch { }
+        };
+
+        cm.Items.Add(miApply);
+        cm.Items.Add(new Separator());
+        cm.Items.Add(miFav);
+        cm.Items.Add(new Separator());
+        cm.Items.Add(miOpenExplorer);
+        cm.Items.Add(miCopyPath);
+
+        border.ContextMenu = cm;
+
         // Load image using ThumbnailCacheService (disk cache + ultra-fast thumbnail load)
         Task.Run(async () =>
         {
@@ -651,6 +489,7 @@ public partial class LocalGalleryWindow : Window
                 var bmp = await ThumbnailCacheService.Instance.GetThumbnailAsync(entry.FilePath, IMG_W * 2);
                 if (bmp != null)
                 {
+                    entry.Thumbnail = bmp;
                     _ = Dispatcher.BeginInvoke(new Action(() =>
                     {
                         border.Background = new ImageBrush(bmp)
@@ -687,9 +526,8 @@ public partial class LocalGalleryWindow : Window
             scale.BeginAnimation(ScaleTransform.ScaleYProperty, releaseAnim);
         };
 
-        border.MouseLeftButtonUp += async (_, _) =>
+        border.MouseLeftButtonUp += (_, _) =>
         {
-            await Task.Delay(120);
             ChangeWallpaper(entry);
         };
 
@@ -698,12 +536,6 @@ public partial class LocalGalleryWindow : Window
 
     private void ChangeWallpaper(WallpaperEntry entry)
     {
-        WallpaperTransitionService.ApplyWallpaperWithFade(entry.FilePath, async () =>
-        {
-            await Task.Delay(150);
-            RefreshAllBackdrops();
-        });
-
         // Sync index when wallpaper is manually changed
         _currentWallpaperIndex = _wallpapers.IndexOf(entry);
 
@@ -712,6 +544,11 @@ public partial class LocalGalleryWindow : Window
         {
             DockWindow.Instance.UpdateAccentColorFromWallpaper(entry.FilePath);
         }
+
+        WallpaperTransitionService.ApplyWallpaper(entry.FilePath, () =>
+        {
+            RefreshAllBackdrops();
+        });
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -994,7 +831,6 @@ public partial class LocalGalleryWindow : Window
         ApplicationEvents.RefreshRequested -= OnRefreshRequested;
         ApplicationEvents.DirectoryChanged -= ChangeDirectory;
         _autoTimer?.Stop();
-        UninstallMouseHook();
         _watcher?.Dispose();
         _debounceTimer?.Stop();
         _instance = null;

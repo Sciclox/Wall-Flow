@@ -1,3690 +1,7569 @@
 using System;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Controls;
+using System.Windows.Forms;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Markup;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using WallFlow.Native;
 using WallFlow.Services;
-using System.Linq;
+using WallFlow.Spotlight.Models;
+using WallFlow.Spotlight.Services;
+using Windows.Devices.Bluetooth;
+using Windows.Devices.Enumeration;
+using Windows.Gaming.Input;
+using Windows.Media.Control;
+using Windows.Media.Devices;
+using Windows.Storage.Streams;
+using Windows.UI.Notifications;
+using Windows.UI.Notifications.Management;
 
 namespace WallFlow.Windows;
 
-public partial class PinnedAppsWindow : Window, System.ComponentModel.INotifyPropertyChanged, IWidget
+public partial class PinnedAppsWindow : Window, INotifyPropertyChanged, IWidget
 {
-    string IWidget.Name => "PinnedApps";
-    public void Open() { Show(); Activate(); }
-    public bool IsOpen => IsLoaded && IsVisible;
-    public class PinnedApp : System.ComponentModel.INotifyPropertyChanged
-    {
-        private ImageSource? _icon;
-        private bool _isSelected;
-        private bool _isPinned;
-        private bool _isDragging;
-
-        public bool IsDragging
-        {
-            get => _isDragging;
-            set
-            {
-                _isDragging = value;
-                OnPropertyChanged(nameof(IsDragging));
-                OnPropertyChanged(nameof(Opacity));
-            }
-        }
-
-        public double Opacity => _isDragging ? 0.4 : 1.0;
-
-        public string Name { get; set; } = string.Empty;
-
-        private string _path = string.Empty;
-        public string Path
-        {
-            get => _path;
-            set
-            {
-                _path = value;
-                OnPropertyChanged(nameof(Path));
-                OnPropertyChanged(nameof(IsActionVisible));
-            }
-        }
-        
-        public ImageSource? Icon
-        {
-            get => _icon;
-            set
-            {
-                _icon = value;
-                OnPropertyChanged(nameof(Icon));
-                OnPropertyChanged(nameof(IsIconVisible));
-            }
-        }
-
-        public bool IsSelected
-        {
-            get => _isSelected;
-            set
-            {
-                _isSelected = value;
-                OnPropertyChanged(nameof(IsSelected));
-            }
-        }
-
-        public bool IsPinned
-        {
-            get => _isPinned;
-            set
-            {
-                _isPinned = value;
-                OnPropertyChanged(nameof(IsPinned));
-            }
-        }
-
-        public string FriendlyPath
-        {
-            get
-            {
-                if (Path.StartsWith("uwp:", StringComparison.OrdinalIgnoreCase))
-                {
-                    return "Aplicación de Windows Store";
-                }
-                if (Path == "ADD_APP")
-                {
-                    return "Anclar una aplicación personalizada al menú";
-                }
-                try
-                {
-                    var dir = System.IO.Path.GetDirectoryName(Path);
-                    if (string.IsNullOrEmpty(dir)) return Path;
-                    return dir;
-                }
-                catch { return Path; }
-            }
-        }
-
-        private bool _runAsAdmin;
-        public bool RunAsAdmin
-        {
-            get => _runAsAdmin;
-            set
-            {
-                _runAsAdmin = value;
-                OnPropertyChanged(nameof(RunAsAdmin));
-                OnPropertyChanged(nameof(ActionText));
-            }
-        }
-
-        private string? _actionText;
-        public string ActionText
-        {
-            get
-            {
-                if (!string.IsNullOrEmpty(_actionText)) return _actionText;
-                return IsClipboardItem ? "Copiar" : (RunAsAdmin ? "Admin" : "Ejecutar");
-            }
-            set
-            {
-                _actionText = value;
-                OnPropertyChanged(nameof(ActionText));
-            }
-        }
-
-        public string IconGlyph { get; set; } = string.Empty;
-        public bool IsGlyphVisible => !string.IsNullOrEmpty(IconGlyph);
-        public bool IsIconVisible => string.IsNullOrEmpty(IconGlyph) && Icon != null;
-        public bool IsActionVisible => Path != "ADD_APP" && !Path.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase);
-
-        private string? _subtitle;
-        public string? Subtitle
-        {
-            get => _subtitle;
-            set
-            {
-                _subtitle = value;
-                OnPropertyChanged(nameof(Subtitle));
-                OnPropertyChanged(nameof(IsSubtitleVisible));
-            }
-        }
-
-        public bool IsSubtitleVisible => !string.IsNullOrEmpty(Subtitle);
-        public DateTime? Timestamp { get; set; }
-
-        public Guid ClipboardId { get; set; } = Guid.Empty;
-        public string ClipboardType { get; set; } = string.Empty;
-        public bool IsClipboardItem => Path.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase);
-        public bool IsClipboardLink => IsClipboardItem && ClipboardType == "Link";
-        public bool IsClipboardFile => IsClipboardItem && ClipboardType == "File";
-        public bool IsClipboardText => IsClipboardItem && ClipboardType != "Link" && ClipboardType != "File" && ClipboardType != "Image";
-        public bool IsClipboardImage => IsClipboardItem && ClipboardType == "Image";
-
-        public bool IsAiItem => (ClipboardType != null && ClipboardType == "IA") ||
-                               (Path != null && (Path == "AI_LOADING" || Path == "AI_ERROR" || Path == "AI_EMPTY")) ||
-                               (Subtitle != null && Subtitle.StartsWith("Respuesta IA"));
-
-        public bool IsActionBadgeVisible => !IsAiItem && !IsClipboardItem && !string.IsNullOrEmpty(ActionText);
-
-        public bool IsPinnable => !IsAiItem && !string.IsNullOrEmpty(Path) && Path != "ADD_APP" && !Path.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase);
-
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-        protected void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    public ObservableCollection<PinnedApp> PinnedAppsList { get; } = new();
-    public ObservableCollection<PinnedApp> FavoritesList { get; } = new();
-    private System.Threading.CancellationTokenSource? _fileSearchCts;
-
-    private string _searchMode = "Apps"; // Apps, Files, Clipboard
-    public string CurrentSearchMode => _searchMode;
-
-    private Brush _modeAppsBrush = Brushes.Transparent;
-    public Brush ModeAppsBrush
-    {
-        get => _modeAppsBrush;
-        set { _modeAppsBrush = value; OnPropertyChanged(nameof(ModeAppsBrush)); }
-    }
-
-    private Brush _modeFilesBrush = Brushes.Transparent;
-    public Brush ModeFilesBrush
-    {
-        get => _modeFilesBrush;
-        set { _modeFilesBrush = value; OnPropertyChanged(nameof(ModeFilesBrush)); }
-    }
-
-    private Brush _modeClipboardBrush = Brushes.Transparent;
-    public Brush ModeClipboardBrush
-    {
-        get => _modeClipboardBrush;
-        set { _modeClipboardBrush = value; OnPropertyChanged(nameof(ModeClipboardBrush)); }
-    }
-
-    private Brush _modeAppsForegroundBrush = Brushes.White;
-    public Brush ModeAppsForegroundBrush
-    {
-        get => _modeAppsForegroundBrush;
-        set { _modeAppsForegroundBrush = value; OnPropertyChanged(nameof(ModeAppsForegroundBrush)); }
-    }
-
-    private Brush _modeFilesForegroundBrush = Brushes.White;
-    public Brush ModeFilesForegroundBrush
-    {
-        get => _modeFilesForegroundBrush;
-        set { _modeFilesForegroundBrush = value; OnPropertyChanged(nameof(ModeFilesForegroundBrush)); }
-    }
-
-    private Brush _modeClipboardForegroundBrush = Brushes.White;
-    public Brush ModeClipboardForegroundBrush
-    {
-        get => _modeClipboardForegroundBrush;
-        set { _modeClipboardForegroundBrush = value; OnPropertyChanged(nameof(ModeClipboardForegroundBrush)); }
-    }
-
-    private Brush _modeAiBrush = Brushes.Transparent;
-    public Brush ModeAiBrush
-    {
-        get => _modeAiBrush;
-        set { _modeAiBrush = value; OnPropertyChanged(nameof(ModeAiBrush)); }
-    }
-
-    private Brush _modeAiForegroundBrush = Brushes.White;
-    public Brush ModeAiForegroundBrush
-    {
-        get => _modeAiForegroundBrush;
-        set { _modeAiForegroundBrush = value; OnPropertyChanged(nameof(ModeAiForegroundBrush)); }
-    }
-
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
-    private const int MaxIconCacheSize = 200;
-    private readonly List<PinnedApp> _allInstalledApps = new();
-    private int _selectedIndex = -1;
-    private bool _isClosing = false;
-    private bool _isShowingDialog = false;
-    private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
-    private DateTime _loadedTime = DateTime.MinValue;
-    private bool _isChangingMode = false;
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool IsIconic(IntPtr hWnd);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr ProcessId);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-    private static extern uint GetCurrentThreadId();
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-    private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string? lpszWindow);
-
-    private const int SW_RESTORE = 9;
-    private const int SW_SHOW = 5;
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-    private struct SHFILEINFO
-    {
-        public IntPtr hIcon;
-        public int iIcon;
-        public uint dwAttributes;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string szDisplayName;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 80)]
-        public string szTypeName;
-    }
-
-    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, PreserveSig = true)]
-    private static extern int SHParseDisplayName(
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszName,
-        IntPtr pbc,
-        out IntPtr ppidl,
-        uint sfgaoIn,
-        out uint psfgaoOut);
-
-    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-    private static extern IntPtr SHGetFileInfo(
-        IntPtr ppidl,
-        uint dwFileAttributes,
-        ref SHFILEINFO psfi,
-        uint cbFileInfo,
-        uint uFlags);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-    private static extern bool DestroyIcon(IntPtr hIcon);
-
-    [System.Runtime.InteropServices.DllImport("ole32.dll")]
-    private static extern void CoTaskMemFree(IntPtr pv);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
-    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    private const uint SHGFI_PIDL = 0x000000008;
-    private const uint SHGFI_ICON = 0x000000100;
-    private const uint SHGFI_LARGEICON = 0x000000000;
-
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
-    private const int WS_EX_APPWINDOW  = 0x00040000;
-
-    private void ForceForeground()
-    {
-        try
-        {
-            var helper = new System.Windows.Interop.WindowInteropHelper(this);
-            IntPtr hWnd = helper.Handle;
-            if (hWnd == IntPtr.Zero) return;
-
-            IntPtr foregroundHWnd = GetForegroundWindow();
-            if (foregroundHWnd == hWnd) return;
-
-            uint foregroundThreadId = GetWindowThreadProcessId(foregroundHWnd, IntPtr.Zero);
-            uint currentThreadId = GetCurrentThreadId();
-
-            if (foregroundThreadId != currentThreadId && foregroundThreadId != 0)
-            {
-                AttachThreadInput(foregroundThreadId, currentThreadId, true);
-                SetForegroundWindow(hWnd);
-                AttachThreadInput(foregroundThreadId, currentThreadId, false);
-            }
-            else
-            {
-                SetForegroundWindow(hWnd);
-            }
-        }
-        catch { /* ignored */ }
-    }
-
-    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-    protected void OnPropertyChanged(string propertyName)
-    {
-        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
-    }
-
-    // Properties for Spotlight custom design
-    private Brush _spotlightBgBrush = Brushes.Transparent;
-    public Brush SpotlightBgBrush
-    {
-        get => _spotlightBgBrush;
-        set { _spotlightBgBrush = value; OnPropertyChanged(nameof(SpotlightBgBrush)); }
-    }
-
-    private Brush _spotlightBorderBrush = Brushes.Transparent;
-    public Brush SpotlightBorderBrush
-    {
-        get => _spotlightBorderBrush;
-        set { _spotlightBorderBrush = value; OnPropertyChanged(nameof(SpotlightBorderBrush)); }
-    }
-
-    private Thickness _spotlightBorderThickness = new Thickness(0);
-    public Thickness SpotlightBorderThickness
-    {
-        get => _spotlightBorderThickness;
-        set { _spotlightBorderThickness = value; OnPropertyChanged(nameof(SpotlightBorderThickness)); }
-    }
-
-    private Brush _spotlightTextBrush = Brushes.White;
-    public Brush SpotlightTextBrush
-    {
-        get => _spotlightTextBrush;
-        set { _spotlightTextBrush = value; OnPropertyChanged(nameof(SpotlightTextBrush)); }
-    }
-
-    private Brush _spotlightPlaceholderBrush = Brushes.Gray;
-    public Brush SpotlightPlaceholderBrush
-    {
-        get => _spotlightPlaceholderBrush;
-        set { _spotlightPlaceholderBrush = value; OnPropertyChanged(nameof(SpotlightPlaceholderBrush)); }
-    }
-
-    private Brush _spotlightIconBrush = Brushes.Gray;
-    public Brush SpotlightIconBrush
-    {
-        get => _spotlightIconBrush;
-        set { _spotlightIconBrush = value; OnPropertyChanged(nameof(SpotlightIconBrush)); }
-    }
-
-    private double _spotlightWidth = 600.0;
-    public double SpotlightWidth
-    {
-        get => _spotlightWidth;
-        set { _spotlightWidth = value; OnPropertyChanged(nameof(SpotlightWidth)); }
-    }
-
-    private CornerRadius _spotlightCornerRadius = new CornerRadius(27);
-    public CornerRadius SpotlightCornerRadius
-    {
-        get => _spotlightCornerRadius;
-        set { _spotlightCornerRadius = value; OnPropertyChanged(nameof(SpotlightCornerRadius)); }
-    }
-
-    private Visibility _spotlightFavoritesVisibility = Visibility.Visible;
-    public Visibility SpotlightFavoritesVisibility
-    {
-        get => _spotlightFavoritesVisibility;
-        set { _spotlightFavoritesVisibility = value; OnPropertyChanged(nameof(SpotlightFavoritesVisibility)); }
-    }
-
-    private Brush _spotlightSelectedBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x25, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightSelectedBackgroundBrush
-    {
-        get => _spotlightSelectedBackgroundBrush;
-        set { _spotlightSelectedBackgroundBrush = value; OnPropertyChanged(nameof(SpotlightSelectedBackgroundBrush)); }
-    }
-
-    private Brush _spotlightSelectedBorderBrush = Brushes.Transparent;
-    public Brush SpotlightSelectedBorderBrush
-    {
-        get => _spotlightSelectedBorderBrush;
-        set { _spotlightSelectedBorderBrush = value; OnPropertyChanged(nameof(SpotlightSelectedBorderBrush)); }
-    }
-
-    private Brush _spotlightHoverBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightHoverBackgroundBrush
-    {
-        get => _spotlightHoverBackgroundBrush;
-        set { _spotlightHoverBackgroundBrush = value; OnPropertyChanged(nameof(SpotlightHoverBackgroundBrush)); }
-    }
-
-    private Brush _spotlightHoverBorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightHoverBorderBrush
-    {
-        get => _spotlightHoverBorderBrush;
-        set { _spotlightHoverBorderBrush = value; OnPropertyChanged(nameof(SpotlightHoverBorderBrush)); }
-    }
-
-    private Brush _spotlightItemBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightItemBackgroundBrush
-    {
-        get => _spotlightItemBackgroundBrush;
-        set { _spotlightItemBackgroundBrush = value; OnPropertyChanged(nameof(SpotlightItemBackgroundBrush)); }
-    }
-
-    private Brush _spotlightItemForegroundBrush = new SolidColorBrush(Color.FromArgb(0xA5, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightItemForegroundBrush
-    {
-        get => _spotlightItemForegroundBrush;
-        set { _spotlightItemForegroundBrush = value; OnPropertyChanged(nameof(SpotlightItemForegroundBrush)); }
-    }
-
-    private Brush _spotlightSecondaryTextBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightSecondaryTextBrush
-    {
-        get => _spotlightSecondaryTextBrush;
-        set { _spotlightSecondaryTextBrush = value; OnPropertyChanged(nameof(SpotlightSecondaryTextBrush)); }
-    }
-
-    private Brush _spotlightSeparatorBrush = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
-    public Brush SpotlightSeparatorBrush
-    {
-        get => _spotlightSeparatorBrush;
-        set { _spotlightSeparatorBrush = value; OnPropertyChanged(nameof(SpotlightSeparatorBrush)); }
-    }
-
-    private Brush _spotlightSearchFocusBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0x22, 0x22, 0x26));
-    public Brush SpotlightSearchFocusBrush
-    {
-        get => _spotlightSearchFocusBrush;
-        set { _spotlightSearchFocusBrush = value; OnPropertyChanged(nameof(SpotlightSearchFocusBrush)); }
-    }
-
-    public void ApplySettings()
-    {
-        var s = SettingsService.Instance;
-
-        SpotlightWidth = s.SpotlightWidth > 0 ? s.SpotlightWidth : 600.0;
-        SpotlightCornerRadius = new CornerRadius(s.SpotlightCornerRadius >= 0 ? s.SpotlightCornerRadius : 27.0);
-        SpotlightFavoritesVisibility = s.SpotlightShowFavorites ? Visibility.Visible : Visibility.Collapsed;
-
-        if (s.SpotlightThemeMode == "Dock")
-        {
-            SpotlightBgBrush = Application.Current.Resources["DockBackgroundBrush"] as Brush 
-                               ?? TryFindResource("DockBackgroundBrush") as Brush 
-                               ?? new SolidColorBrush(Color.FromArgb(0xB4, 0x0B, 0x0B, 0x0B));
-
-            SpotlightBorderBrush = Application.Current.Resources["DockBorderBrush"] as Brush 
-                                   ?? TryFindResource("DockBorderBrush") as Brush 
-                                   ?? Brushes.Transparent;
-
-            SpotlightBorderThickness = new Thickness(s.SpotlightBorderThickness >= 0 ? s.SpotlightBorderThickness : 0.0);
-
-            SpotlightSelectedBorderBrush = Application.Current.Resources["AccentBrush"] as Brush 
-                                           ?? TryFindResource("AccentBrush") as Brush 
-                                           ?? new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xFF));
-
-            SpotlightSelectedBackgroundBrush = Application.Current.Resources["AccentActiveBrush"] as Brush 
-                                               ?? new SolidColorBrush(Color.FromArgb(0x25, 0xFF, 0xFF, 0xFF));
-
-            SpotlightTextBrush = Brushes.White;
-            SpotlightPlaceholderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF));
-            SpotlightIconBrush = new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF));
-
-            ApplySubBrushes(isLight: false);
-            SpotlightSearchFocusBrush = SpotlightBgBrush;
-        }
-        else if (s.SpotlightThemeMode == "Personalizado")
-        {
-            if (!string.IsNullOrEmpty(s.SpotlightBackgroundColor) && TryParseColor(s.SpotlightBackgroundColor, out var bgColor))
-                SpotlightBgBrush = new SolidColorBrush(bgColor);
-            else
-                SpotlightBgBrush = TryFindResource("DockBackgroundBrush") as Brush ?? new SolidColorBrush(Color.FromArgb(0xB4, 0x0B, 0x0B, 0x0B));
-
-            if (!string.IsNullOrEmpty(s.SpotlightBorderColor) && TryParseColor(s.SpotlightBorderColor, out var borderColor))
-                SpotlightBorderBrush = new SolidColorBrush(borderColor);
-            else
-                SpotlightBorderBrush = Brushes.Transparent;
-            SpotlightBorderThickness = new Thickness(s.SpotlightBorderThickness >= 0 ? s.SpotlightBorderThickness : 0.0);
-
-            if (!string.IsNullOrEmpty(s.SpotlightTextColor) && TryParseColor(s.SpotlightTextColor, out var textColor))
-                SpotlightTextBrush = new SolidColorBrush(textColor);
-            else
-                SpotlightTextBrush = Brushes.White;
-
-            if (!string.IsNullOrEmpty(s.SpotlightPlaceholderColor) && TryParseColor(s.SpotlightPlaceholderColor, out var placeholderColor))
-                SpotlightPlaceholderBrush = new SolidColorBrush(placeholderColor);
-            else
-                SpotlightPlaceholderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF));
-
-            if (!string.IsNullOrEmpty(s.SpotlightIconColor) && TryParseColor(s.SpotlightIconColor, out var iconColor))
-                SpotlightIconBrush = new SolidColorBrush(iconColor);
-            else
-                SpotlightIconBrush = new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF));
-
-            if (!string.IsNullOrEmpty(s.SpotlightAccentColor) && TryParseColor(s.SpotlightAccentColor, out var accentColor))
-            {
-                SpotlightSelectedBorderBrush = new SolidColorBrush(accentColor);
-                SpotlightSelectedBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x25, accentColor.R, accentColor.G, accentColor.B));
-            }
-            else
-            {
-                SpotlightSelectedBorderBrush = TryFindResource("AccentBrush") as Brush ?? new SolidColorBrush(Color.FromRgb(0x00, 0x7A, 0xFF));
-                SpotlightSelectedBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x25, 0xFF, 0xFF, 0xFF));
-            }
-
-            ApplyPersonalizadoBrush(s.SpotlightHoverBackgroundColor, v => SpotlightHoverBackgroundBrush = v, () => SpotlightHoverBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)));
-            ApplyPersonalizadoBrush(s.SpotlightHoverBorderColor, v => SpotlightHoverBorderBrush = v, () => SpotlightHoverBorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)));
-            ApplyPersonalizadoBrush(s.SpotlightItemBackgroundColor, v => SpotlightItemBackgroundBrush = v, () => SpotlightItemBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF)));
-            ApplyPersonalizadoBrush(s.SpotlightItemForegroundColor, v => SpotlightItemForegroundBrush = v, () => SpotlightItemForegroundBrush = new SolidColorBrush(Color.FromArgb(0xA5, 0xFF, 0xFF, 0xFF)));
-            ApplyPersonalizadoBrush(s.SpotlightSecondaryTextColor, v => SpotlightSecondaryTextBrush = v, () => SpotlightSecondaryTextBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF)));
-            ApplyPersonalizadoBrush(s.SpotlightSeparatorColor, v => SpotlightSeparatorBrush = v, () => SpotlightSeparatorBrush = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF)));
-            ApplyPersonalizadoBrush(s.SpotlightSearchFocusColor, v => SpotlightSearchFocusBrush = v, () => SpotlightSearchFocusBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0x22, 0x22, 0x26)));
-        }
-        else
-        {
-            ApplyThemePreset(s.SpotlightThemeMode);
-        }
-
-        // Note: each property setter already calls OnPropertyChanged, no need to re-notify
-    }
-
-    private static void ApplyPersonalizadoBrush(string? hexValue, Action<Brush> setter, Action fallback)
-    {
-        if (!string.IsNullOrEmpty(hexValue) && TryParseColor(hexValue, out var color))
-        {
-            setter(new SolidColorBrush(color));
-        }
-        else
-        {
-            fallback();
-        }
-    }
-
-    private void ApplySubBrushes(bool isLight)
-    {
-        if (isLight)
-        {
-            SpotlightHoverBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x15, 0x00, 0x00, 0x00));
-            SpotlightHoverBorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0x00, 0x00, 0x00));
-            SpotlightItemBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x12, 0x00, 0x00, 0x00));
-            SpotlightItemForegroundBrush = new SolidColorBrush(Color.FromArgb(0xA5, 0x00, 0x00, 0x00));
-            SpotlightSecondaryTextBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0x00, 0x00, 0x00));
-            SpotlightSeparatorBrush = new SolidColorBrush(Color.FromArgb(0x15, 0x00, 0x00, 0x00));
-            SpotlightSearchFocusBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xE6, 0xE6, 0xE6));
-        }
-        else
-        {
-            SpotlightHoverBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
-            SpotlightHoverBorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
-            SpotlightItemBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
-            SpotlightItemForegroundBrush = new SolidColorBrush(Color.FromArgb(0xA5, 0xFF, 0xFF, 0xFF));
-            SpotlightSecondaryTextBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF));
-            SpotlightSeparatorBrush = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
-            SpotlightSearchFocusBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0x22, 0x22, 0x26));
-        }
-    }
-
-    private record ThemePreset(
-        Color Background,
-        Color Border,
-        double BorderThickness,
-        Color Text,
-        Color Placeholder,
-        Color Icon,
-        Color Accent,
-        double HoverBackgroundA,
-        double HoverBorderA,
-        double ItemBackgroundA,
-        double ItemForegroundA,
-        double SecondaryTextA,
-        double SeparatorA,
-        Color SearchFocus,
-        bool IsLight = false
-    );
-
-    private static readonly Dictionary<string, ThemePreset> ThemePresets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Oscuro"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x0B, 0x0B, 0x0B),
-            Border: Colors.Transparent,
-            BorderThickness: 0,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x00, 0x7A, 0xFF),
-            HoverBackgroundA: 0x15, HoverBorderA: 0x20,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x22, 0x22, 0x26)
-        ),
-        ["Claro"] = new ThemePreset(
-            Background: Color.FromArgb(0xE6, 0xF0, 0xF0, 0xF0),
-            Border: Color.FromArgb(0x40, 0x00, 0x00, 0x00),
-            BorderThickness: 1,
-            Text: Color.FromRgb(0x1A, 0x1A, 0x1A),
-            Placeholder: Color.FromArgb(0x50, 0x00, 0x00, 0x00),
-            Icon: Color.FromArgb(0x60, 0x00, 0x00, 0x00),
-            Accent: Color.FromRgb(0x00, 0x7A, 0xFF),
-            HoverBackgroundA: 0x15, HoverBorderA: 0x20,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0xE6, 0xE6, 0xE6),
-            IsLight: true
-        ),
-        ["Midnight"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x0A, 0x0E, 0x1A),
-            Border: Color.FromArgb(0x30, 0x4A, 0x6C, 0xF7),
-            BorderThickness: 1,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x4A, 0x6C, 0xF7),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x0F, 0x13, 0x20)
-        ),
-        ["Ocean"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x06, 0x1A, 0x2E),
-            Border: Color.FromArgb(0x30, 0x00, 0xB4, 0xD8),
-            BorderThickness: 1,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x00, 0xB4, 0xD8),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x08, 0x1E, 0x32)
-        ),
-        ["Forest"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x06, 0x18, 0x0C),
-            Border: Colors.Transparent,
-            BorderThickness: 0,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x22, 0xC5, 0x5E),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x0A, 0x1E, 0x10)
-        ),
-        ["Sunset"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x1A, 0x0E, 0x06),
-            Border: Color.FromArgb(0x30, 0xF9, 0x73, 0x16),
-            BorderThickness: 1,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0xF9, 0x73, 0x16),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x20, 0x12, 0x0A)
-        ),
-        ["Crimson"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x1A, 0x06, 0x0A),
-            Border: Colors.Transparent,
-            BorderThickness: 0,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0xEF, 0x44, 0x44),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x20, 0x0A, 0x0E)
-        ),
-        ["Teal"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x06, 0x1A, 0x1A),
-            Border: Colors.Transparent,
-            BorderThickness: 0,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x14, 0xB8, 0xA6),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x0A, 0x20, 0x20)
-        ),
-        ["Warm"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x1A, 0x14, 0x06),
-            Border: Color.FromArgb(0x30, 0xF5, 0x9E, 0x0B),
-            BorderThickness: 1,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0xF5, 0x9E, 0x0B),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x20, 0x1A, 0x0A)
-        ),
-        ["Rose"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x1A, 0x06, 0x12),
-            Border: Colors.Transparent,
-            BorderThickness: 0,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0xEC, 0x48, 0x99),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x20, 0x0A, 0x18)
-        ),
-        ["Slate"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x1E, 0x29, 0x3B),
-            Border: Color.FromArgb(0x30, 0x94, 0xA3, 0xB8),
-            BorderThickness: 1,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x94, 0xA3, 0xB8),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x28, 0x35, 0x45)
-        ),
-        ["Violet"] = new ThemePreset(
-            Background: Color.FromArgb(0xB4, 0x12, 0x06, 0x1E),
-            Border: Colors.Transparent,
-            BorderThickness: 0,
-            Text: Colors.White,
-            Placeholder: Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF),
-            Icon: Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF),
-            Accent: Color.FromRgb(0x8B, 0x5C, 0xF6),
-            HoverBackgroundA: 0x18, HoverBorderA: 0x25,
-            ItemBackgroundA: 0x12, ItemForegroundA: 0xA5,
-            SecondaryTextA: 0xA0, SeparatorA: 0x15,
-            SearchFocus: Color.FromArgb(0xE6, 0x18, 0x0A, 0x24)
-        )
-    };
-
-    private void ApplyThemePreset(string mode)
-    {
-        if (!ThemePresets.TryGetValue(mode, out var p)) return;
-
-        SpotlightBgBrush = new SolidColorBrush(p.Background);
-        SpotlightBorderBrush = new SolidColorBrush(p.Border);
-        SpotlightBorderThickness = new Thickness(p.BorderThickness);
-        SpotlightTextBrush = new SolidColorBrush(p.Text);
-        SpotlightPlaceholderBrush = new SolidColorBrush(p.Placeholder);
-        SpotlightIconBrush = new SolidColorBrush(p.Icon);
-        SpotlightSelectedBorderBrush = new SolidColorBrush(p.Accent);
-        SpotlightSelectedBackgroundBrush = new SolidColorBrush(Color.FromArgb(0x25, p.Accent.R, p.Accent.G, p.Accent.B));
-        SpotlightHoverBackgroundBrush = new SolidColorBrush(Color.FromArgb((byte)p.HoverBackgroundA, p.Accent.R, p.Accent.G, p.Accent.B));
-        SpotlightHoverBorderBrush = new SolidColorBrush(Color.FromArgb((byte)p.HoverBorderA, p.Accent.R, p.Accent.G, p.Accent.B));
-        byte baseC = p.IsLight ? (byte)0x00 : (byte)0xFF;
-        SpotlightItemBackgroundBrush = new SolidColorBrush(Color.FromArgb((byte)p.ItemBackgroundA, baseC, baseC, baseC));
-        SpotlightItemForegroundBrush = new SolidColorBrush(Color.FromArgb((byte)p.ItemForegroundA, baseC, baseC, baseC));
-        SpotlightSecondaryTextBrush = new SolidColorBrush(Color.FromArgb((byte)p.SecondaryTextA, baseC, baseC, baseC));
-        SpotlightSeparatorBrush = new SolidColorBrush(Color.FromArgb((byte)p.SeparatorA, baseC, baseC, baseC));
-        SpotlightSearchFocusBrush = new SolidColorBrush(p.Background);
-        UpdateModeButtonsVisuals();
-    }
-
-    private static bool TryParseColor(string hex, out System.Windows.Media.Color color)
-    {
-        color = System.Windows.Media.Colors.Transparent;
-        if (string.IsNullOrWhiteSpace(hex)) return false;
-        hex = hex.Trim();
-        if (!hex.StartsWith("#")) hex = "#" + hex;
-        try
-        {
-            var converted = ColorConverter.ConvertFromString(hex);
-            if (converted != null)
-            {
-                color = (System.Windows.Media.Color)converted;
-                return true;
-            }
-        }
-        catch (FormatException) { /* ignored */ }
-        catch (NotSupportedException) { /* ignored */ }
-        return false;
-    }
-
-    private static readonly System.Net.Http.HttpClient _sharedHttpClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-
-    public PinnedAppsWindow()
-    {
-        InitializeComponent();
-        ApplySettings();
-        DataContext = this;
-        this.Activated += Window_Activated;
-
-        _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(150)
-        };
-        _searchDebounceTimer.Tick += (s, args) =>
-        {
-            _searchDebounceTimer.Stop();
-            if (_searchMode == "AI") return;
-            PerformSearch(SearchBox.Text.Trim());
-        };
-
-        UpdateModeButtonsVisuals();
-        ClipboardService.Instance.HistoryChanged += OnClipboardHistoryChanged;
-        this.Closed += (s, ev) =>
-        {
-            ClipboardService.Instance.HistoryChanged -= OnClipboardHistoryChanged;
-        };
-    }
-
-    private void OnClipboardHistoryChanged()
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(new Action(OnClipboardHistoryChanged));
-            return;
-        }
-        if (_searchMode == "Clipboard")
-        {
-            SearchClipboard(SearchBox != null ? SearchBox.Text.Trim() : "");
-        }
-        else if (_searchMode == "AI" && (SearchBox == null || string.IsNullOrWhiteSpace(SearchBox.Text)))
-        {
-            LoadAiHistory();
-        }
-    }
-
-    public void SetSearchMode(string mode)
-    {
-        if (_searchMode == mode) return;
-
-        _isChangingMode = true;
-        try
-        {
-            _searchMode = mode;
-            _searchDebounceTimer?.Stop();
-            
-            if (SearchBox != null)
-            {
-                SearchBox.Text = string.Empty;
-            }
-
-            UpdateModeButtonsVisuals();
-            
-            if (_searchMode == "Clipboard")
-            {
-                SearchClipboard(string.Empty);
-            }
-            else if (_searchMode == "AI")
-            {
-                LoadAiHistory();
-            }
-            else
-            {
-                PinnedAppsList.Clear();
-                _selectedIndex = -1;
-                if (_searchMode == "Apps")
-                {
-                    PopulateDefaultList();
-                }
-                else
-                {
-                    UpdateWindowSize();
-                }
-            }
-            
-            if (SearchBox != null)
-            {
-                SearchBox.Focus();
-                Keyboard.Focus(SearchBox);
-            }
-        }
-        finally
-        {
-            _isChangingMode = false;
-        }
-    }
-
-    private void CycleSearchMode()
-    {
-        if (_searchMode == "Apps") SetSearchMode("Files");
-        else if (_searchMode == "Files") SetSearchMode("Clipboard");
-        else if (_searchMode == "Clipboard") SetSearchMode("AI");
-        else SetSearchMode("Apps");
-    }
-
-    private void ModeButton_Click(object sender, RoutedEventArgs e)
-    {
-        var button = sender as Button;
-        if (button != null && button.Tag is string mode)
-        {
-            SetSearchMode(mode);
-        }
-    }
-
-    private void UpdateModeButtonsVisuals()
-    {
-        var activeBg = SpotlightSelectedBorderBrush ?? Brushes.Teal;
-        var inactiveBg = SpotlightBgBrush ?? Brushes.Transparent;
-        
-        var activeFg = Brushes.White;
-        var inactiveFg = SpotlightTextBrush ?? Brushes.White;
-
-        ModeAppsBrush = _searchMode == "Apps" ? activeBg : inactiveBg;
-        ModeAppsForegroundBrush = _searchMode == "Apps" ? activeFg : inactiveFg;
-
-        ModeFilesBrush = _searchMode == "Files" ? activeBg : inactiveBg;
-        ModeFilesForegroundBrush = _searchMode == "Files" ? activeFg : inactiveFg;
-
-        ModeClipboardBrush = _searchMode == "Clipboard" ? activeBg : inactiveBg;
-        ModeClipboardForegroundBrush = _searchMode == "Clipboard" ? activeFg : inactiveFg;
-
-        ModeAiBrush = _searchMode == "AI" ? activeBg : inactiveBg;
-        ModeAiForegroundBrush = _searchMode == "AI" ? activeFg : inactiveFg;
-
-        if (PlaceholderText != null)
-        {
-            if (_searchMode == "Apps") PlaceholderText.Text = "Buscar aplicación...";
-            else if (_searchMode == "Files") PlaceholderText.Text = "Buscar archivos...";
-            else if (_searchMode == "Clipboard") PlaceholderText.Text = "Buscar en el portapapeles...";
-            else if (_searchMode == "AI") PlaceholderText.Text = "Pregunta algo a Gemini AI...";
-        }
-    }
-
-    private void Window_Activated(object? sender, EventArgs ev)
-    {
-        _ = Dispatcher.BeginInvoke(new Action(() =>
-        {
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
-        }), System.Windows.Threading.DispatcherPriority.Input);
-    }
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-        // Exclude from Alt+Tab and Windows Task View before the window is visible
-        try
-        {
-            var helper = new System.Windows.Interop.WindowInteropHelper(this);
-            int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
-            SetWindowLong(helper.Handle, GWL_EXSTYLE, (exStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW);
-        }
-        catch { /* ignored */ }
-    }
-
-    private async void Window_Loaded(object sender, RoutedEventArgs e)
-    {
-        _loadedTime = DateTime.Now;
-
-        // Force window to foreground to prevent activation beep and missing cursor hand
-        ForceForeground();
-
-        // Calculate initial window size to prevent cut-off search box
-        UpdateWindowSize();
-
-        // Center window on active monitor
-        try
-        {
-            var screens = System.Windows.Forms.Screen.AllScreens;
-            var screenIndex = Math.Clamp(SettingsService.Instance.DockMonitorIndex, 0, screens.Length - 1);
-            var screen = screens[screenIndex];
-            var dpi = VisualTreeHelper.GetDpi(this);
-
-            // Use the Top coordinate already calculated and set by UpdateWindowSize
-            double finalTop = Top;
-            if (double.IsNaN(finalTop) || double.IsInfinity(finalTop))
-            {
-                double actualScreenHeight = screen.WorkingArea.Height / dpi.DpiScaleY;
-                double actualScreenTop = screen.WorkingArea.Y / dpi.DpiScaleY;
-                finalTop = actualScreenTop + (actualScreenHeight * 0.15);
-            }
-            Top = finalTop;
-            Opacity = 0;
-
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-
-            BeginAnimation(OpacityProperty, fadeIn);
-        }
-        catch
-        {
-            Left = 20;
-            Top = 64;
-            Opacity = 1;
-        }
-
-        // Notify DockWindow that the flyout is open
-        if (ApplicationHost.Instance != null)
-        {
-            ApplicationHost.Instance.IsPinnedFlyoutOpen = true;
-        }
-
-        // Load all applications sequentially to trigger entrance animations
-        await LoadAppsStaggeredAsync();
-
-        // Ensure focus is still set after loading
-        _ = Dispatcher.BeginInvoke(new Action(() =>
-        {
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
-        }), System.Windows.Threading.DispatcherPriority.Input);
-    }
-
-    private PinnedApp CreatePinnedAppFromPath(string path)
-    {
-        string targetPath = path;
-        bool isUwp = path.StartsWith("uwp:", StringComparison.OrdinalIgnoreCase);
-        if (isUwp)
-        {
-            var parts = path.Substring(4).Split('|');
-            targetPath = parts.Length > 1 ? parts[1] : "";
-        }
-
-        var resolved = ResolvePath(targetPath);
-        var name = TranslateAppName(Path.GetFileNameWithoutExtension(resolved));
-
-        return new PinnedApp
-        {
-            Name = name,
-            Path = path,
-            Icon = null
-        };
-    }
-
-    private static string TranslateAppName(string name)
-    {
-        if (string.Equals(name, "explorer", StringComparison.OrdinalIgnoreCase)) return "Explorador de Archivos";
-        if (string.Equals(name, "chrome", StringComparison.OrdinalIgnoreCase)) return "Google Chrome";
-        if (string.Equals(name, "notepad", StringComparison.OrdinalIgnoreCase)) return "Bloc de Notas";
-        if (string.Equals(name, "cmd", StringComparison.OrdinalIgnoreCase)) return "Símbolo del Sistema";
-        if (string.Equals(name, "taskmgr", StringComparison.OrdinalIgnoreCase)) return "Administrador de Tareas";
-        return name;
-    }
-
-    private async Task LoadAppsStaggeredAsync()
-    {
-        PinnedAppsList.Clear();
-        FavoritesList.Clear();
-        _allInstalledApps.Clear();
-        _selectedIndex = -1;
-
-        var paths = SettingsService.Instance.PinnedAppPaths;
-        var appsToLoad = new List<PinnedApp>();
-        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // Load Pinned Apps instantly on the UI thread to display them without delay
-        if (paths != null)
-        {
-            foreach (var path in paths)
-            {
-                if (string.IsNullOrEmpty(path) || path == "ADD_APP") continue;
-                try
-                {
-                    var app = CreatePinnedAppFromPath(path);
-                    FavoritesList.Add(app);
-                    _allInstalledApps.Add(app);
-                    seenPaths.Add(path);
-                }
-                catch { /* ignored */ }
-            }
-        }
-
-        // Add the "Anclar Aplicación" button at the end
-        FavoritesList.Add(new PinnedApp
-        {
-            Name = "Anclar Aplicación",
-            Path = "ADD_APP",
-            IconGlyph = "\uE6E6"
-        });
-
-        // Trigger loading of icons for these initial favorites in the background immediately
-        StartLoadingIcons();
-
-        // Also trigger default list layout update
-        PopulateDefaultList();
-
-        // Load Start Menu & Desktop apps
-        await Task.Run(() =>
-        {
-            var userPrograms = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
-            var commonPrograms = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
-            var userDesktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            var commonDesktop = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
-
-            void ScanDirectory(string dir)
-            {
-                if (!Directory.Exists(dir)) return;
-                try
-                {
-                    var files = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories)
-                        .Where(f => f.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".url", StringComparison.OrdinalIgnoreCase));
-
-                    foreach (var file in files)
-                    {
-                        if (_isClosing) return;
-                        try
-                        {
-                            var name = Path.GetFileNameWithoutExtension(file);
-                            if (string.IsNullOrWhiteSpace(name)) continue;
-
-                            if (name.Contains("Uninstall", StringComparison.OrdinalIgnoreCase) ||
-                                name.Contains("Unins", StringComparison.OrdinalIgnoreCase) ||
-                                name.Contains("ReadMe", StringComparison.OrdinalIgnoreCase) ||
-                                name.Contains("Help", StringComparison.OrdinalIgnoreCase) ||
-                                name.Contains("Website", StringComparison.OrdinalIgnoreCase) ||
-                                name.Contains("Documentation", StringComparison.OrdinalIgnoreCase))
-                            {
-                                continue;
-                            }
-
-                            if (seenPaths.Add(file))
-                            {
-                                appsToLoad.Add(new PinnedApp
-                                {
-                                    Name = name,
-                                    Path = file,
-                                    Icon = null
-                                });
-                            }
-                        }
-                        catch { /* ignored */ }
-                    }
-                }
-                catch { /* ignored */ }
-            }
-
-            void ScanUwpApps()
-            {
-                try
-                {
-                    Type? shellType = Type.GetTypeFromCLSID(new Guid("13709620-C279-11CE-A49E-00AA00C1485B"));
-                    if (shellType == null) return;
-
-                    object? shell = Activator.CreateInstance(shellType);
-                    if (shell == null) return;
-
-                    object? appsFolder = shellType.InvokeMember("NameSpace",
-                        System.Reflection.BindingFlags.InvokeMethod,
-                        null, shell, new object[] { "shell:AppsFolder" });
-
-                    if (appsFolder == null) return;
-
-                    Type folderType = appsFolder.GetType();
-                    object? items = folderType.InvokeMember("Items",
-                        System.Reflection.BindingFlags.InvokeMethod,
-                        null, appsFolder, null);
-
-                    if (items is System.Collections.IEnumerable enumerable)
-                    {
-                        foreach (object item in enumerable)
-                        {
-                            if (_isClosing) return;
-                            try
-                            {
-                                Type itemType = item.GetType();
-                                string? name = itemType.InvokeMember("Name",
-                                    System.Reflection.BindingFlags.GetProperty,
-                                    null, item, null) as string;
-
-                                string? path = itemType.InvokeMember("Path",
-                                    System.Reflection.BindingFlags.GetProperty,
-                                    null, item, null) as string;
-
-                                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path)) continue;
-
-                                if (name.Contains("Uninstall", StringComparison.OrdinalIgnoreCase) ||
-                                    name.Contains("Unins", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    continue;
-                                }
-
-                                string uwpPath = path.StartsWith("uwp:", StringComparison.OrdinalIgnoreCase) 
-                                    ? path 
-                                    : "uwp:" + path;
-
-                                if (seenPaths.Add(uwpPath))
-                                {
-                                    appsToLoad.Add(new PinnedApp
-                                    {
-                                        Name = name,
-                                        Path = uwpPath,
-                                        Icon = null
-                                    });
-                                }
-                            }
-                            catch { /* ignored */ }
-                        }
-                    }
-                }
-                catch { /* ignored */ }
-            }
-
-            void ScanStartApps()
-            {
-                try
-                {
-                    var psi = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "powershell.exe",
-                        Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"Get-StartApps | ConvertTo-Json -Compress\"",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        CreateNoWindow = true,
-                        StandardOutputEncoding = System.Text.Encoding.UTF8
-                    };
-
-                    using var proc = System.Diagnostics.Process.Start(psi);
-                    if (proc != null)
-                    {
-                        string json = proc.StandardOutput.ReadToEnd();
-                        proc.WaitForExit();
-
-                        if (!string.IsNullOrWhiteSpace(json))
-                        {
-                            using var doc = System.Text.Json.JsonDocument.Parse(json);
-                            var root = doc.RootElement;
-
-                            if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
-                            {
-                                foreach (var elem in root.EnumerateArray())
-                                {
-                                    if (_isClosing) return;
-                                    if (!elem.TryGetProperty("Name", out var nameProp) || !elem.TryGetProperty("AppID", out var appIdProp))
-                                        continue;
-
-                                    string name = nameProp.GetString() ?? "";
-                                    string appId = appIdProp.GetString() ?? "";
-
-                                    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(appId))
-                                        continue;
-
-                                    if (name.Contains("Uninstall", StringComparison.OrdinalIgnoreCase) ||
-                                        name.Contains("Unins", StringComparison.OrdinalIgnoreCase) ||
-                                        name.Contains("ReadMe", StringComparison.OrdinalIgnoreCase) ||
-                                        name.Contains("Help", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        continue;
-                                    }
-
-                                    string itemPath = appId;
-                                    if (!appId.Contains("\\") || appId.Contains("!") || appId.StartsWith("Microsoft."))
-                                    {
-                                        itemPath = "uwp:" + appId;
-                                    }
-
-                                    if (seenPaths.Add(itemPath))
-                                    {
-                                        appsToLoad.Add(new PinnedApp
-                                        {
-                                            Name = name,
-                                            Path = itemPath,
-                                            Icon = null
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                catch { /* ignored */ }
-            }
-
-            ScanStartApps();
-            ScanDirectory(userPrograms);
-            ScanDirectory(commonPrograms);
-            ScanDirectory(userDesktop);
-            ScanDirectory(commonDesktop);
-            ScanUwpApps();
-
-            appsToLoad.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
-        });
-
-        if (_isClosing) return;
-
-        _allInstalledApps.AddRange(appsToLoad);
-
-        // Update Pinned States and Populate Favorites
-        UpdatePinsState();
-        PopulateFavoritesList();
-
-        // Populate default list when query is empty (which will collapse the results panel)
-        PopulateDefaultList();
-
-        // Start loading icons in background
-        StartLoadingIcons();
-    }
-
-    private void PopulateDefaultList()
-    {
-        PinnedAppsList.Clear();
-        _selectedIndex = -1;
-
-        if (ResultsScrollViewer != null)
-        {
-            ResultsScrollViewer.Visibility = Visibility.Collapsed;
-        }
-
-        UpdateWindowSize();
-    }
-
-    private void StartLoadingIcons()
-    {
-        // Snapshot collections on the UI thread — no lock needed since
-        // StartLoadingIcons is always called from the UI thread
-        var favorites = new List<PinnedApp>(FavoritesList);
-        var apps = new List<PinnedApp>(_allInstalledApps);
-
-        Task.Run(async () =>
-        {
-            foreach (var app in favorites)
-            {
-                if (_isClosing) return;
-                if (app.Path == "ADD_APP" || app.Icon != null || app.IsGlyphVisible) continue;
-
-                var icon = LoadIconForApp(app.Path);
-                if (icon != null)
-                {
-                    _ = Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        app.Icon = icon;
-                    }));
-                }
-            }
-
-            foreach (var app in apps)
-            {
-                if (_isClosing) return;
-                if (app.Icon != null || app.IsGlyphVisible) continue;
-
-                var icon = LoadIconForApp(app.Path);
-                if (icon != null)
-                {
-                    _ = Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        app.Icon = icon;
-                    }));
-                }
-
-                await Task.Delay(5);
-            }
-        });
-    }
-
-    public static void PreloadPinnedIcons()
-    {
-        var paths = SettingsService.Instance.PinnedAppPaths;
-        if (paths == null) return;
-
-        Task.Run(() =>
-        {
-            foreach (var path in paths)
-            {
-                if (string.IsNullOrEmpty(path) || path == "ADD_APP") continue;
-                try
-                {
-                    LoadIconForApp(path);
-                }
-                catch { /* ignored */ }
-            }
-        });
-    }
-
-    private static ImageSource? LoadIconForApp(string appPath)
-    {
-        try
-        {
-            return appPath.StartsWith("uwp:", StringComparison.OrdinalIgnoreCase)
-                ? GetUwpIcon(appPath.Substring(4).Split('|')[0])
-                : GetAppIcon(ResolvePath(appPath));
-        }
-        catch { /* ignored */ return null; }
-    }
-
-    private static string ResolvePath(string path)
-    {
-        if (File.Exists(path)) return path;
-
-        var system32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-
-        var candidate = Path.Combine(system32, path);
-        if (File.Exists(candidate)) return candidate;
-
-        candidate = Path.Combine(windows, path);
-        if (File.Exists(candidate)) return candidate;
-
-        if (path.Equals("chrome.exe", StringComparison.OrdinalIgnoreCase))
-        {
-            var p1 = Path.Combine(programFiles, @"Google\Chrome\Application\chrome.exe");
-            if (File.Exists(p1)) return p1;
-            var p2 = Path.Combine(programFilesX86, @"Google\Chrome\Application\chrome.exe");
-            if (File.Exists(p2)) return p2;
-        }
-
-        return path;
-    }
-
-    private static ImageSource? GetAppIcon(string path)
-    {
-        if (_iconCache.TryGetValue(path, out var cached)) return cached;
-
-        try
-        {
-            string targetPath = path;
-            if (path.Equals("explorer.exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
-            {
-                targetPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
-            }
-
-            if (File.Exists(targetPath))
-            {
-                using (var icon = System.Drawing.Icon.ExtractAssociatedIcon(targetPath))
-                {
-                    if (icon != null)
-                    {
-                        var dispatcher = System.Windows.Application.Current?.Dispatcher ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
-                        var imageSource = dispatcher.Invoke(() =>
-                        {
-                            var bs = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                                icon.Handle,
-                                Int32Rect.Empty,
-                                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-                            var cloned = CloneBitmapSource(bs);
-                            if (_iconCache.Count < MaxIconCacheSize) _iconCache[path] = cloned;
-                            return cloned;
-                        });
-                        return imageSource;
-                    }
-                }
-            }
-        }
-        catch { /* ignored */ }
-        return null;
-    }
-
-    private static ImageSource? GetUwpIcon(string aumid)
-    {
-        if (_iconCache.TryGetValue(aumid, out var cached)) return cached;
-
-        try
-        {
-            string path = @"shell:AppsFolder\" + aumid;
-            IntPtr pidl = IntPtr.Zero;
-            uint sfgaoOut = 0;
-            int hr = SHParseDisplayName(path, IntPtr.Zero, out pidl, 0, out sfgaoOut);
-            
-            if (hr == 0 && pidl != IntPtr.Zero)
-            {
-                try
-                {
-                    var shfi = new SHFILEINFO();
-                    uint shfiSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(shfi);
-                    
-                    // SHGFI_PIDL | SHGFI_ICON | SHGFI_LARGEICON
-                    IntPtr res = SHGetFileInfo(pidl, 0, ref shfi, shfiSize, SHGFI_PIDL | SHGFI_ICON | SHGFI_LARGEICON);
-                    if (res != IntPtr.Zero && shfi.hIcon != IntPtr.Zero)
-                    {
-                        var dispatcher = System.Windows.Application.Current?.Dispatcher ?? System.Windows.Threading.Dispatcher.CurrentDispatcher;
-                        var bitmapSource = dispatcher.Invoke(() =>
-                        {
-                            var bs = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                                shfi.hIcon,
-                                Int32Rect.Empty,
-                                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-                            var cloned = CloneBitmapSource(bs);
-                            DestroyIcon(shfi.hIcon);
-                            if (_iconCache.Count < MaxIconCacheSize) _iconCache[aumid] = cloned;
-                            return cloned;
-                        });
-                        return bitmapSource;
-                    }
-                }
-                finally
-                {
-                    CoTaskMemFree(pidl);
-                }
-            }
-        }
-        catch { /* ignored */ }
-        return null;
-    }
-
-    private static System.Windows.Media.Imaging.BitmapSource CloneBitmapSource(System.Windows.Media.Imaging.BitmapSource source)
-    {
-        int width = source.PixelWidth;
-        int height = source.PixelHeight;
-        int bitsPerPixel = source.Format.BitsPerPixel;
-        int stride = ((width * bitsPerPixel + 31) / 32) * 4;
-        byte[] bits = new byte[height * stride];
-        source.CopyPixels(bits, stride, 0);
-        
-        var clone = System.Windows.Media.Imaging.BitmapSource.Create(
-            width, height, 
-            source.DpiX, source.DpiY, 
-            source.Format, 
-            source.Palette, 
-            bits, stride);
-        clone.Freeze();
-        return clone;
-    }
-
-    private void AppButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_isFavDragging)
-        {
-            _isFavDragging = false;
-            e.Handled = true;
-            return;
-        }
-
-        if (sender is System.Windows.Controls.Button btn && btn.Tag is string path)
-        {
-            if (path == "ADD_APP")
-            {
-                AddNewApp();
-                return;
-            }
-
-            bool runAsAdmin = false;
-            foreach (var app in PinnedAppsList)
-            {
-                if (string.Equals(app.Path, path, StringComparison.OrdinalIgnoreCase))
-                {
-                    runAsAdmin = app.RunAsAdmin;
-                    break;
-                }
-            }
-
-            LaunchApp(path, runAsAdmin);
-        }
-    }
-
-    private bool ActivateExistingWindow(string exeName)
-    {
-        var procName = Path.GetFileNameWithoutExtension(exeName);
-
-        if (string.Equals(procName, "explorer", StringComparison.OrdinalIgnoreCase))
-        {
-            var hwnd = FindWindowEx(IntPtr.Zero, IntPtr.Zero, "CabinetWClass", null);
-            if (hwnd != IntPtr.Zero)
-            {
-                if (IsIconic(hwnd))
-                {
-                    ShowWindow(hwnd, SW_RESTORE);
-                }
-                else
-                {
-                    ShowWindow(hwnd, SW_SHOW);
-                }
-                SetForegroundWindow(hwnd);
-                return true;
-            }
-            return false;
-        }
-
-        try
-        {
-            var processes = Process.GetProcessesByName(procName);
-            foreach (var proc in processes)
-            {
-                var hwnd = proc.MainWindowHandle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    if (IsIconic(hwnd))
-                    {
-                        ShowWindow(hwnd, SW_RESTORE);
-                    }
-                    else
-                    {
-                        ShowWindow(hwnd, SW_SHOW);
-                    }
-                    SetForegroundWindow(hwnd);
-                    return true;
-                }
-            }
-        }
-        catch { /* ignored */ }
-        return false;
-    }
-
-    private void AddNewApp()
-    {
-        _isShowingDialog = true;
-        try
-        {
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Seleccionar aplicación para anclar",
-                Filter = "Aplicaciones (*.exe, *.lnk)|*.exe;*.lnk|Todos los archivos (*.*)|*.*",
-                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                var selectedPath = dialog.FileName;
-                if (!string.IsNullOrEmpty(selectedPath) && File.Exists(selectedPath))
-                {
-                    if (SettingsService.Instance.PinnedAppPaths == null)
-                    {
-                        SettingsService.Instance.PinnedAppPaths = new List<string>();
-                    }
-
-                    if (!SettingsService.Instance.PinnedAppPaths.Contains(selectedPath))
-                    {
-                        SettingsService.Instance.PinnedAppPaths.Add(selectedPath);
-                        SettingsService.Save();
-                    }
-
-                    // Reload layout sequentially
-                    _ = LoadAppsStaggeredAsync();
-                }
-            }
-        }
-        finally
-        {
-            _isShowingDialog = false;
-            // Reactivate this window after the modal dialog is closed
-            try { this.Activate(); } catch { /* ignored */ }
-        }
-    }
-
-    private void UnpinMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            if (SettingsService.Instance.PinnedAppPaths != null && SettingsService.Instance.PinnedAppPaths.Contains(path))
-            {
-                SettingsService.Instance.PinnedAppPaths.Remove(path);
-                SettingsService.Save();
-            }
-
-            // Reset launch count
-            if (SettingsService.Instance.AppLaunchCounts != null && SettingsService.Instance.AppLaunchCounts.ContainsKey(path))
-            {
-                SettingsService.Instance.AppLaunchCounts.Remove(path);
-                SettingsService.Save();
-            }
-
-            // Reload layout
-            _ = LoadAppsStaggeredAsync();
-        }
-    }
-
-    private void DeleteClipboardItemMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is Guid id)
-        {
-            ClipboardService.Instance.DeleteItem(id);
-        }
-    }
-
-    private void SearchGoogleMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            var content = path.Substring("clipboard:".Length);
-            var url = "https://www.google.com/search?q=" + Uri.EscapeDataString(content);
-            try
-            {
-                using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = url,
-                    UseShellExecute = true
-                });
-            }
-            catch { }
-            SafeClose();
-        }
-    }
-
-    private void OpenLinkMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            var content = path.Substring("clipboard:".Length);
-            if (!content.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                !content.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                content = "https://" + content;
-            }
-            try
-            {
-                using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = content,
-                    UseShellExecute = true
-                });
-            }
-            catch { }
-            SafeClose();
-        }
-    }
-
-    private void OpenFilesMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            var content = path.Substring("clipboard:".Length);
-            var files = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var file in files)
-            {
-                if (System.IO.File.Exists(file) || System.IO.Directory.Exists(file))
-                {
-                    try
-                    {
-                        using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = file,
-                            UseShellExecute = true
-                        });
-                    }
-                    catch { }
-                }
-            }
-            SafeClose();
-        }
-    }
-
-    private void OpenFilesLocationMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            var content = path.Substring("clipboard:".Length);
-            var files = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-            if (files.Length > 0)
-            {
-                var file = files[0];
-                if (System.IO.File.Exists(file))
-                {
-                    var dir = System.IO.Path.GetDirectoryName(file);
-                    if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
-                    {
-                        try
-                        {
-                            using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                            {
-                                FileName = "explorer.exe",
-                                Arguments = $"/select,\"{file}\"",
-                                UseShellExecute = true
-                            });
-                        }
-                        catch { }
-                    }
-                }
-                else if (System.IO.Directory.Exists(file))
-                {
-                    try
-                    {
-                        using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = file,
-                            UseShellExecute = true
-                        });
-                    }
-                    catch { }
-                }
-            }
-            SafeClose();
-        }
-    }
-
-    private void PinMenu_Click(object sender, RoutedEventArgs e)
-    {
-        e.Handled = true;
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            TogglePinApp(path);
-        }
-    }
-
-    private void Window_Deactivated(object? sender, EventArgs e)
-    {
-        if (_isShowingDialog) return;
-
-        // Ignore deactivation within the first 800ms of loading to prevent focus-stealing
-        // issues (e.g., during PC startup / when other background apps launch).
-        if ((DateTime.Now - _loadedTime).TotalMilliseconds < 800)
-        {
-            ForceForeground();
-            return;
-        }
-
-        SafeClose();
-    }
-
-    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape) { SafeClose(); e.Handled = true; return; }
-
-        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-        {
-            if (e.Key == Key.D1 || e.Key == Key.NumPad1)
-            {
-                SetSearchMode("Apps");
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.D2 || e.Key == Key.NumPad2)
-            {
-                SetSearchMode("Files");
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.D3 || e.Key == Key.NumPad3)
-            {
-                SetSearchMode("Clipboard");
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.D4 || e.Key == Key.NumPad4)
-            {
-                SetSearchMode("AI");
-                e.Handled = true;
-                return;
-            }
-        }
-
-        if (SearchBox != null && !SearchBox.IsFocused)
-        {
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
-        }
-    }
-
-
-
-    private void SafeClose()
-    {
-        if (_isClosing) return;
-        _isClosing = true;
-
-        if (ApplicationHost.Instance != null)
-        {
-            ApplicationHost.Instance.IsPinnedFlyoutOpen = false;
-            ApplicationHost.Instance.RecordWidgetClose("PinnedApps");
-        }
-
-        var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(200)) 
-        { 
-            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn } 
-        };
-
-        fadeOut.Completed += (snd, args) =>
-        {
-            try { Close(); }
-            catch { _isClosing = false; }
-        };
-
-        BeginAnimation(OpacityProperty, fadeOut);
-    }
-
-    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
-    {
-        if (ApplicationHost.Instance != null)
-        {
-            ApplicationHost.Instance.IsPinnedFlyoutOpen = false;
-        }
-        base.OnClosing(e);
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        base.OnClosed(e);
-    }
-
-    private void UpdateWindowSize()
-    {
-        double screenWidth = 1920;
-        double screenHeight = 1080;
-        double screenLeft = 0;
-        double screenTop = 0;
-        double actualScreenHeight = 0;
-        double actualScreenTop = 0;
-
-        try
-        {
-            var screens = System.Windows.Forms.Screen.AllScreens;
-            var screenIndex = Math.Clamp(SettingsService.Instance.DockMonitorIndex, 0, screens.Length - 1);
-            var screen = screens[screenIndex];
-            var dpi = VisualTreeHelper.GetDpi(this);
-
-            screenWidth = screen.WorkingArea.Width / dpi.DpiScaleX;
-            screenHeight = screen.WorkingArea.Height / dpi.DpiScaleY;
-            screenLeft = screen.WorkingArea.X / dpi.DpiScaleX;
-            screenTop = screen.WorkingArea.Y / dpi.DpiScaleY;
-            actualScreenHeight = screenHeight;
-            actualScreenTop = screenTop;
-        }
-        catch { /* ignored */ }
-
-        Width = screenWidth;
-        Left = screenLeft;
-
-        string query = SearchBox != null ? SearchBox.Text.Trim() : "";
-        if (string.IsNullOrEmpty(query) && _searchMode != "Clipboard" && _searchMode != "AI")
-        {
-            SpotlightFavoritesVisibility = SettingsService.Instance.SpotlightShowFavorites ? Visibility.Visible : Visibility.Collapsed;
-            if (ResultsScrollViewer != null) ResultsScrollViewer.Visibility = Visibility.Collapsed;
-            if (ResultsCardBorder != null) ResultsCardBorder.Visibility = Visibility.Collapsed;
-
-            // Calculate WrapPanel rows for Favorites
-            int favCount = 0;
-            if (SettingsService.Instance.SpotlightShowFavorites)
-            {
-                if (FavoritesList != null && FavoritesList.Count > 0)
-                {
-                    favCount = FavoritesList.Count;
-                }
-                else if (SettingsService.Instance.PinnedAppPaths != null)
-                {
-                    int pathsCount = 0;
-                    foreach (var p in SettingsService.Instance.PinnedAppPaths)
-                    {
-                        if (p != "ADD_APP" && !string.IsNullOrEmpty(p)) pathsCount++;
-                    }
-                    favCount = pathsCount + 1; // +1 for the ADD_APP button
-                }
-            }
-
-            // Each button: Width 54 + Margin 6 on left and right = 66px
-            // Available width: screenWidth - 40
-            double availableWidth = Math.Max(200, screenWidth - 40);
-            int settingAppsPerRow = SettingsService.Instance.SpotlightAppsPerRow;
-            double maxItemsPerRow = settingAppsPerRow > 0 
-                ? settingAppsPerRow 
-                : Math.Max(1, Math.Floor(availableWidth / 66));
-
-            if (FavoritesControl != null)
-            {
-                FavoritesControl.MaxWidth = maxItemsPerRow * 66;
-            }
-
-            double rowCount = favCount > 0 
-                ? Math.Max(1, Math.Ceiling(favCount / maxItemsPerRow))
-                : 0;
-
-            double searchBoxH = SearchBox != null && SearchBox.ActualHeight > 0 
-                ? Math.Max(54, SearchBox.ActualHeight) 
-                : 54;
-
-            // Height formula:
-            // 10 (Grid top) + searchBoxH + 10 (Searchbox bottom margin)
-            // + (rowCount * (54 + 8)) [each row is 54px high + 8px vertical margin]
-            // + 10 (Grid bottom margin) + 24 (shadow bleed room)
-            Height = 10 + searchBoxH + 10 + (rowCount * 62) + 10 + 24;
-        }
-        else
-        {
-            SpotlightFavoritesVisibility = Visibility.Collapsed;
-            if (ResultsCardBorder != null) ResultsCardBorder.Visibility = Visibility.Visible;
-
-            int itemsCount = PinnedAppsList != null ? PinnedAppsList.Count : 0;
-            bool hasResults = itemsCount > 0;
-
-            // Show/hide the results list
-            if (ResultsScrollViewer != null)
-                ResultsScrollViewer.Visibility = hasResults ? Visibility.Visible : Visibility.Collapsed;
-
-            // In Clipboard mode, we do NOT search the web
-            bool showWebSearch = !string.IsNullOrEmpty(query) && (_searchMode == "Apps" || _searchMode == "Files");
-
-            if (WebSearchSeparator != null)
-                WebSearchSeparator.Visibility = (hasResults && showWebSearch) ? Visibility.Visible : Visibility.Collapsed;
-
-            if (WebSearchButton != null)
-                WebSearchButton.Visibility = showWebSearch ? Visibility.Visible : Visibility.Collapsed;
-
-            // Update web search label — detect if query is a URL
-            if (WebSearchText != null && showWebSearch)
-            {
-                WebSearchText.Text = IsUrl(query)
-                    ? $"Abrir \"{query}\""
-                    : $"Buscar \"{query}\" en la web";
-            }
-
-            // Manage empty clipboard placeholder
-            bool showEmptyPlaceholder = (_searchMode == "Clipboard" && !hasResults);
-            if (NoResultsPlaceholder != null)
-            {
-                if (showEmptyPlaceholder)
-                {
-                    NoResultsPlaceholder.Visibility = Visibility.Visible;
-                    if (NoResultsTitle != null && NoResultsSubtitle != null)
-                    {
-                        if (string.IsNullOrEmpty(query))
-                        {
-                            NoResultsTitle.Text = "El portapapeles está vacío";
-                            NoResultsSubtitle.Text = "Copia texto o imágenes para ver tu historial aquí.";
-                        }
-                        else
-                        {
-                            NoResultsTitle.Text = "Sin coincidencias";
-                            NoResultsSubtitle.Text = "No se encontraron elementos en el portapapeles.";
-                        }
-                    }
-                }
-                else
-                {
-                    NoResultsPlaceholder.Visibility = Visibility.Collapsed;
-                }
-            }
-
-            double searchBoxH = SearchBox != null && SearchBox.ActualHeight > 0 
-                ? Math.Max(54, SearchBox.ActualHeight) 
-                : 54;
-
-            double cardHeight = 0;
-            if (ResultsCardBorder != null && ResultsCardBorder.Visibility == Visibility.Visible)
-            {
-                UpdateLayout();
-                ResultsCardBorder.UpdateLayout();
-                ResultsCardBorder.Measure(new Size(SpotlightWidth, double.PositiveInfinity));
-                cardHeight = ResultsCardBorder.DesiredSize.Height;
-                double maxAllowedCardH = actualScreenHeight > 0 ? actualScreenHeight * 0.70 : 540;
-                cardHeight = Math.Min(cardHeight, maxAllowedCardH);
-            }
-
-            Height = 10 + searchBoxH + 10 + cardHeight + 24;
-        }
-
-        double targetHeight = Height;
-        if (double.IsNaN(targetHeight) || double.IsInfinity(targetHeight) || targetHeight <= 0)
-        {
-            targetHeight = 360;
-        }
-
-        double calculatedTop = actualScreenTop + (actualScreenHeight * 0.15);
-        if (!double.IsNaN(calculatedTop) && !double.IsInfinity(calculatedTop))
-        {
-            Top = calculatedTop;
-        }
-    }
-
-    private void WebSearchButton_Click(object sender, RoutedEventArgs e)
-    {
-        OpenWebSearch();
-    }
-
-    private void OpenWebSearch()
-    {
-        string query = SearchBox?.Text.Trim() ?? "";
-        if (string.IsNullOrEmpty(query)) return;
-        try
-        {
-            string url;
-            if (IsUrl(query))
-            {
-                // Navigate directly — add https:// if no scheme present
-                url = (query.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                       query.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                    ? query
-                    : "https://" + query;
-            }
-            else
-            {
-                url = $"https://www.google.com/search?q={Uri.EscapeDataString(query)}";
-            }
-
-            using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName        = url,
-                UseShellExecute = true
-            });
-            SafeClose();
-        }
-        catch { /* ignored */ }
-    }
-
-    /// <summary>
-    /// Returns true if the query looks like a navigable URL.
-    /// Matches: http(s)://, www., bare domains (youtube.com), localhost:3000, etc.
-    /// </summary>
-    private static bool IsUrl(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text) || text.Contains(' ')) return false;
-
-        // Explicit schemes or www prefix
-        if (text.StartsWith("http://",  StringComparison.OrdinalIgnoreCase) ||
-            text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-            text.StartsWith("www.",     StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        // Bare domain pattern: something.tld  /  something.tld/path  /  localhost:port
-        return System.Text.RegularExpressions.Regex.IsMatch(text,
-            @"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})(:\d+)?(/\S*)?$");
-    }
-
-    private void PinButton_Click(object sender, RoutedEventArgs e)
-    {
-        e.Handled = true;
-        if (sender is System.Windows.Controls.Button btn && btn.Tag is string path)
-        {
-            TogglePinApp(path);
-        }
-    }
-
-    private void TogglePinApp(string path)
-    {
-        if (string.IsNullOrEmpty(path) || path == "ADD_APP") return;
-
-        if (SettingsService.Instance.PinnedAppPaths == null)
-        {
-            SettingsService.Instance.PinnedAppPaths = new List<string>();
-        }
-
-        var paths = SettingsService.Instance.PinnedAppPaths;
-        if (paths.Contains(path))
-        {
-            paths.Remove(path);
-        }
-        else
-        {
-            paths.Add(path);
-        }
-
-        SettingsService.Save();
-
-        // Refresh states and collections
-        UpdatePinsState();
-        PopulateFavoritesList();
-
-        if (string.IsNullOrEmpty(SearchBox.Text.Trim()))
-        {
-            PopulateDefaultList();
-        }
-        else
-        {
-            UpdateWindowSize();
-        }
-    }
-
-    private void UpdatePinsState()
-    {
-        var paths = SettingsService.Instance.PinnedAppPaths ?? new List<string>();
-        var pathSet = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var app in PinnedAppsList)
-        {
-            app.IsPinned = pathSet.Contains(app.Path);
-        }
-
-        foreach (var app in _allInstalledApps)
-        {
-            app.IsPinned = pathSet.Contains(app.Path);
-        }
-    }
-
-    private void PopulateFavoritesList()
-    {
-        FavoritesList.Clear();
-        var paths = SettingsService.Instance.PinnedAppPaths;
-        if (paths != null)
-        {
-            foreach (var favPath in paths)
-            {
-                if (string.IsNullOrEmpty(favPath) || favPath == "ADD_APP") continue;
-                bool found = false;
-                foreach (var app in _allInstalledApps)
-                {
-                    if (string.Equals(app.Path, favPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        FavoritesList.Add(app);
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                {
-                    try
-                    {
-                        var app = CreatePinnedAppFromPath(favPath);
-                        FavoritesList.Add(app);
-                    }
-                    catch { /* ignored */ }
-                }
-            }
-        }
-
-        FavoritesList.Add(new PinnedApp
-        {
-            Name = "Anclar Aplicación",
-            Path = "ADD_APP",
-            IconGlyph = "\uE6E6" // Lucide layers-plus
-        });
-    }
-
-    // ===== Explorer Drag & Drop to Pin =====
-
-    private void Window_DragOver(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-        {
-            e.Effects = DragDropEffects.Copy;
-            e.Handled = true;
-        }
-    }
-
-    private void Window_Drop(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-        {
-            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-            bool addedAny = false;
-            
-            if (SettingsService.Instance.PinnedAppPaths == null)
-            {
-                SettingsService.Instance.PinnedAppPaths = new List<string>();
-            }
-
-            foreach (var file in files)
-            {
-                var ext = Path.GetExtension(file).ToLower();
-                if (ext == ".exe" || ext == ".lnk" || Directory.Exists(file) || file.StartsWith("shell:AppsFolder\\"))
-                {
-                    if (!SettingsService.Instance.PinnedAppPaths.Contains(file))
-                    {
-                        SettingsService.Instance.PinnedAppPaths.Add(file);
-                        addedAny = true;
-                    }
-                }
-            }
-
-            if (addedAny)
-            {
-                SettingsService.Save();
-                _ = LoadAppsStaggeredAsync();
-            }
-            e.Handled = true;
-        }
-    }
-
-    // ===== Favorites Drag & Drop Reordering =====
-
-    private Point _favDragStartPoint;
-    private PinnedApp? _draggedFavApp;
-    private bool _isFavDragging;
-
-    private void FavButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _isFavDragging = false;
-        if (sender is FrameworkElement element && element.DataContext is PinnedApp app)
-        {
-            if (app.Path == "ADD_APP") return;
-            _favDragStartPoint = e.GetPosition(this);
-            _draggedFavApp = app;
-        }
-    }
-
-    private void FavButton_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed || _draggedFavApp == null) return;
-
-        Point currentPos = e.GetPosition(this);
-        Vector diff = _favDragStartPoint - currentPos;
-
-        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
-        {
-            _isFavDragging = true;
-            _draggedFavApp.IsDragging = true;
-
-            if (sender is FrameworkElement element)
-            {
-                DataObject data = new DataObject("PinnedAppDrag", _draggedFavApp);
-                DragDrop.DoDragDrop(element, data, DragDropEffects.Move);
-
-                if (_draggedFavApp != null)
-                {
-                    _draggedFavApp.IsDragging = false;
-                    _draggedFavApp = null;
-                }
-                e.Handled = true;
-            }
-        }
-    }
-
-    private void FavButton_DragOver(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent("PinnedAppDrag"))
-        {
-            var draggedApp = e.Data.GetData("PinnedAppDrag") as PinnedApp;
-            if (sender is FrameworkElement element && element.DataContext is PinnedApp targetApp)
-            {
-                if (targetApp.Path != "ADD_APP" && draggedApp != null && draggedApp != targetApp)
-                {
-                    int oldIndex = FavoritesList.IndexOf(draggedApp);
-                    int newIndex = FavoritesList.IndexOf(targetApp);
-
-                    if (oldIndex >= 0 && newIndex >= 0 && oldIndex != newIndex)
-                    {
-                        FavoritesList.Move(oldIndex, newIndex);
-                    }
-                    e.Effects = DragDropEffects.Move;
-                    e.Handled = true;
-                    return;
-                }
-            }
-        }
-        e.Effects = DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void FavButton_Drop(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetDataPresent("PinnedAppDrag"))
-        {
-            var draggedApp = e.Data.GetData("PinnedAppDrag") as PinnedApp;
-            if (draggedApp != null)
-            {
-                draggedApp.IsDragging = false;
-            }
-
-            var newPaths = new List<string>();
-            foreach (var fav in FavoritesList)
-            {
-                if (!string.IsNullOrEmpty(fav.Path) && fav.Path != "ADD_APP")
-                {
-                    newPaths.Add(fav.Path);
-                }
-            }
-
-            SettingsService.Instance.PinnedAppPaths = newPaths;
-            SettingsService.Save();
-            e.Handled = true;
-        }
-    }
-
-    // ===== Context Menu click actions =====
-
-    private void RunAsAdminMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            try
-            {
-                var fullPath = ResolvePath(path);
-                using var _ = Process.Start(new ProcessStartInfo
-                {
-                    FileName = fullPath,
-                    Verb = "runas",
-                    UseShellExecute = true
-                });
-                SafeClose();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"No se pudo ejecutar como administrador: {ex.Message}", "Error Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-    }
-
-    private void OpenLocationMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.MenuItem item && item.Tag is string path)
-        {
-            try
-            {
-                var fullPath = ResolvePath(path);
-                if (File.Exists(fullPath))
-                {
-                    using var _ = Process.Start("explorer.exe", $"/select,\"{fullPath}\"");
-                }
-                else
-                {
-                    MessageBox.Show("No se encontró el archivo.", "Error Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"No se pudo abrir la ubicación del archivo: {ex.Message}", "Error Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-    }
-
-    private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-    {
-        if (_isChangingMode) return;
-
-        PlaceholderText.Visibility = string.IsNullOrEmpty(SearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
-
-        string query = SearchBox.Text.Trim();
-        if (string.IsNullOrEmpty(query))
-        {
-            _searchDebounceTimer?.Stop();
-            foreach (var app in PinnedAppsList) app.IsSelected = false;
-            
-            if (_searchMode == "Apps")
-            {
-                PopulateDefaultList();
-            }
-            else if (_searchMode == "Files")
-            {
-                PinnedAppsList.Clear();
-                _selectedIndex = -1;
-                UpdateWindowSize();
-            }
-            else if (_searchMode == "Clipboard")
-            {
-                SearchClipboard(string.Empty);
-            }
-            else if (_searchMode == "AI")
-            {
-                LoadAiHistory();
-            }
-        }
-        else
-        {
-            // Restart debounce timer — search will fire after 150ms of no typing
-            _searchDebounceTimer?.Stop();
-            _searchDebounceTimer?.Start();
-        }
-    }
-
-    private void PerformSearch(string query)
-    {
-        if (_searchMode == "Apps")
-        {
-            PerformAppsSearch(query);
-        }
-        else if (_searchMode == "Files")
-        {
-            _ = SearchFilesAsync(query);
-        }
-        else if (_searchMode == "Clipboard")
-        {
-            SearchClipboard(query);
-        }
-        else if (_searchMode == "AI")
-        {
-            _ = PerformAiSearchAsync(query);
-        }
-    }
-
-    private async Task PerformAiSearchAsync(string prompt)
-    {
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            LoadAiHistory();
-            return;
-        }
-
-        string apiKey = SettingsService.Instance.GeminiApiKey ?? "";
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            PinnedAppsList.Clear();
-            PinnedAppsList.Add(new PinnedApp
-            {
-                Name = "Configura tu API Key gratuita de Gemini AI para consultar la IA.",
-                Path = "https://aistudio.google.com/app/apikey",
-                ActionText = "Haz clic aquí para abrir Google AI Studio y obtener tu clave gratis",
-                IconGlyph = "\uE4A6"
-            });
-            _selectedIndex = 0;
-            PinnedAppsList[0].IsSelected = true;
-            UpdateWindowSize();
-            return;
-        }
-
-        PinnedAppsList.Clear();
-        PinnedAppsList.Add(new PinnedApp
-        {
-            Name = "Consultando a Gemini AI...",
-            Path = "AI_LOADING",
-            ActionText = "Procesando tu pregunta en tiempo real...",
-            IconGlyph = "\uE1BB"
-        });
-        _selectedIndex = 0;
-        PinnedAppsList[0].IsSelected = true;
-        UpdateWindowSize();
-
-        try
-        {
-            string primaryModel = string.IsNullOrWhiteSpace(SettingsService.Instance.GeminiModel) 
-                ? "gemini-2.5-flash" 
-                : SettingsService.Instance.GeminiModel;
-
-            var modelsToTry = new List<string> { primaryModel, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash" };
-            var uniqueModels = modelsToTry.Distinct().ToArray();
-
-            var requestBody = new
-            {
-                systemInstruction = new
-                {
-                    parts = new[]
-                    {
-                        new { text = "Actúa como un asistente directo. Proporciona la respuesta final en español de forma directa, concisa y rápida, sin introducciones ni rodeos." }
-                    }
-                },
-                contents = new[]
-                {
-                    new
-                    {
-                        role = "user",
-                        parts = new[]
-                        {
-                            new { text = prompt }
-                        }
-                    }
-                },
-                generationConfig = new
-                {
-                    temperature = 0.2,
-                    maxOutputTokens = 1024
-                }
-            };
-            string jsonContent = System.Text.Json.JsonSerializer.Serialize(requestBody);
-
-            System.Net.Http.HttpResponseMessage? response = null;
-            string responseJson = "";
-            string lastErrDetail = "";
-
-            foreach (var model in uniqueModels)
-            {
-                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={Uri.EscapeDataString(apiKey)}";
-                using var content = new System.Net.Http.StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
-
-                response = await _sharedHttpClient.PostAsync(url, content);
-                responseJson = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    SettingsService.Instance.GeminiModel = model;
-                    SettingsService.Save();
-                    break;
-                }
-                else
-                {
-                    try
-                    {
-                        using var docErr = System.Text.Json.JsonDocument.Parse(responseJson);
-                        if (docErr.RootElement.TryGetProperty("error", out var errObj) &&
-                            errObj.TryGetProperty("message", out var msgProp))
-                        {
-                            lastErrDetail = msgProp.GetString() ?? "";
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            if (response == null || !response.IsSuccessStatusCode)
-            {
-                string statusInfo = response != null ? response.StatusCode.ToString() : "Error";
-                string actionInfo = string.IsNullOrWhiteSpace(lastErrDetail) 
-                    ? "Verifica tu API Key o conexión a internet" 
-                    : lastErrDetail;
-
-                PinnedAppsList.Clear();
-                PinnedAppsList.Add(new PinnedApp
-                {
-                    Name = $"Error al consultar Gemini ({statusInfo})",
-                    Path = "https://aistudio.google.com/app/apikey",
-                    ActionText = actionInfo,
-                    IconGlyph = "\uE1BB"
-                });
-                _selectedIndex = 0;
-                PinnedAppsList[0].IsSelected = true;
-                UpdateWindowSize();
-                return;
-            }
-
-            // --- Extract ONLY candidates[0].content.parts[*].text (skipping 'thought': true parts) ---
-            using var doc = System.Text.Json.JsonDocument.Parse(responseJson);
-            string aiAnswer = "";
-
-            if (doc.RootElement.TryGetProperty("candidates", out var candidates) &&
-                candidates.ValueKind == System.Text.Json.JsonValueKind.Array &&
-                candidates.GetArrayLength() > 0)
-            {
-                var firstCandidate = candidates[0];
-                if (firstCandidate.TryGetProperty("content", out var contentObj) &&
-                    contentObj.TryGetProperty("parts", out var partsArr) &&
-                    partsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
-                {
-                    var sb = new System.Text.StringBuilder();
-                    foreach (var part in partsArr.EnumerateArray())
-                    {
-                        // Skip internal chain-of-thought blocks ("thought": true)
-                        if (part.TryGetProperty("thought", out var thoughtElem) && thoughtElem.GetBoolean())
-                        {
-                            continue;
-                        }
-
-                        if (part.TryGetProperty("text", out var textElem))
-                        {
-                            sb.Append(textElem.GetString() ?? "");
-                        }
-                    }
-                    aiAnswer = sb.ToString();
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(aiAnswer))
-            {
-                aiAnswer = "No se obtuvo respuesta de la IA.";
-            }
-
-            PinnedAppsList.Clear();
-
-            string cleanAnswer = aiAnswer.Trim();
-
-            // 1. Strip label prefixes like "Response:", "Greeting:", "Output:", "Answer:"
-            int colonIdx = cleanAnswer.IndexOf(':');
-            if (colonIdx > 0 && colonIdx <= 12)
-            {
-                string prefix = cleanAnswer.Substring(0, colonIdx).Trim();
-                if (prefix.Equals("Response", StringComparison.OrdinalIgnoreCase) ||
-                    prefix.Equals("Greeting", StringComparison.OrdinalIgnoreCase) ||
-                    prefix.Equals("Output", StringComparison.OrdinalIgnoreCase) ||
-                    prefix.Equals("Answer", StringComparison.OrdinalIgnoreCase) ||
-                    prefix.Equals("Result", StringComparison.OrdinalIgnoreCase))
-                {
-                    cleanAnswer = cleanAnswer.Substring(colonIdx + 1).Trim();
-                }
-            }
-
-            // 2. Handle repeated quoted patterns e.g. "Hola"Hola or "Text"
-            if (cleanAnswer.StartsWith("\""))
-            {
-                int lastQuoteIdx = cleanAnswer.LastIndexOf('"');
-                if (lastQuoteIdx > 0)
-                {
-                    string afterQuote = cleanAnswer.Substring(lastQuoteIdx + 1).Trim();
-                    if (!string.IsNullOrWhiteSpace(afterQuote))
-                    {
-                        cleanAnswer = afterQuote;
-                    }
-                    else
-                    {
-                        cleanAnswer = cleanAnswer.Substring(1, lastQuoteIdx - 1).Trim();
-                    }
-                }
-            }
-
-            // 3. Strip any surrounding quotes or backticks
-            cleanAnswer = cleanAnswer.Trim('"', '\'', ' ');
-
-            if (!string.IsNullOrWhiteSpace(cleanAnswer))
-            {
-                try { WallFlow.Services.ClipboardService.Instance.AddAiItem(cleanAnswer); } catch { }
-
-                PinnedAppsList.Add(new PinnedApp
-                {
-                    Name = cleanAnswer,
-                    Path = "clipboard:" + cleanAnswer,
-                    ActionText = "Copiar este texto al portapapeles",
-                    IconGlyph = "\uE1BB"
-                });
-            }
-
-            if (PinnedAppsList.Count > 0)
-            {
-                _selectedIndex = 0;
-                PinnedAppsList[0].IsSelected = true;
-            }
-            UpdateWindowSize();
-            _ = Dispatcher.BeginInvoke(new Action(() =>
-            {
-                UpdateLayout();
-                UpdateWindowSize();
-            }), System.Windows.Threading.DispatcherPriority.Loaded);
-        }
-        catch (Exception ex)
-        {
-            PinnedAppsList.Clear();
-            PinnedAppsList.Add(new PinnedApp
-            {
-                Name = "Error al conectar con Gemini AI: " + ex.Message,
-                Path = "AI_ERROR",
-                ActionText = "Verifica tu conexión a internet",
-                IconGlyph = "\uE1BB"
-            });
-            _selectedIndex = 0;
-            PinnedAppsList[0].IsSelected = true;
-            UpdateWindowSize();
-        }
-    }
-
-    private void PerformAppsSearch(string query)
-    {
-        // Clear previous selection
-        foreach (var app in PinnedAppsList) app.IsSelected = false;
-
-        PinnedAppsList.Clear();
-        _selectedIndex = -1;
-
-        if (string.IsNullOrEmpty(query)) { UpdateWindowSize(); return; }
-
-        var counts = SettingsService.Instance.AppLaunchCounts;
-        var scored = new List<(PinnedApp app, int score)>();
-
-        foreach (var app in _allInstalledApps)
-        {
-            int score = 0;
-            if (app.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase))
-                score = 100;
-            else if (app.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-                score = 50;
-            else if (app.Path.Contains(query, StringComparison.OrdinalIgnoreCase))
-                score = 40;
-            else if (MatchInitials(app.Name, query))
-                score = 30;
-            else
-                continue;
-
-            // Boost by launch frequency
-            if (counts != null && counts.TryGetValue(app.Path, out int count))
-                score += Math.Min(count * 2, 20);
-
-            // Boost pinned apps
-            if (app.IsPinned) score += 10;
-
-            scored.Add((app, score));
-        }
-
-        scored.Sort((a, b) => string.Compare(a.app.Name, b.app.Name, StringComparison.CurrentCultureIgnoreCase));
-
-        var seenResultNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (app, _) in scored)
-        {
-            if (seenResultNames.Add(app.Name))
-            {
-                PinnedAppsList.Add(app);
-            }
-        }
-
-        // Select first result
-        if (PinnedAppsList.Count > 0)
-        {
-            _selectedIndex = 0;
-            PinnedAppsList[0].IsSelected = true;
-        }
-
-        UpdateWindowSize();
-    }
-
-    private static bool MatchInitials(string name, string query)
-    {
-        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length < 2 || query.Length < 2) return false;
-
-        var initials = new System.Text.StringBuilder();
-        foreach (var w in words)
-            if (w.Length > 0) initials.Append(char.ToLowerInvariant(w[0]));
-
-        return initials.ToString().Contains(query.ToLowerInvariant());
-    }
-
-    private void MapFileExtension(string ext, PinnedApp item)
-    {
-        switch (ext)
-        {
-            // Images
-            case ".png":
-            case ".jpg":
-            case ".jpeg":
-            case ".gif":
-            case ".bmp":
-            case ".svg":
-            case ".webp":
-            case ".ico":
-            case ".tiff":
-                item.IconGlyph = "\uE5C4"; // Lucide images
-                item.ActionText = "Imagen";
-                break;
-
-            // Audio
-            case ".mp3":
-            case ".wav":
-            case ".wma":
-            case ".ogg":
-            case ".flac":
-            case ".aac":
-            case ".m4a":
-                item.IconGlyph = "\uE31A"; // Lucide file-headphone
-                item.ActionText = "Audio";
-                break;
-
-            // Video
-            case ".mp4":
-            case ".mkv":
-            case ".avi":
-            case ".mov":
-            case ".wmv":
-            case ".flv":
-            case ".webm":
-            case ".mpeg":
-                item.IconGlyph = "\uE321"; // Lucide file-video
-                item.ActionText = "Video";
-                break;
-
-            // Documents / Office / PDF
-            case ".pdf":
-                item.IconGlyph = "\uE329"; // Lucide file-type
-                item.ActionText = "Documento PDF";
-                break;
-            case ".docx":
-            case ".doc":
-                item.IconGlyph = "\uE329";
-                item.ActionText = "Documento de Word";
-                break;
-            case ".xlsx":
-            case ".xls":
-                item.IconGlyph = "\uE329";
-                item.ActionText = "Hoja de cálculo";
-                break;
-            case ".pptx":
-            case ".ppt":
-                item.IconGlyph = "\uE329";
-                item.ActionText = "Presentación";
-                break;
-            case ".txt":
-            case ".rtf":
-            case ".md":
-                item.IconGlyph = "\uE329";
-                item.ActionText = "Archivo de texto";
-                break;
-
-            // Archives
-            case ".zip":
-            case ".rar":
-            case ".7z":
-            case ".tar":
-            case ".gz":
-                item.IconGlyph = "\uE129"; // Lucide package
-                item.ActionText = "Archivo comprimido";
-                break;
-
-            // Default
-            default:
-                item.IconGlyph = "\uE329"; // Lucide file-type
-                item.ActionText = "Archivo";
-                break;
-        }
-    }
-
-    private async Task SearchFilesAsync(string query)
-    {
-        // Cancel previous running search to prevent lag
-        _fileSearchCts?.Cancel();
-        _fileSearchCts = new System.Threading.CancellationTokenSource();
-        var token = _fileSearchCts.Token;
-
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            Dispatcher.Invoke(() => {
-                PinnedAppsList.Clear();
-                _selectedIndex = -1;
-                UpdateWindowSize();
-            });
-            return;
-        }
-
-        List<string> searchDirs = new()
-        {
-            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
-        };
-
-        var matchedFiles = new List<PinnedApp>();
-
-        await Task.Run(() =>
-        {
-            try
-            {
-                foreach (var dir in searchDirs)
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (!Directory.Exists(dir)) continue;
-
-                    // Support deep search (up to 3 levels) only if query is long enough (3+ chars)
-                    // Short queries (1-2 chars) only scan the root of folders to keep it instant
-                    var options = new EnumerationOptions
-                    {
-                        IgnoreInaccessible = true,
-                        RecurseSubdirectories = query.Length >= 3,
-                        MaxRecursionDepth = query.Length < 3 ? 1 : 3
-                    };
-
-                    foreach (var path in Directory.EnumerateFileSystemEntries(dir, "*", options))
-                    {
-                        if (token.IsCancellationRequested) return;
-
-                        bool isDir = Directory.Exists(path);
-                        if (isDir)
-                        {
-                            string folderName = Path.GetFileName(path);
-                            if (string.IsNullOrEmpty(folderName)) continue;
-
-                            if (folderName.Contains(query, StringComparison.OrdinalIgnoreCase))
-                            {
-                                var appItem = new PinnedApp
-                                {
-                                    Name = folderName,
-                                    Subtitle = path,
-                                    Path = path,
-                                    RunAsAdmin = false,
-                                    IconGlyph = "\uE247", // Lucide folder-open glyph
-                                    ActionText = "Carpeta"
-                                };
-                                matchedFiles.Add(appItem);
-                            }
-                        }
-                        else
-                        {
-                            string fileName = Path.GetFileName(path);
-                            string ext = Path.GetExtension(path).ToLower();
-                            
-                            // Exclude apps/executables/installers/shortcuts
-                            if (ext == ".exe" || ext == ".lnk" || ext == ".com" || ext == ".bat" || 
-                                ext == ".cmd" || ext == ".msi" || ext == ".msp" || ext == ".scr" || 
-                                ext == ".pif" || ext == ".appref-ms")
-                            {
-                                continue;
-                            }
-
-                            if (fileName.Contains(query, StringComparison.OrdinalIgnoreCase))
-                            {
-                                var appItem = new PinnedApp
-                                {
-                                    Name = fileName,
-                                    Subtitle = path,
-                                    Path = path,
-                                    RunAsAdmin = false
-                                };
-                                
-                                // Map extension to custom glyph and category badge
-                                MapFileExtension(ext, appItem);
-
-                                matchedFiles.Add(appItem);
-                            }
-                        }
-
-                        if (matchedFiles.Count >= 20) break;
-                    }
-
-                    if (matchedFiles.Count >= 20) break;
-                }
-            }
-            catch { }
-        }, token);
-
-        Dispatcher.Invoke(() =>
-        {
-            if (token.IsCancellationRequested) return;
-            if (SearchBox == null || SearchBox.Text.Trim() != query) return;
-
-            PinnedAppsList.Clear();
-            foreach (var item in matchedFiles)
-            {
-                PinnedAppsList.Add(item);
-            }
-            
-            if (PinnedAppsList.Count > 0)
-            {
-                _selectedIndex = 0;
-                PinnedAppsList[0].IsSelected = true;
-            }
-            else
-            {
-                _selectedIndex = -1;
-            }
-            
-            UpdateWindowSize();
-        });
-    }
-
-    private static string GetFormattedCopyTime(DateTime timestamp)
-    {
-        var now = DateTime.Now;
-        var diff = now - timestamp;
-
-        string timeStr = timestamp.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
-
-        if (diff.TotalSeconds < 60 && diff.TotalSeconds >= 0)
-        {
-            return "Se copió justo ahora";
-        }
-        else if (timestamp.Date == now.Date)
-        {
-            return $"Se copió a las {timeStr}";
-        }
-        else if (timestamp.Date == now.Date.AddDays(-1))
-        {
-            return $"Se copió ayer a las {timeStr}";
-        }
-        else
-        {
-            return $"Se copió el {timestamp:dd/MM} a las {timeStr}";
-        }
-    }
-
-    private void SearchClipboard(string query)
-    {
-        var history = ClipboardService.Instance.History;
-        var matchedItems = new List<PinnedApp>();
-
-        foreach (var item in history)
-        {
-            if (string.IsNullOrEmpty(query) || item.Content.Contains(query, StringComparison.OrdinalIgnoreCase))
-            {
-                string displayName = item.Content;
-                if (item.Type == "Image" && !string.IsNullOrEmpty(item.ImagePath))
-                {
-                    displayName = "[Imagen] " + Path.GetFileName(item.ImagePath);
-                }
-                else if (item.Type == "File")
-                {
-                    displayName = "[Archivos] " + item.Content.Replace("\r", " ").Replace("\n", ", ");
-                }
-
-                string typeLabel = item.Type switch
-                {
-                    "IA" => "Respuesta IA",
-                    "Image" => "Imagen",
-                    "Link" => "URL",
-                    "Code" => "Código",
-                    "File" => "Archivo",
-                    _ => (item.Tags != null && item.Tags.Contains("#IA")) ? "Respuesta IA" : ((item.Colors != null && item.Colors.Count > 0 && item.Content.StartsWith("#")) ? "Color" : "Texto")
-                };
-
-                string timeLabel = GetFormattedCopyTime(item.Timestamp);
-
-                var appItem = new PinnedApp
-                {
-                    Name = displayName.Length > 80 ? displayName.Substring(0, 77).Replace("\r", " ").Replace("\n", " ") + "..." : displayName.Replace("\r", " ").Replace("\n", " "),
-                    Subtitle = $"{typeLabel} • {timeLabel}",
-                    Path = "clipboard:" + item.Content,
-                    RunAsAdmin = false,
-                    ClipboardId = item.Id,
-                    ClipboardType = item.Type,
-                    Timestamp = item.Timestamp
-                };
-
-                if (item.Type == "IA" || (item.Tags != null && item.Tags.Contains("#IA")))
-                {
-                    appItem.IconGlyph = "\uE1BB"; // Lucide Bot
-                }
-                else if (item.Type == "Image" && !string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
-                {
-                    try
-                    {
-                        var bmi = new BitmapImage();
-                        bmi.BeginInit();
-                        bmi.CacheOption = BitmapCacheOption.OnLoad;
-                        bmi.UriSource = new Uri(item.ImagePath, UriKind.Absolute);
-                        bmi.EndInit();
-                        bmi.Freeze();
-                        appItem.Icon = bmi;
-                    }
-                    catch { appItem.IconGlyph = "\uE5C4"; } // Lucide images
-                }
-                else if (item.Type == "Code")
-                {
-                    appItem.IconGlyph = "\uE0C3"; // Lucide file-code
-                }
-                else if (item.Type == "Link")
-                {
-                    appItem.IconGlyph = "\uE102"; // Lucide link
-                }
-                else if (item.Type == "File")
-                {
-                    string pathStr = item.Content.Trim();
-                    if (Directory.Exists(pathStr))
-                    {
-                        appItem.IconGlyph = "\uE247"; // Lucide folder-open
-                    }
-                    else
-                    {
-                        string ext = Path.GetExtension(pathStr).ToLowerInvariant();
-                        switch (ext)
-                        {
-                            case ".png": case ".jpg": case ".jpeg": case ".gif": case ".bmp": case ".svg": case ".webp":
-                                appItem.IconGlyph = "\uE5C4"; // Lucide images
-                                break;
-                            case ".mp3": case ".wav": case ".wma": case ".ogg": case ".flac": case ".aac": case ".m4a":
-                                appItem.IconGlyph = "\uE31A"; // Lucide file-headphone
-                                break;
-                            case ".mp4": case ".mkv": case ".avi": case ".mov": case ".wmv": case ".flv": case ".webm":
-                                appItem.IconGlyph = "\uE321"; // Lucide file-video
-                                break;
-                            case ".zip": case ".rar": case ".7z": case ".tar": case ".gz":
-                                appItem.IconGlyph = "\uE129"; // Lucide package
-                                break;
-                            default:
-                                appItem.IconGlyph = "\uE329"; // Lucide file-type
-                                break;
-                        }
-                    }
-                }
-                else
-                {
-                    appItem.IconGlyph = "\uE329"; // Lucide file-type
-                }
-
-                matchedItems.Add(appItem);
-            }
-        }
-
-        PinnedAppsList.Clear();
-        foreach (var item in matchedItems)
-        {
-            PinnedAppsList.Add(item);
-        }
-
-        if (PinnedAppsList.Count > 0)
-        {
-            _selectedIndex = 0;
-            PinnedAppsList[0].IsSelected = true;
-        }
-        else
-        {
-            _selectedIndex = -1;
-        }
-
-        UpdateWindowSize();
-    }
-
-    private void LoadAiHistory()
-    {
-        var history = ClipboardService.Instance.History;
-        var matchedItems = new List<PinnedApp>();
-
-        var aiItems = history.Where(item => item.Type == "IA" || (item.Tags != null && item.Tags.Contains("#IA")))
-                             .OrderByDescending(item => item.Timestamp)
-                             .ToList();
-
-        foreach (var item in aiItems)
-        {
-            string timeLabel = GetFormattedCopyTime(item.Timestamp);
-
-            var appItem = new PinnedApp
-            {
-                Name = item.Content,
-                Subtitle = $"Respuesta IA • {timeLabel}",
-                Path = "clipboard:" + item.Content,
-                RunAsAdmin = false,
-                ClipboardId = item.Id,
-                ClipboardType = "IA",
-                Timestamp = item.Timestamp,
-                IconGlyph = "\uE1BB" // Lucide Bot
-            };
-
-            matchedItems.Add(appItem);
-        }
-
-        PinnedAppsList.Clear();
-        if (matchedItems.Count > 0)
-        {
-            foreach (var item in matchedItems)
-            {
-                PinnedAppsList.Add(item);
-            }
-            _selectedIndex = 0;
-            PinnedAppsList[0].IsSelected = true;
-        }
-        else
-        {
-            PinnedAppsList.Add(new PinnedApp
-            {
-                Name = "Consulta a Gemini AI",
-                Subtitle = "Escribe tu pregunta en el cuadro de búsqueda y presiona Enter",
-                Path = "AI_EMPTY",
-                IconGlyph = "\uE1BB"
-            });
-            _selectedIndex = 0;
-            PinnedAppsList[0].IsSelected = true;
-        }
-
-        UpdateWindowSize();
-        _ = Dispatcher.BeginInvoke(new Action(() =>
-        {
-            UpdateLayout();
-            UpdateWindowSize();
-        }), System.Windows.Threading.DispatcherPriority.Loaded);
-    }
-
-    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        // Check custom toggle pin hotkey first
-        if (IsHotkeyTriggered(e, SettingsService.Instance.Hotkey_TogglePinApp))
-        {
-            if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
-            {
-                var selectedApp = PinnedAppsList[_selectedIndex];
-                TogglePinApp(selectedApp.Path);
-            }
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Tab)
-        {
-            CycleSearchMode();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Enter)
-        {
-            if (_searchMode == "AI")
-            {
-                _ = PerformAiSearchAsync(SearchBox?.Text.Trim() ?? "");
-                e.Handled = true;
-                return;
-            }
-
-            bool webVisible = WebSearchButton != null && WebSearchButton.IsVisible;
-            int  webIndex   = PinnedAppsList.Count;
-
-            if (webVisible && _selectedIndex == webIndex)
-            {
-                OpenWebSearch();
-            }
-            else if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
-            {
-                var selectedApp = PinnedAppsList[_selectedIndex];
-                LaunchApp(selectedApp.Path, selectedApp.RunAsAdmin);
-            }
-            else if (PinnedAppsList.Count == 0 && !string.IsNullOrEmpty(SearchBox?.Text.Trim()))
-            {
-                OpenWebSearch();
-            }
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Down)
-        {
-            MoveSelection(1);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Up)
-        {
-            MoveSelection(-1);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Right
-                 && _selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count
-                 && SearchBox.CaretIndex >= SearchBox.Text.Length)
-        {
-            SetRunAsAdmin(true);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Left
-                 && _selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count
-                 && SearchBox.CaretIndex == 0)
-        {
-            SetRunAsAdmin(false);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape)
-        {
-            SafeClose();
-            e.Handled = true;
-        }
-    }
-
-    private bool IsHotkeyTriggered(KeyEventArgs e, string hotkeyText)
-    {
-        if (string.IsNullOrWhiteSpace(hotkeyText)) return false;
-
-        var parts = hotkeyText.Split('+', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0) return false;
-
-        bool ctrlRequired = false;
-        bool shiftRequired = false;
-        bool altRequired = false;
-        bool winRequired = false;
-
-        string keyPart = parts[parts.Length - 1].Trim();
-
-        for (int i = 0; i < parts.Length - 1; i++)
-        {
-            string mod = parts[i].Trim().ToLower();
-            if (mod == "ctrl" || mod == "control") ctrlRequired = true;
-            else if (mod == "shift") shiftRequired = true;
-            else if (mod == "alt") altRequired = true;
-            else if (mod == "win" || mod == "windows") winRequired = true;
-        }
-
-        bool ctrlPressed = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-        bool shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-        bool altPressed = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-        bool winPressed = (Keyboard.Modifiers & ModifierKeys.Windows) != 0;
-
-        if (ctrlPressed != ctrlRequired) return false;
-        if (shiftPressed != shiftRequired) return false;
-        if (altPressed != altRequired) return false;
-        if (winPressed != winRequired) return false;
-
-        if (Enum.TryParse<Key>(keyPart, true, out Key targetKey))
-        {
-            Key actualKey = (e.Key == Key.System) ? e.SystemKey : e.Key;
-            return actualKey == targetKey;
-        }
-
-        if (keyPart.Equals("Esc", StringComparison.OrdinalIgnoreCase) || keyPart.Equals("Escape", StringComparison.OrdinalIgnoreCase))
-            return e.Key == Key.Escape;
-        if (keyPart.Equals("Enter", StringComparison.OrdinalIgnoreCase) || keyPart.Equals("Return", StringComparison.OrdinalIgnoreCase))
-            return e.Key == Key.Enter;
-        if (keyPart.Equals("Tab", StringComparison.OrdinalIgnoreCase))
-            return e.Key == Key.Tab;
-        if (keyPart.Equals("Space", StringComparison.OrdinalIgnoreCase))
-            return e.Key == Key.Space;
-
-        return false;
-    }
-
-    private void SetRunAsAdmin(bool admin)
-    {
-        if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
-        {
-            PinnedAppsList[_selectedIndex].RunAsAdmin = admin;
-        }
-    }
-
-    private void LaunchApp(string path, bool asAdmin)
-    {
-        if (string.IsNullOrEmpty(path) || path == "AI_ERROR" || path == "AI_LOADING" || path == "AI_EMPTY")
-        {
-            return;
-        }
-
-        if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                using var _ = Process.Start(new ProcessStartInfo
-                {
-                    FileName = path,
-                    UseShellExecute = true
-                });
-            }
-            catch { }
-            SafeClose();
-            return;
-        }
-
-        if (path.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase))
-        {
-            var appItem = PinnedAppsList.FirstOrDefault(a => a.Path == path);
-            if (appItem != null && appItem.ClipboardId != Guid.Empty)
-            {
-                ClipboardService.Instance.CopyToClipboardInternal(appItem.ClipboardId);
-            }
-            else
-            {
-                var content = path.Substring("clipboard:".Length);
-                ClipboardService.Instance.CopyToClipboardInternal(content);
-            }
-            SoundService.Play(SoundType.Click);
-            SafeClose();
-            return;
-        }
-
-        if (path == "ADD_APP")
-        {
-            AddNewApp();
-            return;
-        }
-
-        try
-        {
-            // Increment launch count
-            var counts = SettingsService.Instance.AppLaunchCounts;
-            if (counts == null)
-            {
-                SettingsService.Instance.AppLaunchCounts = new Dictionary<string, int>();
-                counts = SettingsService.Instance.AppLaunchCounts;
-            }
-            if (!counts.ContainsKey(path))
-            {
-                counts[path] = 0;
-            }
-            counts[path]++;
-            SettingsService.Save();
-
-            string launchPath = path;
-            string exeName = "";
-            bool isUwp = path.StartsWith("uwp:", StringComparison.OrdinalIgnoreCase);
-
-            if (isUwp)
-            {
-                var parts = path.Substring(4).Split('|');
-                var aumid = parts[0];
-                var exePath = parts.Length > 1 ? parts[1] : "";
-                exeName = Path.GetFileName(exePath);
-                launchPath = $@"shell:AppsFolder\{aumid}";
-            }
-            else
-            {
-                var fullPath = ResolvePath(path);
-                exeName = Path.GetFileName(fullPath);
-                launchPath = fullPath;
-            }
-
-            // Try to activate existing window first
-            if (!string.IsNullOrEmpty(exeName) && ActivateExistingWindow(exeName))
-            {
-                SafeClose();
-                return;
-            }
-
-            // Hide the launcher window immediately so that Windows directs activation focus
-            // to the newly launched application rather than backing into other WallFlow windows.
-            try { Visibility = Visibility.Collapsed; } catch { }
-
-            if (isUwp)
-            {
-                using var _ = Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = launchPath,
-                    UseShellExecute = true
-                });
-            }
-            else
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = launchPath,
-                    UseShellExecute = true
-                };
-                if (asAdmin)
-                {
-                    psi.Verb = "runas";
-                }
-                using var _ = Process.Start(psi);
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"No se pudo abrir la aplicación: {ex.Message}", "Error Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        SafeClose();
-    }
-
-    private void MoveSelection(int direction)
-    {
-        bool webVisible = WebSearchButton != null && WebSearchButton.IsVisible;
-        bool hasApps   = PinnedAppsList.Count > 0;
-        int  webIndex  = PinnedAppsList.Count; // virtual index for the web search row
-        int  total     = webIndex + (webVisible ? 1 : 0);
-
-        if (total == 0) return;
-
-        // Clear current highlight
-        if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
-            PinnedAppsList[_selectedIndex].IsSelected = false;
-        SetWebSearchHighlight(false);
-
-        _selectedIndex += direction;
-
-        // Wrap around
-        if (_selectedIndex < 0)
-            _selectedIndex = total - 1;
-        else if (_selectedIndex >= total)
-            _selectedIndex = 0;
-
-        // Apply new highlight
-        if (webVisible && _selectedIndex == webIndex)
-        {
-            SetWebSearchHighlight(true);
-        }
-        else if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
-        {
-            PinnedAppsList[_selectedIndex].IsSelected = true;
-            try
-            {
-                var container = AppsControl.ItemContainerGenerator.ContainerFromIndex(_selectedIndex) as FrameworkElement;
-                container?.BringIntoView();
-            }
-            catch { /* ignored */ }
-        }
-    }
-
-    private void SetWebSearchHighlight(bool selected)
-    {
-        if (WebRowBorder == null) return;
-        if (selected)
-        {
-            WebRowBorder.Background  = SpotlightSelectedBackgroundBrush;
-            WebRowBorder.BorderBrush = SpotlightSelectedBorderBrush;
-        }
-        else
-        {
-            WebRowBorder.Background  = System.Windows.Media.Brushes.Transparent;
-            WebRowBorder.BorderBrush = System.Windows.Media.Brushes.Transparent;
-        }
-    }
-
-    private void SearchBox_GotFocus(object sender, RoutedEventArgs e) { }
-
-    private void SearchBox_LostFocus(object sender, RoutedEventArgs e) { }
-}
-
-public static class MarkdownHelper
-{
-    public static readonly DependencyProperty FormattedTextProperty =
-        DependencyProperty.RegisterAttached(
-            "FormattedText",
-            typeof(string),
-            typeof(MarkdownHelper),
-            new PropertyMetadata(string.Empty, OnFormattedTextChanged));
-
-    public static string GetFormattedText(DependencyObject obj)
-    {
-        return (string)obj.GetValue(FormattedTextProperty);
-    }
-
-    public static void SetFormattedText(DependencyObject obj, string value)
-    {
-        obj.SetValue(FormattedTextProperty, value);
-    }
-
-    private static void OnFormattedTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is TextBlock textBlock)
-        {
-            textBlock.Inlines.Clear();
-            string text = e.NewValue as string ?? string.Empty;
-            if (string.IsNullOrEmpty(text)) return;
-
-            ParseMarkdownToInlines(text, textBlock.Inlines, textBlock.FontSize);
-        }
-    }
-
-    public static void ParseMarkdownToInlines(string text, System.Windows.Documents.InlineCollection inlines, double baseFontSize)
-    {
-        string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        bool inCodeBlock = false;
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string line = lines[i];
-
-            if (line.TrimStart().StartsWith("```"))
-            {
-                inCodeBlock = !inCodeBlock;
-                continue;
-            }
-
-            if (i > 0)
-            {
-                inlines.Add(new System.Windows.Documents.LineBreak());
-            }
-
-            if (inCodeBlock)
-            {
-                var codeSpan = new System.Windows.Documents.Span(new System.Windows.Documents.Run(line))
-                {
-                    FontFamily = new FontFamily("Consolas"),
-                    Foreground = new SolidColorBrush(Color.FromRgb(255, 203, 107)),
-                    Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255))
-                };
-                inlines.Add(codeSpan);
-                continue;
-            }
-
-            if (line.StartsWith("# "))
-            {
-                AddFormattedText(line.Substring(2), inlines, isBold: true, fontSize: baseFontSize + 4);
-            }
-            else if (line.StartsWith("## "))
-            {
-                AddFormattedText(line.Substring(3), inlines, isBold: true, fontSize: baseFontSize + 3);
-            }
-            else if (line.StartsWith("### "))
-            {
-                AddFormattedText(line.Substring(4), inlines, isBold: true, fontSize: baseFontSize + 2);
-            }
-            else if (line.StartsWith("* ") || line.StartsWith("- ") || line.StartsWith("• "))
-            {
-                inlines.Add(new System.Windows.Documents.Run("• "));
-                string content = line.Length > 2 ? line.Substring(2) : "";
-                AddFormattedText(content, inlines, isBold: false, fontSize: baseFontSize);
-            }
-            else
-            {
-                AddFormattedText(line, inlines, isBold: false, fontSize: baseFontSize);
-            }
-        }
-    }
-
-    private static void AddFormattedText(string text, System.Windows.Documents.InlineCollection inlines, bool isBold, double fontSize)
-    {
-        var regex = new System.Text.RegularExpressions.Regex(@"(\*\*.*?\*\*|__.*?__|`.*?`|\*.*?\*|_.*?_)");
-        var parts = regex.Split(text);
-
-        foreach (var part in parts)
-        {
-            if (string.IsNullOrEmpty(part)) continue;
-
-            if ((part.StartsWith("**") && part.EndsWith("**") && part.Length >= 4) ||
-                (part.StartsWith("__") && part.EndsWith("__") && part.Length >= 4))
-            {
-                string inner = part.Substring(2, part.Length - 4);
-                var boldRun = new System.Windows.Documents.Run(inner) { FontWeight = FontWeights.Bold, FontSize = fontSize };
-                inlines.Add(boldRun);
-            }
-            else if ((part.StartsWith("*") && part.EndsWith("*") && part.Length >= 2) ||
-                     (part.StartsWith("_") && part.EndsWith("_") && part.Length >= 2))
-            {
-                string inner = part.Substring(1, part.Length - 2);
-                var italicRun = new System.Windows.Documents.Run(inner) { FontStyle = FontStyles.Italic, FontSize = fontSize };
-                if (isBold) italicRun.FontWeight = FontWeights.Bold;
-                inlines.Add(italicRun);
-            }
-            else if (part.StartsWith("`") && part.EndsWith("`") && part.Length >= 2)
-            {
-                string inner = part.Substring(1, part.Length - 2);
-                var codeRun = new System.Windows.Documents.Run(" " + inner + " ")
-                {
-                    FontFamily = new FontFamily("Consolas"),
-                    Foreground = new SolidColorBrush(Color.FromRgb(255, 203, 107)),
-                    Background = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255)),
-                    FontSize = fontSize - 1
-                };
-                inlines.Add(codeRun);
-            }
-            else
-            {
-                var normalRun = new System.Windows.Documents.Run(part) { FontSize = fontSize };
-                if (isBold) normalRun.FontWeight = FontWeights.Bold;
-                inlines.Add(normalRun);
-            }
-        }
-    }
+	private List<ActiveWindowModel> _allActiveWindows = new List<ActiveWindowModel>();
+
+	private Visibility _activeWindowsVisibility;
+
+	private string _activeWindowsCountText = "0 en ejecución";
+
+	private Brush _modeWindowsBrush = Brushes.Transparent;
+
+	private Brush _modeWindowsForegroundBrush = Brushes.White;
+
+	private string _satelliteMediaTitle = "Reproductor";
+
+	private string _satelliteMediaArtist = string.Empty;
+
+	private string _satelliteMediaGlyph = "\ue13c";
+
+	private ImageSource? _satelliteMediaArtwork;
+
+	private bool _isMediaPlaying;
+
+	private Visibility _isPlayerExpandedVisibility = Visibility.Collapsed;
+
+	private Visibility _notificationsCardVisibility = Visibility.Collapsed;
+
+	private string _notificationsCountText = "0 notificaciones";
+
+	private bool _hasUnreadNotifications;
+
+	private bool _hasNoNotifications = true;
+
+	private bool _isNotificationsLoading;
+
+	private Visibility _connectedDevicesCardVisibility = Visibility.Collapsed;
+
+	private string _connectedDevicesCountText = "0 dispositivos";
+
+	private bool _hasConnectedDevices;
+
+	private bool _hasNoConnectedDevices = true;
+
+	private bool _isConnectedDevicesLoading;
+
+	private Visibility _wallpaperFanCardVisibility = Visibility.Collapsed;
+
+	private int _fanCurrentIndex;
+	private string _lastLoadedFanDir = string.Empty;
+	private int _lastLoadedFanCount = 0;
+	private readonly HashSet<string> _inFlightThumbnails = new(StringComparer.OrdinalIgnoreCase);
+	private long _lastWheelTicks;
+
+	private string _fanWallpapersCountText = "0 Fondos";
+
+	private string _activeFanTitleText = "Selecciona un fondo";
+
+	private string _activeFanMetaText = "";
+
+	private string _fanCounterText = "0 / 0";
+
+	private bool _hasFanWallpapers;
+
+	private bool _isOpeningSubWidget;
+
+	private GlobalSystemMediaTransportControlsSessionManager? _mediaSessionManager;
+
+	private GlobalSystemMediaTransportControlsSession? _currentMediaSession;
+
+	private CancellationTokenSource? _mediaCts;
+
+	private string _spotlightCurrentTime = DateTime.Now.ToString("HH:mm");
+
+	private string _spotlightCurrentDate = "";
+
+	private string _spotlightWeatherSnippet = "";
+
+	private bool _hasWeatherSnippet;
+
+	private double _spotlightRamPercent;
+
+	private string _spotlightRamPercentText = "0%";
+
+	private string _spotlightRamUsageText = "-- / -- GB";
+
+	private double _spotlightDiskPercent;
+
+	private string _spotlightDiskPercentText = "0%";
+
+	private string _spotlightDiskUsageText = "-- libres";
+
+	private string _spotlightDiskName = "DISCO (C:)";
+
+	private string _spotlightBatterySnippet = "";
+
+	private bool _hasBatterySnippet;
+
+	private readonly List<PinnedApp> _allInstalledApps = new List<PinnedApp>();
+
+	private readonly IIconExtractionService _iconService = IconExtractionService.Instance;
+
+	private readonly IAppDiscoveryService _discoveryService = AppDiscoveryService.Instance;
+
+	private readonly ISpotlightSearchService _searchService = SpotlightSearchService.Instance;
+
+	private readonly IGeminiSpotlightService _geminiService = GeminiSpotlightService.Instance;
+
+	private readonly ISpotlightThemeService _themeService = SpotlightThemeService.Instance;
+
+	private CancellationTokenSource? _fileSearchCts;
+
+	private DispatcherTimer? _searchDebounceTimer;
+
+	private DispatcherTimer? _musicDebounceTimer;
+
+	private DispatcherTimer? _clockTimer;
+
+	private DateTime _loadedTime = DateTime.MinValue;
+
+	private int _selectedIndex = -1;
+
+	private bool _isClosing;
+
+	private bool _isShowingDialog;
+
+	private bool _isChangingMode;
+
+	private string _searchMode = "Apps";
+
+	private Brush _modeAppsBrush = Brushes.Transparent;
+
+	private Brush _modeFilesBrush = Brushes.Transparent;
+
+	private Brush _modeClipboardBrush = Brushes.Transparent;
+
+	private Brush _modeAiBrush = Brushes.Transparent;
+
+	private Brush _modeAppsForegroundBrush = Brushes.White;
+
+	private Brush _modeFilesForegroundBrush = Brushes.White;
+
+	private Brush _modeClipboardForegroundBrush = Brushes.White;
+
+	private Brush _modeAiForegroundBrush = Brushes.White;
+
+	private Brush _spotlightBgBrush = Brushes.Transparent;
+
+	private Brush _spotlightBorderBrush = Brushes.Transparent;
+
+	private Thickness _spotlightBorderThickness = new Thickness(0.0);
+
+	private Brush _spotlightTextBrush = Brushes.White;
+
+	private Brush _spotlightPlaceholderBrush = new SolidColorBrush(Color.FromArgb(80, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightIconBrush = new SolidColorBrush(Color.FromArgb(96, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightSelectedBorderBrush = new SolidColorBrush(Color.FromRgb(0, 122, byte.MaxValue));
+
+	private Brush _spotlightSelectedBackgroundBrush = new SolidColorBrush(Color.FromArgb(37, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightHoverBackgroundBrush = new SolidColorBrush(Color.FromArgb(21, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightHoverBorderBrush = new SolidColorBrush(Color.FromArgb(32, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightItemBackgroundBrush = new SolidColorBrush(Color.FromArgb(18, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightItemForegroundBrush = new SolidColorBrush(Color.FromArgb(165, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightSecondaryTextBrush = new SolidColorBrush(Color.FromArgb(160, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightSeparatorBrush = new SolidColorBrush(Color.FromArgb(21, byte.MaxValue, byte.MaxValue, byte.MaxValue));
+
+	private Brush _spotlightSearchFocusBrush = new SolidColorBrush(Color.FromArgb(230, 34, 34, 38));
+
+	private double _spotlightWidth = 600.0;
+
+	private CornerRadius _spotlightCornerRadius = new CornerRadius(27.0);
+
+	private Visibility _spotlightFavoritesVisibility;
+
+	private bool _isWebSearchSelected;
+
+	private double _spotlightContainerWidth = 980.0;
+
+	private Visibility _bentoVisibility;
+
+	private string _bentoWeatherTemp = "--°C";
+
+	private string _bentoWeatherCity = "Clima local";
+
+	private string _bentoWeatherCondition = "Cargando...";
+
+	private string _bentoWeatherGlyph = "\ue706";
+
+	private string _bentoWeatherDate = "";
+
+	private string _bentoClipboardSnippet = "Portapapeles vacío";
+
+	private string _bentoClipboardType = "Texto";
+
+	private string _currentWallpaperPath = "";
+
+	private ImageSource? _bentoWallpaperSource;
+
+	private string _bentoWallpaperName = "Fondo de Windows";
+
+	private string _bentoWallpaperResolution = "";
+
+	private PinnedApp? _inspectorSelectedItem;
+
+	private string _inspectorTitle = "";
+
+	private string _inspectorSubtitle = "";
+
+	private string _inspectorPath = "";
+
+	private ImageSource? _inspectorImageSource;
+
+	private string _inspectorFileSize = "";
+
+	private string _inspectorDimensions = "";
+
+	private string _inspectorModifiedDate = "";
+
+	private string _inspectorCodeSnippet = "";
+
+	private string _inspectorCodeLines = "";
+
+	private string _inspectorCodeLanguage = "";
+
+	private ImageSource? _inspectorAppIcon;
+
+	private string _inspectorAppName = "";
+
+	private string _inspectorAppStatus = "Listo para iniciar";
+
+	private string _inspectorAppRamUsage = "—";
+
+	private string _inspectorAppPid = "—";
+
+	private string _inspectorWebQuery = "";
+
+	private bool _inspectorIsAppRunning;
+
+	private string _inspectorFullClipboardText = "";
+
+	private string _inspectorClipboardWordCount = "";
+
+	private Brush? _inspectorColorPreviewBrush;
+
+	private bool _inspectorIsColor;
+
+	private bool _inspectorIsLink;
+
+	private ImageSource? _inspectorClipboardImageSource;
+
+	private bool _inspectorHasClipboardImage;
+
+	private Visibility _inspectorClipboardImageViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorClipboardTextViewVisibility = Visibility.Visible;
+
+	private string _inspectorClipboardImageDimensions = "";
+
+	private string _inspectorClipboardImageDetails = "";
+
+	private string _inspectorClipboardCopyButtonText = "Copiar (Enter)";
+
+	private string _inspectorAiResponse = "";
+
+	private Visibility _inspectorFileViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorCodeViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorAppViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorClipboardViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorAiViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorWebViewVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorDefaultViewVisibility;
+
+	private Visibility _inspectorMusicViewVisibility = Visibility.Collapsed;
+
+	private string _inspectorMusicTitle = "";
+
+	private string _inspectorMusicSubtitle = "";
+
+	private string _inspectorMusicQuery = "";
+
+	private string _inspectorMusicStatus = "";
+
+	private ImageSource? _inspectorMusicArtwork;
+
+	private string _inspectorMusicDuration = "";
+
+	private Visibility _inspectorMusicDurationVisibility = Visibility.Collapsed;
+
+	private Visibility _inspectorMusicEqualizerVisibility = Visibility.Collapsed;
+
+	private const int WM_SYSCOMMAND = 274;
+
+	private const int SC_KEYMENU = 61696;
+
+	private CancellationTokenSource? _musicSearchCts;
+
+	private Point _favDragStartPoint;
+
+	private PinnedApp? _draggedFavApp;
+
+	private bool _isFavDragging;
+
+	private CancellationTokenSource? _inspectorCts;
+
+
+	string IWidget.Name => "PinnedApps";
+
+	public bool IsOpen
+	{
+		get
+		{
+			if (IsLoaded)
+			{
+				return IsVisible;
+			}
+			return false;
+		}
+	}
+
+	public ObservableCollection<PinnedApp> PinnedAppsList { get; } = new ObservableCollection<PinnedApp>();
+
+	public ObservableCollection<AiChatMessage> AiChatMessages { get; } = new ObservableCollection<AiChatMessage>();
+
+	public Visibility AiChatViewVisibility => _searchMode == "AI" ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility StandardResultsViewVisibility => _searchMode != "AI" ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AiChatEmptyStateVisibility => (_searchMode == "AI" && AiChatMessages.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AiChatThreadVisibility => (_searchMode == "AI" && AiChatMessages.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+
+	public string ActiveAiModelName
+	{
+		get
+		{
+			string m = SettingsService.Instance.GeminiModel ?? "gemini-3.5-flash-lite";
+			return m switch
+			{
+				"gemini-3.5-flash-lite" => "Gemini 3.5 Flash Lite",
+				"gemini-3.6-flash" => "Gemini 3.6 Flash",
+				"gemini-3.7-flash" => "Gemini 3.7 Flash",
+				"gemini-3.8-flash" => "Gemini 3.8 Flash",
+				_ => m
+			};
+		}
+	}
+
+	public void UpdateAiChatVisibilities()
+	{
+		OnPropertyChanged(nameof(AiChatViewVisibility));
+		OnPropertyChanged(nameof(StandardResultsViewVisibility));
+		OnPropertyChanged(nameof(AiChatEmptyStateVisibility));
+		OnPropertyChanged(nameof(AiChatThreadVisibility));
+		OnPropertyChanged(nameof(ActiveAiModelName));
+	}
+
+	public ObservableCollection<PinnedApp> FavoritesList { get; } = new ObservableCollection<PinnedApp>();
+
+	public ObservableCollection<ActiveWindowModel> ActiveWindowsList { get; } = new ObservableCollection<ActiveWindowModel>();
+
+	public Visibility ActiveWindowsVisibility
+	{
+		get
+		{
+			return _activeWindowsVisibility;
+		}
+		set
+		{
+			_activeWindowsVisibility = value;
+			OnPropertyChanged("ActiveWindowsVisibility");
+		}
+	}
+
+	public string ActiveWindowsCountText
+	{
+		get
+		{
+			return _activeWindowsCountText;
+		}
+		set
+		{
+			_activeWindowsCountText = value;
+			OnPropertyChanged("ActiveWindowsCountText");
+		}
+	}
+
+	public Brush ModeWindowsBrush
+	{
+		get
+		{
+			return _modeWindowsBrush;
+		}
+		set
+		{
+			_modeWindowsBrush = value;
+			OnPropertyChanged("ModeWindowsBrush");
+		}
+	}
+
+	public Brush ModeWindowsForegroundBrush
+	{
+		get
+		{
+			return _modeWindowsForegroundBrush;
+		}
+		set
+		{
+			_modeWindowsForegroundBrush = value;
+			OnPropertyChanged("ModeWindowsForegroundBrush");
+		}
+	}
+
+	public string SatelliteMediaTitle
+	{
+		get
+		{
+			return _satelliteMediaTitle;
+		}
+		set
+		{
+			_satelliteMediaTitle = value;
+			OnPropertyChanged("SatelliteMediaTitle");
+		}
+	}
+
+	public bool HasMediaArtist => !string.IsNullOrWhiteSpace(_satelliteMediaArtist);
+
+	public string SatelliteMediaArtist
+	{
+		get
+		{
+			return _satelliteMediaArtist;
+		}
+		set
+		{
+			_satelliteMediaArtist = value;
+			OnPropertyChanged("SatelliteMediaArtist");
+			OnPropertyChanged("HasMediaArtist");
+		}
+	}
+
+	public string SatelliteMediaGlyph
+	{
+		get
+		{
+			return _satelliteMediaGlyph;
+		}
+		set
+		{
+			_satelliteMediaGlyph = value;
+			OnPropertyChanged("SatelliteMediaGlyph");
+		}
+	}
+
+	public ImageSource? SatelliteMediaArtwork
+	{
+		get
+		{
+			return _satelliteMediaArtwork;
+		}
+		set
+		{
+			_satelliteMediaArtwork = value;
+			OnPropertyChanged("SatelliteMediaArtwork");
+			OnPropertyChanged("HasMediaArtwork");
+			OnPropertyChanged("HasNoMediaArtwork");
+		}
+	}
+
+	public bool HasMediaArtwork => _satelliteMediaArtwork != null;
+
+	public bool HasNoMediaArtwork => _satelliteMediaArtwork == null;
+
+	public bool IsMediaPlaying
+	{
+		get
+		{
+			return _isMediaPlaying;
+		}
+		set
+		{
+			_isMediaPlaying = value;
+			OnPropertyChanged("IsMediaPlaying");
+			OnPropertyChanged("PlayGlyphMargin");
+		}
+	}
+
+	public Thickness PlayGlyphMargin
+	{
+		get
+		{
+			if (!_isMediaPlaying)
+			{
+				return new Thickness(1.5, 0.0, 0.0, 0.0);
+			}
+			return new Thickness(0.0, 0.0, 0.0, 0.0);
+		}
+	}
+
+	public Visibility IsPlayerExpandedVisibility
+	{
+		get
+		{
+			return _isPlayerExpandedVisibility;
+		}
+		set
+		{
+			_isPlayerExpandedVisibility = value;
+			OnPropertyChanged("IsPlayerExpandedVisibility");
+		}
+	}
+
+	public Visibility NotificationsCardVisibility
+	{
+		get
+		{
+			return _notificationsCardVisibility;
+		}
+		set
+		{
+			_notificationsCardVisibility = value;
+			OnPropertyChanged("NotificationsCardVisibility");
+		}
+	}
+
+	public ObservableCollection<SpotlightNotificationItem> NotificationsList { get; } = new ObservableCollection<SpotlightNotificationItem>();
+
+	public string NotificationsCountText
+	{
+		get
+		{
+			return _notificationsCountText;
+		}
+		set
+		{
+			_notificationsCountText = value;
+			OnPropertyChanged("NotificationsCountText");
+		}
+	}
+
+	public bool HasUnreadNotifications
+	{
+		get
+		{
+			return _hasUnreadNotifications;
+		}
+		set
+		{
+			_hasUnreadNotifications = value;
+			OnPropertyChanged("HasUnreadNotifications");
+		}
+	}
+
+	public bool HasNoNotifications
+	{
+		get
+		{
+			return _hasNoNotifications;
+		}
+		set
+		{
+			_hasNoNotifications = value;
+			OnPropertyChanged("HasNoNotifications");
+		}
+	}
+
+	public bool IsNotificationsLoading
+	{
+		get
+		{
+			return _isNotificationsLoading;
+		}
+		set
+		{
+			_isNotificationsLoading = value;
+			OnPropertyChanged("IsNotificationsLoading");
+		}
+	}
+
+	public Visibility ConnectedDevicesCardVisibility
+	{
+		get
+		{
+			return _connectedDevicesCardVisibility;
+		}
+		set
+		{
+			_connectedDevicesCardVisibility = value;
+			OnPropertyChanged("ConnectedDevicesCardVisibility");
+		}
+	}
+
+	public ObservableCollection<SpotlightConnectedDeviceItem> ConnectedDevicesList { get; } = new ObservableCollection<SpotlightConnectedDeviceItem>();
+
+	public string ConnectedDevicesCountText
+	{
+		get
+		{
+			return _connectedDevicesCountText;
+		}
+		set
+		{
+			_connectedDevicesCountText = value;
+			OnPropertyChanged("ConnectedDevicesCountText");
+		}
+	}
+
+	public bool HasConnectedDevices
+	{
+		get
+		{
+			return _hasConnectedDevices;
+		}
+		set
+		{
+			_hasConnectedDevices = value;
+			OnPropertyChanged("HasConnectedDevices");
+		}
+	}
+
+	public bool HasNoConnectedDevices
+	{
+		get
+		{
+			return _hasNoConnectedDevices;
+		}
+		set
+		{
+			_hasNoConnectedDevices = value;
+			OnPropertyChanged("HasNoConnectedDevices");
+		}
+	}
+
+	public bool IsConnectedDevicesLoading
+	{
+		get
+		{
+			return _isConnectedDevicesLoading;
+		}
+		set
+		{
+			_isConnectedDevicesLoading = value;
+			OnPropertyChanged("IsConnectedDevicesLoading");
+		}
+	}
+
+	public Visibility WallpaperFanCardVisibility
+	{
+		get
+		{
+			return _wallpaperFanCardVisibility;
+		}
+		set
+		{
+			_wallpaperFanCardVisibility = value;
+			OnPropertyChanged("WallpaperFanCardVisibility");
+		}
+	}
+
+	public ObservableCollection<WallpaperFanItem> FanWallpapersList { get; } = new ObservableCollection<WallpaperFanItem>();
+
+	public int FanCurrentIndex => _fanCurrentIndex;
+
+	public string FanWallpapersCountText
+	{
+		get
+		{
+			return _fanWallpapersCountText;
+		}
+		set
+		{
+			_fanWallpapersCountText = value;
+			OnPropertyChanged("FanWallpapersCountText");
+		}
+	}
+
+	public string ActiveFanTitleText
+	{
+		get
+		{
+			return _activeFanTitleText;
+		}
+		set
+		{
+			_activeFanTitleText = value;
+			OnPropertyChanged("ActiveFanTitleText");
+		}
+	}
+
+	public string ActiveFanMetaText
+	{
+		get
+		{
+			return _activeFanMetaText;
+		}
+		set
+		{
+			_activeFanMetaText = value;
+			OnPropertyChanged("ActiveFanMetaText");
+		}
+	}
+
+	public string FanCounterText
+	{
+		get
+		{
+			return _fanCounterText;
+		}
+		set
+		{
+			_fanCounterText = value;
+			OnPropertyChanged("FanCounterText");
+		}
+	}
+
+	public bool HasFanWallpapers
+	{
+		get
+		{
+			return _hasFanWallpapers;
+		}
+		set
+		{
+			_hasFanWallpapers = value;
+			OnPropertyChanged("HasFanWallpapers");
+			OnPropertyChanged("HasNoFanWallpapers");
+		}
+	}
+
+	public bool HasNoFanWallpapers => !HasFanWallpapers;
+
+	public string SpotlightCurrentTime
+	{
+		get
+		{
+			return _spotlightCurrentTime;
+		}
+		set
+		{
+			_spotlightCurrentTime = value;
+			OnPropertyChanged("SpotlightCurrentTime");
+		}
+	}
+
+	public string SpotlightCurrentDate
+	{
+		get
+		{
+			return _spotlightCurrentDate;
+		}
+		set
+		{
+			_spotlightCurrentDate = value;
+			OnPropertyChanged("SpotlightCurrentDate");
+		}
+	}
+
+	public string SpotlightWeatherSnippet
+	{
+		get
+		{
+			return _spotlightWeatherSnippet;
+		}
+		set
+		{
+			_spotlightWeatherSnippet = value;
+			OnPropertyChanged("SpotlightWeatherSnippet");
+		}
+	}
+
+	public bool HasWeatherSnippet
+	{
+		get
+		{
+			return _hasWeatherSnippet;
+		}
+		set
+		{
+			_hasWeatherSnippet = value;
+			OnPropertyChanged("HasWeatherSnippet");
+		}
+	}
+
+	public double SpotlightRamPercent
+	{
+		get
+		{
+			return _spotlightRamPercent;
+		}
+		set
+		{
+			_spotlightRamPercent = value;
+			OnPropertyChanged("SpotlightRamPercent");
+		}
+	}
+
+	public string SpotlightRamPercentText
+	{
+		get
+		{
+			return _spotlightRamPercentText;
+		}
+		set
+		{
+			_spotlightRamPercentText = value;
+			OnPropertyChanged("SpotlightRamPercentText");
+		}
+	}
+
+	public string SpotlightRamUsageText
+	{
+		get
+		{
+			return _spotlightRamUsageText;
+		}
+		set
+		{
+			_spotlightRamUsageText = value;
+			OnPropertyChanged("SpotlightRamUsageText");
+		}
+	}
+
+	public double SpotlightDiskPercent
+	{
+		get
+		{
+			return _spotlightDiskPercent;
+		}
+		set
+		{
+			_spotlightDiskPercent = value;
+			OnPropertyChanged("SpotlightDiskPercent");
+		}
+	}
+
+	public string SpotlightDiskPercentText
+	{
+		get
+		{
+			return _spotlightDiskPercentText;
+		}
+		set
+		{
+			_spotlightDiskPercentText = value;
+			OnPropertyChanged("SpotlightDiskPercentText");
+		}
+	}
+
+	public string SpotlightDiskUsageText
+	{
+		get
+		{
+			return _spotlightDiskUsageText;
+		}
+		set
+		{
+			_spotlightDiskUsageText = value;
+			OnPropertyChanged("SpotlightDiskUsageText");
+		}
+	}
+
+	public string SpotlightDiskName
+	{
+		get
+		{
+			return _spotlightDiskName;
+		}
+		set
+		{
+			_spotlightDiskName = value;
+			OnPropertyChanged("SpotlightDiskName");
+		}
+	}
+
+	public string SpotlightBatterySnippet
+	{
+		get
+		{
+			return _spotlightBatterySnippet;
+		}
+		set
+		{
+			_spotlightBatterySnippet = value;
+			OnPropertyChanged("SpotlightBatterySnippet");
+		}
+	}
+
+	public bool HasBatterySnippet
+	{
+		get
+		{
+			return _hasBatterySnippet;
+		}
+		set
+		{
+			_hasBatterySnippet = value;
+			OnPropertyChanged("HasBatterySnippet");
+		}
+	}
+
+	private string _spotlightBatteryGlyph = "\uE83F";
+	public string SpotlightBatteryGlyph
+	{
+		get => _spotlightBatteryGlyph;
+		set { _spotlightBatteryGlyph = value; OnPropertyChanged(nameof(SpotlightBatteryGlyph)); }
+	}
+
+	private string _spotlightBatteryPercentText = "100%";
+	public string SpotlightBatteryPercentText
+	{
+		get => _spotlightBatteryPercentText;
+		set { _spotlightBatteryPercentText = value; OnPropertyChanged(nameof(SpotlightBatteryPercentText)); }
+	}
+
+	private bool _hasActiveMusicTrack = false;
+	public bool HasActiveMusicTrack
+	{
+		get => _hasActiveMusicTrack;
+		set
+		{
+			if (_hasActiveMusicTrack != value)
+			{
+				_hasActiveMusicTrack = value;
+				OnPropertyChanged(nameof(HasActiveMusicTrack));
+				OnPropertyChanged(nameof(DynamicIslandVisibility));
+				OnPropertyChanged(nameof(AmbientClockVisibility));
+			}
+		}
+	}
+
+	private bool _userForcedClockView = false;
+	public Visibility DynamicIslandVisibility => (_hasActiveMusicTrack && !_userForcedClockView) ? Visibility.Visible : Visibility.Collapsed;
+	public Visibility AmbientClockVisibility => (!(_hasActiveMusicTrack && !_userForcedClockView)) ? Visibility.Visible : Visibility.Collapsed;
+
+	private void ToggleDynamicIsland_Click(object sender, MouseButtonEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			_userForcedClockView = !_userForcedClockView;
+			OnPropertyChanged(nameof(DynamicIslandVisibility));
+			OnPropertyChanged(nameof(AmbientClockVisibility));
+			e.Handled = true;
+		}
+		catch { }
+	}
+
+	public string CurrentSearchMode => _searchMode;
+
+	public Brush ModeAppsBrush
+	{
+		get
+		{
+			return _modeAppsBrush;
+		}
+		set
+		{
+			_modeAppsBrush = value;
+			OnPropertyChanged("ModeAppsBrush");
+		}
+	}
+
+	public Brush ModeFilesBrush
+	{
+		get
+		{
+			return _modeFilesBrush;
+		}
+		set
+		{
+			_modeFilesBrush = value;
+			OnPropertyChanged("ModeFilesBrush");
+		}
+	}
+
+	public Brush ModeClipboardBrush
+	{
+		get
+		{
+			return _modeClipboardBrush;
+		}
+		set
+		{
+			_modeClipboardBrush = value;
+			OnPropertyChanged("ModeClipboardBrush");
+		}
+	}
+
+	public Brush ModeAiBrush
+	{
+		get
+		{
+			return _modeAiBrush;
+		}
+		set
+		{
+			_modeAiBrush = value;
+			OnPropertyChanged("ModeAiBrush");
+		}
+	}
+
+	public Brush ModeAppsForegroundBrush
+	{
+		get
+		{
+			return _modeAppsForegroundBrush;
+		}
+		set
+		{
+			_modeAppsForegroundBrush = value;
+			OnPropertyChanged("ModeAppsForegroundBrush");
+		}
+	}
+
+	public Brush ModeFilesForegroundBrush
+	{
+		get
+		{
+			return _modeFilesForegroundBrush;
+		}
+		set
+		{
+			_modeFilesForegroundBrush = value;
+			OnPropertyChanged("ModeFilesForegroundBrush");
+		}
+	}
+
+	public Brush ModeClipboardForegroundBrush
+	{
+		get
+		{
+			return _modeClipboardForegroundBrush;
+		}
+		set
+		{
+			_modeClipboardForegroundBrush = value;
+			OnPropertyChanged("ModeClipboardForegroundBrush");
+		}
+	}
+
+	public Brush ModeAiForegroundBrush
+	{
+		get
+		{
+			return _modeAiForegroundBrush;
+		}
+		set
+		{
+			_modeAiForegroundBrush = value;
+			OnPropertyChanged("ModeAiForegroundBrush");
+		}
+	}
+
+	public Brush SpotlightBgBrush
+	{
+		get
+		{
+			return _spotlightBgBrush;
+		}
+		set
+		{
+			_spotlightBgBrush = value;
+			OnPropertyChanged("SpotlightBgBrush");
+		}
+	}
+
+	public Brush SpotlightBorderBrush
+	{
+		get
+		{
+			return _spotlightBorderBrush;
+		}
+		set
+		{
+			_spotlightBorderBrush = value;
+			OnPropertyChanged("SpotlightBorderBrush");
+		}
+	}
+
+	public Thickness SpotlightBorderThickness
+	{
+		get
+		{
+			return _spotlightBorderThickness;
+		}
+		set
+		{
+			_spotlightBorderThickness = value;
+			OnPropertyChanged("SpotlightBorderThickness");
+		}
+	}
+
+	public Brush SpotlightTextBrush
+	{
+		get
+		{
+			return _spotlightTextBrush;
+		}
+		set
+		{
+			_spotlightTextBrush = value;
+			OnPropertyChanged("SpotlightTextBrush");
+		}
+	}
+
+	public Brush SpotlightPlaceholderBrush
+	{
+		get
+		{
+			return _spotlightPlaceholderBrush;
+		}
+		set
+		{
+			_spotlightPlaceholderBrush = value;
+			OnPropertyChanged("SpotlightPlaceholderBrush");
+		}
+	}
+
+	public Brush SpotlightIconBrush
+	{
+		get
+		{
+			return _spotlightIconBrush;
+		}
+		set
+		{
+			_spotlightIconBrush = value;
+			OnPropertyChanged("SpotlightIconBrush");
+		}
+	}
+
+	public Brush SpotlightSelectedBorderBrush
+	{
+		get
+		{
+			return _spotlightSelectedBorderBrush;
+		}
+		set
+		{
+			_spotlightSelectedBorderBrush = value;
+			OnPropertyChanged("SpotlightSelectedBorderBrush");
+		}
+	}
+
+	public Brush SpotlightSelectedBackgroundBrush
+	{
+		get
+		{
+			return _spotlightSelectedBackgroundBrush;
+		}
+		set
+		{
+			_spotlightSelectedBackgroundBrush = value;
+			OnPropertyChanged("SpotlightSelectedBackgroundBrush");
+		}
+	}
+
+	public Brush SpotlightHoverBackgroundBrush
+	{
+		get
+		{
+			return _spotlightHoverBackgroundBrush;
+		}
+		set
+		{
+			_spotlightHoverBackgroundBrush = value;
+			OnPropertyChanged("SpotlightHoverBackgroundBrush");
+		}
+	}
+
+	public Brush SpotlightHoverBorderBrush
+	{
+		get
+		{
+			return _spotlightHoverBorderBrush;
+		}
+		set
+		{
+			_spotlightHoverBorderBrush = value;
+			OnPropertyChanged("SpotlightHoverBorderBrush");
+		}
+	}
+
+	public Brush SpotlightItemBackgroundBrush
+	{
+		get
+		{
+			return _spotlightItemBackgroundBrush;
+		}
+		set
+		{
+			_spotlightItemBackgroundBrush = value;
+			OnPropertyChanged("SpotlightItemBackgroundBrush");
+		}
+	}
+
+	public Brush SpotlightItemForegroundBrush
+	{
+		get
+		{
+			return _spotlightItemForegroundBrush;
+		}
+		set
+		{
+			_spotlightItemForegroundBrush = value;
+			OnPropertyChanged("SpotlightItemForegroundBrush");
+		}
+	}
+
+	public Brush SpotlightSecondaryTextBrush
+	{
+		get
+		{
+			return _spotlightSecondaryTextBrush;
+		}
+		set
+		{
+			_spotlightSecondaryTextBrush = value;
+			OnPropertyChanged("SpotlightSecondaryTextBrush");
+		}
+	}
+
+	public Brush SpotlightSeparatorBrush
+	{
+		get
+		{
+			return _spotlightSeparatorBrush;
+		}
+		set
+		{
+			_spotlightSeparatorBrush = value;
+			OnPropertyChanged("SpotlightSeparatorBrush");
+		}
+	}
+
+	public Brush SpotlightSearchFocusBrush
+	{
+		get
+		{
+			return _spotlightSearchFocusBrush;
+		}
+		set
+		{
+			_spotlightSearchFocusBrush = value;
+			OnPropertyChanged("SpotlightSearchFocusBrush");
+		}
+	}
+
+	public double SpotlightWidth
+	{
+		get
+		{
+			return _spotlightWidth;
+		}
+		set
+		{
+			_spotlightWidth = value;
+			OnPropertyChanged("SpotlightWidth");
+		}
+	}
+
+	public CornerRadius SpotlightCornerRadius
+	{
+		get
+		{
+			return _spotlightCornerRadius;
+		}
+		set
+		{
+			_spotlightCornerRadius = value;
+			OnPropertyChanged("SpotlightCornerRadius");
+		}
+	}
+
+	public Visibility SpotlightFavoritesVisibility
+	{
+		get
+		{
+			return _spotlightFavoritesVisibility;
+		}
+		set
+		{
+			_spotlightFavoritesVisibility = value;
+			OnPropertyChanged("SpotlightFavoritesVisibility");
+		}
+	}
+
+	public bool IsWebSearchSelected
+	{
+		get
+		{
+			return _isWebSearchSelected;
+		}
+		set
+		{
+			if (_isWebSearchSelected != value)
+			{
+				_isWebSearchSelected = value;
+				OnPropertyChanged("IsWebSearchSelected");
+			}
+		}
+	}
+
+	public double SpotlightContainerWidth
+	{
+		get
+		{
+			return _spotlightContainerWidth;
+		}
+		set
+		{
+			_spotlightContainerWidth = value;
+			OnPropertyChanged("SpotlightContainerWidth");
+		}
+	}
+
+	public Visibility BentoVisibility
+	{
+		get
+		{
+			return _bentoVisibility;
+		}
+		set
+		{
+			_bentoVisibility = value;
+			OnPropertyChanged("BentoVisibility");
+		}
+	}
+
+	public string BentoWeatherTemp
+	{
+		get
+		{
+			return _bentoWeatherTemp;
+		}
+		set
+		{
+			_bentoWeatherTemp = value;
+			OnPropertyChanged("BentoWeatherTemp");
+		}
+	}
+
+	public string BentoWeatherCity
+	{
+		get
+		{
+			return _bentoWeatherCity;
+		}
+		set
+		{
+			_bentoWeatherCity = value;
+			OnPropertyChanged("BentoWeatherCity");
+		}
+	}
+
+	public string BentoWeatherCondition
+	{
+		get
+		{
+			return _bentoWeatherCondition;
+		}
+		set
+		{
+			_bentoWeatherCondition = value;
+			OnPropertyChanged("BentoWeatherCondition");
+		}
+	}
+
+	public string BentoWeatherGlyph
+	{
+		get
+		{
+			return _bentoWeatherGlyph;
+		}
+		set
+		{
+			_bentoWeatherGlyph = value;
+			OnPropertyChanged("BentoWeatherGlyph");
+		}
+	}
+
+	public string BentoWeatherDate
+	{
+		get
+		{
+			return _bentoWeatherDate;
+		}
+		set
+		{
+			_bentoWeatherDate = value;
+			OnPropertyChanged("BentoWeatherDate");
+		}
+	}
+
+	public string BentoClipboardSnippet
+	{
+		get
+		{
+			return _bentoClipboardSnippet;
+		}
+		set
+		{
+			_bentoClipboardSnippet = value;
+			OnPropertyChanged("BentoClipboardSnippet");
+		}
+	}
+
+	public string BentoClipboardType
+	{
+		get
+		{
+			return _bentoClipboardType;
+		}
+		set
+		{
+			_bentoClipboardType = value;
+			OnPropertyChanged("BentoClipboardType");
+		}
+	}
+
+	public ImageSource? BentoWallpaperSource
+	{
+		get
+		{
+			return _bentoWallpaperSource;
+		}
+		set
+		{
+			_bentoWallpaperSource = value;
+			OnPropertyChanged("BentoWallpaperSource");
+		}
+	}
+
+	public string BentoWallpaperName
+	{
+		get
+		{
+			return _bentoWallpaperName;
+		}
+		set
+		{
+			_bentoWallpaperName = value;
+			OnPropertyChanged("BentoWallpaperName");
+		}
+	}
+
+	public string BentoWallpaperResolution
+	{
+		get
+		{
+			return _bentoWallpaperResolution;
+		}
+		set
+		{
+			_bentoWallpaperResolution = value;
+			OnPropertyChanged("BentoWallpaperResolution");
+		}
+	}
+
+	public PinnedApp? InspectorSelectedItem
+	{
+		get
+		{
+			return _inspectorSelectedItem;
+		}
+		set
+		{
+			_inspectorSelectedItem = value;
+			OnPropertyChanged("InspectorSelectedItem");
+		}
+	}
+
+	public string InspectorTitle
+	{
+		get
+		{
+			return _inspectorTitle;
+		}
+		set
+		{
+			_inspectorTitle = value;
+			OnPropertyChanged("InspectorTitle");
+		}
+	}
+
+	public string InspectorSubtitle
+	{
+		get
+		{
+			return _inspectorSubtitle;
+		}
+		set
+		{
+			_inspectorSubtitle = value;
+			OnPropertyChanged("InspectorSubtitle");
+		}
+	}
+
+	public string InspectorPath
+	{
+		get
+		{
+			return _inspectorPath;
+		}
+		set
+		{
+			_inspectorPath = value;
+			OnPropertyChanged("InspectorPath");
+		}
+	}
+
+	public ImageSource? InspectorImageSource
+	{
+		get
+		{
+			return _inspectorImageSource;
+		}
+		set
+		{
+			_inspectorImageSource = value;
+			OnPropertyChanged("InspectorImageSource");
+		}
+	}
+
+	public string InspectorFileSize
+	{
+		get
+		{
+			return _inspectorFileSize;
+		}
+		set
+		{
+			_inspectorFileSize = value;
+			OnPropertyChanged("InspectorFileSize");
+		}
+	}
+
+	public string InspectorDimensions
+	{
+		get
+		{
+			return _inspectorDimensions;
+		}
+		set
+		{
+			_inspectorDimensions = value;
+			OnPropertyChanged("InspectorDimensions");
+			OnPropertyChanged("InspectorImageDimensions");
+		}
+	}
+
+	public string InspectorImageDimensions => InspectorDimensions;
+
+	public string InspectorModifiedDate
+	{
+		get
+		{
+			return _inspectorModifiedDate;
+		}
+		set
+		{
+			_inspectorModifiedDate = value;
+			OnPropertyChanged("InspectorModifiedDate");
+		}
+	}
+
+	public string InspectorCodeSnippet
+	{
+		get
+		{
+			return _inspectorCodeSnippet;
+		}
+		set
+		{
+			_inspectorCodeSnippet = value;
+			OnPropertyChanged("InspectorCodeSnippet");
+		}
+	}
+
+	public string InspectorCodeLines
+	{
+		get
+		{
+			return _inspectorCodeLines;
+		}
+		set
+		{
+			_inspectorCodeLines = value;
+			OnPropertyChanged("InspectorCodeLines");
+			OnPropertyChanged("InspectorCodeLinesCount");
+		}
+	}
+
+	public string InspectorCodeLinesCount => InspectorCodeLines;
+
+	public string InspectorCodeLanguage
+	{
+		get
+		{
+			return _inspectorCodeLanguage;
+		}
+		set
+		{
+			_inspectorCodeLanguage = value;
+			OnPropertyChanged("InspectorCodeLanguage");
+		}
+	}
+
+	public ImageSource? InspectorAppIcon
+	{
+		get
+		{
+			ImageSource? imageSource = _inspectorAppIcon;
+			if (imageSource == null)
+			{
+				PinnedApp? inspectorSelectedItem = InspectorSelectedItem;
+				if (inspectorSelectedItem == null)
+				{
+					return null;
+				}
+				imageSource = inspectorSelectedItem.Icon;
+			}
+			return imageSource;
+		}
+		set
+		{
+			_inspectorAppIcon = value;
+			OnPropertyChanged("InspectorAppIcon");
+		}
+	}
+
+	public string InspectorAppName
+	{
+		get
+		{
+			if (!string.IsNullOrEmpty(_inspectorAppName))
+			{
+				return _inspectorAppName;
+			}
+			return InspectorTitle;
+		}
+		set
+		{
+			_inspectorAppName = value;
+			OnPropertyChanged("InspectorAppName");
+		}
+	}
+
+	public string InspectorAppStatus
+	{
+		get
+		{
+			return _inspectorAppStatus;
+		}
+		set
+		{
+			_inspectorAppStatus = value;
+			OnPropertyChanged("InspectorAppStatus");
+		}
+	}
+
+	public string InspectorAppRunningStatus
+	{
+		get
+		{
+			return _inspectorAppStatus;
+		}
+		set
+		{
+			_inspectorAppStatus = value;
+			OnPropertyChanged("InspectorAppRunningStatus");
+			OnPropertyChanged("InspectorAppStatus");
+		}
+	}
+
+	public string InspectorAppRamUsage
+	{
+		get
+		{
+			return _inspectorAppRamUsage;
+		}
+		set
+		{
+			_inspectorAppRamUsage = value;
+			OnPropertyChanged("InspectorAppRamUsage");
+		}
+	}
+
+	public string InspectorAppPid
+	{
+		get
+		{
+			return _inspectorAppPid;
+		}
+		set
+		{
+			_inspectorAppPid = value;
+			OnPropertyChanged("InspectorAppPid");
+		}
+	}
+
+	public string InspectorWebQuery
+	{
+		get
+		{
+			return _inspectorWebQuery;
+		}
+		set
+		{
+			_inspectorWebQuery = value;
+			OnPropertyChanged("InspectorWebQuery");
+		}
+	}
+
+	public bool InspectorIsAppRunning
+	{
+		get
+		{
+			return _inspectorIsAppRunning;
+		}
+		set
+		{
+			_inspectorIsAppRunning = value;
+			OnPropertyChanged("InspectorIsAppRunning");
+		}
+	}
+
+	public string InspectorFullClipboardText
+	{
+		get
+		{
+			return _inspectorFullClipboardText;
+		}
+		set
+		{
+			_inspectorFullClipboardText = value;
+			OnPropertyChanged("InspectorFullClipboardText");
+		}
+	}
+
+	public string InspectorClipboardWordCount
+	{
+		get
+		{
+			return _inspectorClipboardWordCount;
+		}
+		set
+		{
+			_inspectorClipboardWordCount = value;
+			OnPropertyChanged("InspectorClipboardWordCount");
+		}
+	}
+
+	public Brush? InspectorColorPreviewBrush
+	{
+		get
+		{
+			return _inspectorColorPreviewBrush;
+		}
+		set
+		{
+			_inspectorColorPreviewBrush = value;
+			OnPropertyChanged("InspectorColorPreviewBrush");
+		}
+	}
+
+	public bool InspectorIsColor
+	{
+		get
+		{
+			return _inspectorIsColor;
+		}
+		set
+		{
+			_inspectorIsColor = value;
+			OnPropertyChanged("InspectorIsColor");
+		}
+	}
+
+	public bool InspectorIsLink
+	{
+		get
+		{
+			return _inspectorIsLink;
+		}
+		set
+		{
+			_inspectorIsLink = value;
+			OnPropertyChanged("InspectorIsLink");
+		}
+	}
+
+	public ImageSource? InspectorClipboardImageSource
+	{
+		get => _inspectorClipboardImageSource;
+		set
+		{
+			_inspectorClipboardImageSource = value;
+			OnPropertyChanged(nameof(InspectorClipboardImageSource));
+		}
+	}
+
+	public bool InspectorHasClipboardImage
+	{
+		get => _inspectorHasClipboardImage;
+		set
+		{
+			_inspectorHasClipboardImage = value;
+			OnPropertyChanged(nameof(InspectorHasClipboardImage));
+		}
+	}
+
+	public Visibility InspectorClipboardImageViewVisibility
+	{
+		get => _inspectorClipboardImageViewVisibility;
+		set
+		{
+			_inspectorClipboardImageViewVisibility = value;
+			OnPropertyChanged(nameof(InspectorClipboardImageViewVisibility));
+		}
+	}
+
+	public Visibility InspectorClipboardTextViewVisibility
+	{
+		get => _inspectorClipboardTextViewVisibility;
+		set
+		{
+			_inspectorClipboardTextViewVisibility = value;
+			OnPropertyChanged(nameof(InspectorClipboardTextViewVisibility));
+		}
+	}
+
+	public string InspectorClipboardImageDimensions
+	{
+		get => _inspectorClipboardImageDimensions;
+		set
+		{
+			_inspectorClipboardImageDimensions = value;
+			OnPropertyChanged(nameof(InspectorClipboardImageDimensions));
+		}
+	}
+
+	public string InspectorClipboardImageDetails
+	{
+		get => _inspectorClipboardImageDetails;
+		set
+		{
+			_inspectorClipboardImageDetails = value;
+			OnPropertyChanged(nameof(InspectorClipboardImageDetails));
+		}
+	}
+
+	public string InspectorClipboardCopyButtonText
+	{
+		get => _inspectorClipboardCopyButtonText;
+		set
+		{
+			_inspectorClipboardCopyButtonText = value;
+			OnPropertyChanged(nameof(InspectorClipboardCopyButtonText));
+		}
+	}
+
+	public string InspectorAiResponse
+	{
+		get
+		{
+			return _inspectorAiResponse;
+		}
+		set
+		{
+			_inspectorAiResponse = value;
+			OnPropertyChanged("InspectorAiResponse");
+		}
+	}
+
+	public Visibility InspectorFileViewVisibility
+	{
+		get
+		{
+			return _inspectorFileViewVisibility;
+		}
+		set
+		{
+			_inspectorFileViewVisibility = value;
+			OnPropertyChanged("InspectorFileViewVisibility");
+			OnPropertyChanged("InspectorImageViewVisibility");
+		}
+	}
+
+	public Visibility InspectorImageViewVisibility => InspectorFileViewVisibility;
+
+	public Visibility InspectorCodeViewVisibility
+	{
+		get
+		{
+			return _inspectorCodeViewVisibility;
+		}
+		set
+		{
+			_inspectorCodeViewVisibility = value;
+			OnPropertyChanged("InspectorCodeViewVisibility");
+		}
+	}
+
+	public Visibility InspectorAppViewVisibility
+	{
+		get
+		{
+			return _inspectorAppViewVisibility;
+		}
+		set
+		{
+			_inspectorAppViewVisibility = value;
+			OnPropertyChanged("InspectorAppViewVisibility");
+		}
+	}
+
+	public Visibility InspectorClipboardViewVisibility
+	{
+		get
+		{
+			return _inspectorClipboardViewVisibility;
+		}
+		set
+		{
+			_inspectorClipboardViewVisibility = value;
+			OnPropertyChanged("InspectorClipboardViewVisibility");
+		}
+	}
+
+	public Visibility InspectorAiViewVisibility
+	{
+		get
+		{
+			return _inspectorAiViewVisibility;
+		}
+		set
+		{
+			_inspectorAiViewVisibility = value;
+			OnPropertyChanged("InspectorAiViewVisibility");
+		}
+	}
+
+	public Visibility InspectorWebViewVisibility
+	{
+		get
+		{
+			return _inspectorWebViewVisibility;
+		}
+		set
+		{
+			_inspectorWebViewVisibility = value;
+			OnPropertyChanged("InspectorWebViewVisibility");
+		}
+	}
+
+	public Visibility InspectorDefaultViewVisibility
+	{
+		get
+		{
+			return _inspectorDefaultViewVisibility;
+		}
+		set
+		{
+			_inspectorDefaultViewVisibility = value;
+			OnPropertyChanged("InspectorDefaultViewVisibility");
+		}
+	}
+
+	public Visibility InspectorMusicViewVisibility
+	{
+		get
+		{
+			return _inspectorMusicViewVisibility;
+		}
+		set
+		{
+			_inspectorMusicViewVisibility = value;
+			OnPropertyChanged("InspectorMusicViewVisibility");
+		}
+	}
+
+	public string InspectorMusicTitle
+	{
+		get
+		{
+			return _inspectorMusicTitle;
+		}
+		set
+		{
+			_inspectorMusicTitle = value;
+			OnPropertyChanged("InspectorMusicTitle");
+		}
+	}
+
+	public string InspectorMusicSubtitle
+	{
+		get
+		{
+			return _inspectorMusicSubtitle;
+		}
+		set
+		{
+			_inspectorMusicSubtitle = value;
+			OnPropertyChanged("InspectorMusicSubtitle");
+		}
+	}
+
+	public string InspectorMusicQuery
+	{
+		get
+		{
+			return _inspectorMusicQuery;
+		}
+		set
+		{
+			_inspectorMusicQuery = value;
+			OnPropertyChanged("InspectorMusicQuery");
+		}
+	}
+
+	public string InspectorMusicStatus
+	{
+		get
+		{
+			return _inspectorMusicStatus;
+		}
+		set
+		{
+			_inspectorMusicStatus = value;
+			OnPropertyChanged("InspectorMusicStatus");
+		}
+	}
+
+	public ImageSource? InspectorMusicArtwork
+	{
+		get
+		{
+			return _inspectorMusicArtwork;
+		}
+		set
+		{
+			_inspectorMusicArtwork = value;
+			OnPropertyChanged("InspectorMusicArtwork");
+		}
+	}
+
+	public string InspectorMusicDuration
+	{
+		get
+		{
+			return _inspectorMusicDuration;
+		}
+		set
+		{
+			_inspectorMusicDuration = value;
+			OnPropertyChanged("InspectorMusicDuration");
+		}
+	}
+
+	public Visibility InspectorMusicDurationVisibility
+	{
+		get
+		{
+			return _inspectorMusicDurationVisibility;
+		}
+		set
+		{
+			_inspectorMusicDurationVisibility = value;
+			OnPropertyChanged("InspectorMusicDurationVisibility");
+		}
+	}
+
+	public Visibility InspectorMusicEqualizerVisibility
+	{
+		get
+		{
+			return _inspectorMusicEqualizerVisibility;
+		}
+		set
+		{
+			_inspectorMusicEqualizerVisibility = value;
+			OnPropertyChanged("InspectorMusicEqualizerVisibility");
+		}
+	}
+
+	public event PropertyChangedEventHandler? PropertyChanged;
+
+	public void Open()
+	{
+		if (FavoritesList.Count <= 1)
+		{
+			LoadFavoritesImmediately();
+		}
+		Show();
+		Activate();
+		ForceForeground();
+		FocusSearchBox();
+		UpdateClockAndDate();
+		LoadActiveWindows();
+		UpdateSatelliteMediaInfo();
+		_ = LoadWeatherSnippetAsync();
+		_ = LoadNotificationsAsync();
+		_ = LoadConnectedDevicesAsync();
+	}
+
+	public void CloseWidget()
+	{
+		SafeClose();
+	}
+
+	private bool IsWebSearchAvailable()
+	{
+		if (WebSearchButton != null && WebSearchButton.Visibility == Visibility.Visible && (_searchMode == "Apps" || _searchMode == "Files"))
+		{
+			return !string.IsNullOrWhiteSpace(SearchBox?.Text);
+		}
+		return false;
+	}
+
+	public PinnedAppsWindow()
+	{
+		InitializeComponent();
+		ApplySettings();
+		UpdateWindowSize();
+		DataContext = this;
+		Activated += Window_Activated;
+		LoadFavoritesImmediately();
+		_searchDebounceTimer = new DispatcherTimer(DispatcherPriority.Input, Dispatcher)
+		{
+			Interval = TimeSpan.FromMilliseconds(40.0)
+		};
+		_searchDebounceTimer.Tick += (object? s, EventArgs args) =>
+		{
+			_searchDebounceTimer.Stop();
+			if (!(_searchMode == "AI"))
+			{
+				PerformSearch(SearchBox.Text.Trim());
+			}
+		};
+		_musicDebounceTimer = new DispatcherTimer(DispatcherPriority.Input, Dispatcher)
+		{
+			Interval = TimeSpan.FromMilliseconds(220.0)
+		};
+		_musicDebounceTimer.Tick += (object? s, EventArgs args) =>
+		{
+			_musicDebounceTimer.Stop();
+			PerformSearch(SearchBox.Text.Trim());
+		};
+		UpdateModeButtonsVisuals();
+		ClipboardService.Instance.HistoryChanged += OnClipboardHistoryChanged;
+		EventBus.Subscribe<WallpaperChangedEvent>(OnWallpaperChanged);
+		UpdateClockAndDate();
+		_clockTimer = new DispatcherTimer
+		{
+			Interval = TimeSpan.FromSeconds(1.0)
+		};
+		_clockTimer.Tick += (object? s, EventArgs args) =>
+		{
+			UpdateClockAndDate();
+		};
+		_clockTimer.Start();
+		Closed += (object? s, EventArgs ev) =>
+		{
+			_clockTimer?.Stop();
+			ClipboardService.Instance.HistoryChanged -= OnClipboardHistoryChanged;
+			EventBus.Unsubscribe<WallpaperChangedEvent>(OnWallpaperChanged);
+		};
+		Task.Run(() => _discoveryService.DiscoverInstalledAppsAsync());
+	}
+
+	public static void PreloadPinnedIcons()
+	{
+		IconExtractionService.Instance.PreloadPinnedIcons();
+	}
+
+	public void ApplySettings()
+	{
+		SpotlightThemeBrushes spotlightThemeBrushes = _themeService.ComputeTheme(SettingsService.Instance, System.Windows.Application.Current?.Resources);
+		SpotlightWidth = spotlightThemeBrushes.Width;
+		SpotlightCornerRadius = spotlightThemeBrushes.CornerRadius;
+		SpotlightFavoritesVisibility = spotlightThemeBrushes.FavoritesVisibility;
+		SpotlightBgBrush = spotlightThemeBrushes.BgBrush;
+		SpotlightBorderBrush = spotlightThemeBrushes.BorderBrush;
+		SpotlightBorderThickness = spotlightThemeBrushes.BorderThickness;
+		SpotlightTextBrush = spotlightThemeBrushes.TextBrush;
+		SpotlightPlaceholderBrush = spotlightThemeBrushes.PlaceholderBrush;
+		SpotlightIconBrush = spotlightThemeBrushes.IconBrush;
+		SpotlightSelectedBorderBrush = spotlightThemeBrushes.SelectedBorderBrush;
+		SpotlightSelectedBackgroundBrush = spotlightThemeBrushes.SelectedBackgroundBrush;
+		SpotlightHoverBackgroundBrush = spotlightThemeBrushes.HoverBackgroundBrush;
+		SpotlightHoverBorderBrush = spotlightThemeBrushes.HoverBorderBrush;
+		SpotlightItemBackgroundBrush = spotlightThemeBrushes.ItemBackgroundBrush;
+		SpotlightItemForegroundBrush = spotlightThemeBrushes.ItemForegroundBrush;
+		SpotlightSecondaryTextBrush = spotlightThemeBrushes.SecondaryTextBrush;
+		SpotlightSeparatorBrush = spotlightThemeBrushes.SeparatorBrush;
+		SpotlightSearchFocusBrush = spotlightThemeBrushes.SearchFocusBrush;
+		UpdateModeButtonsVisuals();
+	}
+
+	protected override void OnSourceInitialized(EventArgs e)
+	{
+		base.OnSourceInitialized(e);
+		HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
+	}
+
+	private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+	{
+		if (msg == 274 && (((IntPtr)wParam).ToInt32() & 0xFFF0) == 61696)
+		{
+			handled = true;
+			return IntPtr.Zero;
+		}
+		return IntPtr.Zero;
+	}
+
+	private void FocusSearchBox()
+	{
+		if (SearchBox != null && !SearchBox.IsFocused)
+		{
+			SearchBox.Focus();
+			Keyboard.Focus(SearchBox);
+		}
+	}
+
+	private async void Window_Loaded(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			FloatingMediaOrbWindow.HideOrb();
+		}
+		catch
+		{
+		}
+		_loadedTime = DateTime.Now;
+		try
+		{
+			BackdropHelper.ApplyAcrylic(this, roundCorners: false);
+		}
+		catch
+		{
+		}
+		try
+		{
+			UpdateClockAndDate();
+		}
+		catch
+		{
+		}
+		try
+		{
+			_ = LoadWeatherSnippetAsync();
+		}
+		catch
+		{
+		}
+		try
+		{
+			LoadActiveWindows();
+		}
+		catch
+		{
+		}
+		try
+		{
+			InitSatelliteMedia();
+		}
+		catch
+		{
+		}
+		try
+		{
+			UpdateSatelliteMediaInfo();
+		}
+		catch
+		{
+		}
+		try
+		{
+			UpdateWindowSize();
+		}
+		catch
+		{
+		}
+		try
+		{
+			_ = LoadNotificationsAsync();
+		}
+		catch
+		{
+		}
+		try
+		{
+			_ = LoadConnectedDevicesAsync();
+		}
+		catch
+		{
+		}
+		try
+		{
+			ForceForeground();
+		}
+		catch
+		{
+		}
+		try
+		{
+			FocusSearchBox();
+		}
+		catch
+		{
+		}
+		try
+		{
+			SearchBox.CaretIndex = SearchBox.Text.Length;
+		}
+		catch
+		{
+		}
+		try
+		{
+			DoubleAnimation animation = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(150.0))
+			{
+				EasingFunction = new CubicEase
+				{
+					EasingMode = EasingMode.EaseOut
+				}
+			};
+			BeginAnimation(UIElement.OpacityProperty, animation);
+		}
+		catch
+		{
+		}
+		if (ApplicationHost.Instance != null)
+		{
+			try
+			{
+				ApplicationHost.Instance.IsPinnedFlyoutOpen = true;
+				ApplicationHost.Instance.InternalMusicStateChanged -= OnInternalMusicStateChanged;
+				ApplicationHost.Instance.InternalMusicStateChanged += OnInternalMusicStateChanged;
+			}
+			catch
+			{
+			}
+		}
+		try
+		{
+			_ = LoadActiveWallpaperAsync();
+		}
+		catch
+		{
+		}
+		try
+		{
+			await LoadAppsAsync();
+		}
+		catch
+		{
+		}
+	}
+
+	private void OnInternalMusicStateChanged(object? sender, EventArgs e)
+	{
+		Dispatcher.BeginInvoke(new Action(UpdateSatelliteMediaInfo));
+	}
+
+	private void Window_Activated(object? sender, EventArgs e)
+	{
+		if (FavoritesList.Count <= 1)
+		{
+			LoadFavoritesImmediately();
+		}
+		ForceForeground();
+		FocusSearchBox();
+		UpdateClockAndDate();
+		_ = LoadWeatherSnippetAsync();
+		if (string.IsNullOrWhiteSpace(SearchBox?.Text))
+		{
+			LoadActiveWindows();
+			UpdateSatelliteMediaInfo();
+		}
+		_ = LoadActiveWallpaperAsync();
+	}
+
+	private void UpdateClockAndDate()
+	{
+		DateTime now = DateTime.Now;
+		SpotlightCurrentTime = now.ToString("HH:mm");
+		try
+		{
+			CultureInfo cultureInfo = new CultureInfo("es-ES");
+			string text = now.ToString("dddd, d 'de' MMMM", cultureInfo);
+			if (!string.IsNullOrEmpty(text))
+			{
+				SpotlightCurrentDate = char.ToUpper(text[0]) + text.Substring(1);
+			}
+		}
+		catch
+		{
+			SpotlightCurrentDate = now.ToLongDateString();
+		}
+		UpdateSystemTelemetry();
+	}
+
+	private void UpdateSystemTelemetry()
+	{
+		try
+		{
+			MEMORYSTATUSEX mEMORYSTATUSEX = new MEMORYSTATUSEX();
+			if (NativeMethods.GlobalMemoryStatusEx(mEMORYSTATUSEX))
+			{
+				double num = (double)mEMORYSTATUSEX.ullTotalPhys / 1073741824.0;
+				double num2 = (double)mEMORYSTATUSEX.ullAvailPhys / 1073741824.0;
+				double num3 = Math.Max(0.0, num - num2);
+				int num4 = (int)Math.Clamp(Math.Round(num3 / num * 100.0), 0.0, 100.0);
+				SpotlightRamPercent = num4;
+				SpotlightRamPercentText = $"{num4}%";
+				SpotlightRamUsageText = $"{num3:0.0} / {num:0.0} GB";
+			}
+		}
+		catch
+		{
+		}
+		try
+		{
+			string sysRoot = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+			DriveInfo[] drives = DriveInfo.GetDrives();
+			DriveInfo driveInfo = drives.FirstOrDefault((DriveInfo d) => d.IsReady && d.DriveType == DriveType.Fixed && d.RootDirectory.FullName.StartsWith(sysRoot.Substring(0, 1), StringComparison.OrdinalIgnoreCase)) ?? drives.FirstOrDefault((DriveInfo d) => d.IsReady && d.DriveType == DriveType.Fixed);
+			if (driveInfo != null)
+			{
+				double num5 = (double)driveInfo.TotalSize / 1073741824.0;
+				double num6 = (double)driveInfo.TotalFreeSpace / 1073741824.0;
+				int num7 = (int)Math.Clamp(Math.Round(Math.Max(0.0, num5 - num6) / num5 * 100.0), 0.0, 100.0);
+				string text = driveInfo.Name.TrimEnd('\\');
+				SpotlightDiskName = "DISCO (" + text + ")";
+				SpotlightDiskPercent = num7;
+				SpotlightDiskPercentText = $"{num7}%";
+				SpotlightDiskUsageText = $"{num6:0} GB libres de {num5:0} GB";
+			}
+		}
+		catch
+		{
+		}
+		try
+		{
+			if (NativeMethods.GetSystemPowerStatus(out var lpSystemPowerStatus))
+			{
+				if (lpSystemPowerStatus.BatteryLifePercent <= 100)
+				{
+					SpotlightBatteryGlyph = (lpSystemPowerStatus.ACLineStatus == 1) ? "\uE945" : "\uE83F";
+					SpotlightBatteryPercentText = $"{lpSystemPowerStatus.BatteryLifePercent}%";
+					SpotlightBatterySnippet = $"•  {lpSystemPowerStatus.BatteryLifePercent}%";
+					HasBatterySnippet = true;
+				}
+				else
+				{
+					HasBatterySnippet = false;
+				}
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private async Task LoadWeatherSnippetAsync()
+	{
+		try
+		{
+			WeatherData weatherData = await WeatherService.Instance.GetWeatherAsync();
+			if (weatherData != null && !string.IsNullOrEmpty(weatherData.Condition))
+			{
+				SpotlightWeatherSnippet = $"•  {Math.Round(weatherData.Temperature)}°C {weatherData.Condition}";
+				HasWeatherSnippet = true;
+			}
+		}
+		catch
+		{
+			HasWeatherSnippet = false;
+		}
+	}
+
+	private void ForceForeground()
+	{
+		try
+		{
+			nint handle = new WindowInteropHelper(this).Handle;
+			if (handle == IntPtr.Zero)
+			{
+				return;
+			}
+			nint foregroundWindow = NativeMethods.GetForegroundWindow();
+			if (foregroundWindow != handle)
+			{
+				uint windowThreadProcessId = NativeMethods.GetWindowThreadProcessId(foregroundWindow, IntPtr.Zero);
+				uint currentThreadId = NativeMethods.GetCurrentThreadId();
+				if (windowThreadProcessId != currentThreadId && windowThreadProcessId != 0)
+				{
+					NativeMethods.AttachThreadInput(currentThreadId, windowThreadProcessId, fAttach: true);
+					NativeMethods.SetForegroundWindow(handle);
+					NativeMethods.AttachThreadInput(currentThreadId, windowThreadProcessId, fAttach: false);
+				}
+				else
+				{
+					NativeMethods.SetForegroundWindow(handle);
+				}
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	public void LoadFavoritesImmediately()
+	{
+		List<string> list = SettingsService.Instance.PinnedAppPaths;
+		if (list == null || list.Count == 0)
+		{
+			list = new List<string> { "explorer.exe", "chrome.exe", "notepad.exe", "cmd.exe", "taskmgr.exe" };
+			SettingsService.Instance.PinnedAppPaths = list;
+			SettingsService.Save();
+		}
+		List<string> list2 = list.Where((string p) => !string.IsNullOrEmpty(p) && p != "ADD_APP").ToList();
+		if ((from f in FavoritesList
+			where !string.IsNullOrEmpty(f.Path) && f.Path != "ADD_APP"
+			select f.Path).ToList().SequenceEqual(list2, StringComparer.OrdinalIgnoreCase) && FavoritesList.Any((PinnedApp f) => f.Path == "ADD_APP"))
+		{
+			StartLoadingIcons();
+			return;
+		}
+		FavoritesList.Clear();
+		HashSet<string> hashSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (string path in list2)
+		{
+			try
+			{
+				PinnedApp pinnedApp = _discoveryService.CreatePinnedAppFromPath(path);
+				pinnedApp.IsPinned = true;
+				FavoritesList.Add(pinnedApp);
+				if (hashSet.Add(path) && !_allInstalledApps.Any((PinnedApp a) => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
+				{
+					_allInstalledApps.Add(pinnedApp);
+				}
+			}
+			catch
+			{
+			}
+		}
+		FavoritesList.Add(new PinnedApp
+		{
+			Name = "Anclar Aplicación",
+			Path = "ADD_APP",
+			IconGlyph = "\ue6e6"
+		});
+		StartLoadingIcons();
+	}
+
+	private async Task LoadAppsAsync()
+	{
+		PinnedAppsList.Clear();
+		_selectedIndex = -1;
+		LoadFavoritesImmediately();
+		PopulateDefaultList();
+		List<PinnedApp> list = await _discoveryService.DiscoverInstalledAppsAsync();
+		if (_isClosing)
+		{
+			return;
+		}
+		List<string> pinnedAppPaths = SettingsService.Instance.PinnedAppPaths;
+		HashSet<string> hashSet = new HashSet<string>(_allInstalledApps.Select((PinnedApp a) => a.Path), StringComparer.OrdinalIgnoreCase);
+		foreach (PinnedApp item in list)
+		{
+			if (hashSet.Add(item.Path))
+			{
+				item.IsPinned = pinnedAppPaths?.Contains(item.Path) ?? false;
+				_allInstalledApps.Add(item);
+			}
+		}
+		StartLoadingIcons();
+	}
+
+	private void StartLoadingIcons()
+	{
+		List<PinnedApp> favorites = new List<PinnedApp>(FavoritesList);
+		List<PinnedApp> apps = new List<PinnedApp>(_allInstalledApps);
+		Task.Run(async () =>
+		{
+			foreach (PinnedApp app in favorites)
+			{
+				if (_isClosing)
+				{
+					return;
+				}
+				if (!(app.Path == "ADD_APP") && app.Icon == null && !app.Path.StartsWith("ms-settings:", StringComparison.OrdinalIgnoreCase))
+				{
+					ImageSource? icon = _iconService.LoadIconForApp(app.Path);
+					if (icon != null)
+					{
+						_ = Dispatcher.BeginInvoke((Action)(() =>
+						{
+							app.Icon = icon;
+						}));
+					}
+				}
+			}
+			foreach (PinnedApp app2 in apps)
+			{
+				if (_isClosing)
+				{
+					return;
+				}
+				if (app2.Icon == null && !app2.Path.StartsWith("ms-settings:", StringComparison.OrdinalIgnoreCase))
+				{
+					ImageSource? icon2 = _iconService.LoadIconForApp(app2.Path);
+					if (icon2 != null)
+					{
+						_ = Dispatcher.BeginInvoke((Action)(() =>
+						{
+							app2.Icon = icon2;
+						}));
+					}
+					await Task.Delay(5);
+				}
+			}
+		});
+	}
+
+	private void PopulateDefaultList()
+	{
+		PinnedAppsList.Clear();
+		_selectedIndex = -1;
+		IsWebSearchSelected = false;
+		if (ResultsScrollViewer != null)
+		{
+			ResultsScrollViewer.Visibility = Visibility.Collapsed;
+		}
+		if (ResultsCardBorder != null)
+		{
+			ResultsCardBorder.Visibility = Visibility.Collapsed;
+		}
+		UpdateWindowSize();
+	}
+
+	private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+	{
+		if (_isChangingMode)
+		{
+			return;
+		}
+		PlaceholderText.Visibility = ((!string.IsNullOrEmpty(SearchBox.Text)) ? Visibility.Collapsed : Visibility.Visible);
+		string value = SearchBox.Text.Trim();
+		if (!string.IsNullOrEmpty(value) && WallpaperFanCardVisibility == Visibility.Visible)
+		{
+			WallpaperFanCardVisibility = Visibility.Collapsed;
+		}
+		if (BottomOrbitalZone != null)
+		{
+			BottomOrbitalZone.Opacity = string.IsNullOrEmpty(value) ? 1.0 : 0.35;
+		}
+		if (string.IsNullOrEmpty(value))
+		{
+			_searchDebounceTimer?.Stop();
+			_musicDebounceTimer?.Stop();
+			foreach (PinnedApp pinnedApps in PinnedAppsList)
+			{
+				pinnedApps.IsSelected = false;
+			}
+			IsWebSearchSelected = false;
+			_selectedIndex = -1;
+			UpdateInspector(null);
+			if (_searchMode == "Apps")
+			{
+				PopulateDefaultList();
+			}
+			else if (_searchMode == "Files")
+			{
+				PinnedAppsList.Clear();
+				_selectedIndex = -1;
+				IsWebSearchSelected = false;
+				UpdateWindowSize();
+			}
+			else if (_searchMode == "Clipboard")
+			{
+				ExecuteClipboardSearch(string.Empty);
+			}
+			else if (_searchMode == "AI")
+			{
+				LoadAiHistory();
+			}
+		}
+		else
+		{
+			if (IsMusicSearchQuery(value))
+			{
+				_searchDebounceTimer?.Stop();
+				_musicDebounceTimer?.Stop();
+				_musicDebounceTimer?.Start();
+			}
+			else if (value.StartsWith("m:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("music:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("musica:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("play:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("/m ", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("f:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("c:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("a:", StringComparison.OrdinalIgnoreCase) ||
+			         value.StartsWith("play ", StringComparison.OrdinalIgnoreCase))
+			{
+				_searchDebounceTimer?.Stop();
+				_musicDebounceTimer?.Stop();
+				PerformSearch(value);
+			}
+			else
+			{
+				_musicDebounceTimer?.Stop();
+				_searchDebounceTimer?.Stop();
+				_searchDebounceTimer?.Start();
+			}
+		}
+	}
+
+	private static bool IsMusicSearchQuery(string text)
+	{
+		if (string.IsNullOrWhiteSpace(text)) return false;
+		string q = text.Trim();
+		if (q.StartsWith("m:", StringComparison.OrdinalIgnoreCase)) return q.Length > 2 && !string.IsNullOrWhiteSpace(q.Substring(2));
+		if (q.StartsWith("/m ", StringComparison.OrdinalIgnoreCase)) return q.Length > 3 && !string.IsNullOrWhiteSpace(q.Substring(3));
+		if (q.StartsWith("music:", StringComparison.OrdinalIgnoreCase)) return q.Length > 6 && !string.IsNullOrWhiteSpace(q.Substring(6));
+		if (q.StartsWith("musica:", StringComparison.OrdinalIgnoreCase)) return q.Length > 7 && !string.IsNullOrWhiteSpace(q.Substring(7));
+		if (q.StartsWith("play:", StringComparison.OrdinalIgnoreCase)) return q.Length > 5 && !string.IsNullOrWhiteSpace(q.Substring(5));
+		if (q.StartsWith("play ", StringComparison.OrdinalIgnoreCase)) return q.Length > 5 && !string.IsNullOrWhiteSpace(q.Substring(5));
+		return false;
+	}
+
+	private void PerformSearch(string rawQuery)
+	{
+		if (!string.IsNullOrWhiteSpace(rawQuery))
+		{
+			QueryRouteResult queryRouteResult = _searchService.RouteQuery(rawQuery, _searchMode);
+			if (queryRouteResult.TargetMode == "Files")
+			{
+				_ = ExecuteFileSearchAsync(queryRouteResult.FilteredQuery);
+			}
+			else if (queryRouteResult.TargetMode == "AI")
+			{
+				_ = ExecuteAiSearchAsync(queryRouteResult.FilteredQuery);
+			}
+			else if (queryRouteResult.TargetMode == "Clipboard")
+			{
+				ExecuteClipboardSearch(queryRouteResult.FilteredQuery);
+			}
+			else if (queryRouteResult.TargetMode == "Music")
+			{
+				_ = ExecuteMusicSearchAsync(queryRouteResult.FilteredQuery);
+			}
+			else
+			{
+				ExecuteAppsSearch(queryRouteResult.FilteredQuery);
+			}
+		}
+	}
+
+	private async Task ExecuteMusicSearchAsync(string query)
+	{
+		_musicSearchCts?.Cancel();
+		_musicSearchCts = new CancellationTokenSource();
+		CancellationToken token = _musicSearchCts.Token;
+
+		// 1. Inmediatamente en el hilo de interfaz: limpiar selección y conmutar la vista de Spotlight
+		foreach (PinnedApp pinnedApps in PinnedAppsList)
+		{
+			pinnedApps.IsSelected = false;
+		}
+		PinnedAppsList.Clear();
+		_selectedIndex = -1;
+		IsWebSearchSelected = false;
+
+		string cleanQuery = (query ?? string.Empty).Trim();
+		if (!string.IsNullOrWhiteSpace(cleanQuery))
+		{
+			PinnedAppsList.Add(new PinnedApp
+			{
+				Name = $"Reproducir \"{cleanQuery}\"",
+				Subtitle = "YouTube Music",
+				Path = $"ytmusic:play:{cleanQuery}",
+				ActionText = "Reproducir",
+				IconGlyph = "\uE197",
+				ToolTip = $"Buscar y reproducir {cleanQuery} en YouTube Music"
+			});
+			PinnedAppsList.Add(new PinnedApp
+			{
+				Name = $"Buscar \"{cleanQuery}\" en YouTube Web",
+				Subtitle = "youtube.com",
+				Path = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(cleanQuery)}",
+				ActionText = "Web",
+				IconGlyph = "\uE0E8",
+				ToolTip = "Abrir resultados en el navegador predeterminado"
+			});
+			_selectedIndex = 0;
+			PinnedAppsList[0].IsSelected = true;
+			UpdateInspector(PinnedAppsList[0]);
+		}
+		else
+		{
+			PinnedAppsList.Add(new PinnedApp
+			{
+				Name = "Alternar Reproducir / Pausar",
+				Subtitle = "YouTube Music",
+				Path = "ytmusic:toggle",
+				ActionText = "Control",
+				IconGlyph = "\uE197",
+				ToolTip = "Alternar estado de reproducción"
+			});
+			PinnedAppsList.Add(new PinnedApp
+			{
+				Name = "Siguiente Canción",
+				Subtitle = "YouTube Music",
+				Path = "ytmusic:next",
+				ActionText = "Control",
+				IconGlyph = "\uE19B",
+				ToolTip = "Avanzar a la siguiente pista"
+			});
+			PinnedAppsList.Add(new PinnedApp
+			{
+				Name = "Canción Anterior",
+				Subtitle = "YouTube Music",
+				Path = "ytmusic:prev",
+				ActionText = "Control",
+				IconGlyph = "\uE19A",
+				ToolTip = "Volver a la pista previa"
+			});
+			PinnedAppsList.Add(new PinnedApp
+			{
+				Name = "Abrir YouTube Music",
+				Subtitle = "Reproductor flotante",
+				Path = "ytmusic:open",
+				ActionText = "Ventana",
+				IconGlyph = "\uE217",
+				ToolTip = "Abrir o enfocar el reproductor"
+			});
+			_selectedIndex = 0;
+			PinnedAppsList[0].IsSelected = true;
+			UpdateInspector(PinnedAppsList[0]);
+		}
+
+		// Oculta "Ventanas Activas" y despliega la tarjeta de resultados al instante (0 ms de demora)
+		UpdateWindowSize();
+
+		try
+		{
+			bool hasFinalResults = false;
+			List<PinnedApp> results = await _searchService.SearchMusicAsync(query, onSuggestionsReady: (suggestionsList) =>
+			{
+				Dispatcher.Invoke(() =>
+				{
+					if (token.IsCancellationRequested || hasFinalResults) return;
+					foreach (PinnedApp pinnedApps in PinnedAppsList)
+					{
+						pinnedApps.IsSelected = false;
+					}
+					PinnedAppsList.Clear();
+					_selectedIndex = -1;
+					IsWebSearchSelected = false;
+					foreach (PinnedApp item in suggestionsList)
+					{
+						PinnedAppsList.Add(item);
+					}
+					UpdateWindowSize();
+					if (PinnedAppsList.Count > 0)
+					{
+						_selectedIndex = 0;
+						PinnedAppsList[0].IsSelected = true;
+						UpdateInspector(PinnedAppsList[0]);
+					}
+				});
+			}, token);
+
+			Dispatcher.Invoke(() =>
+			{
+				if (!token.IsCancellationRequested && results != null && results.Count > 0)
+				{
+					hasFinalResults = true;
+					foreach (PinnedApp pinnedApps in PinnedAppsList)
+					{
+						pinnedApps.IsSelected = false;
+					}
+					PinnedAppsList.Clear();
+					_selectedIndex = -1;
+					IsWebSearchSelected = false;
+					foreach (PinnedApp item in results)
+					{
+						PinnedAppsList.Add(item);
+					}
+					UpdateWindowSize();
+					if (PinnedAppsList.Count > 0)
+					{
+						_selectedIndex = 0;
+						PinnedAppsList[0].IsSelected = true;
+						IsWebSearchSelected = false;
+						UpdateInspector(PinnedAppsList[0]);
+					}
+					else
+					{
+						UpdateInspector(null);
+					}
+				}
+			});
+		}
+		catch (OperationCanceledException)
+		{
+		}
+		catch
+		{
+		}
+	}
+
+	private void ExecuteAppsSearch(string query)
+	{
+		foreach (PinnedApp pinnedApps in PinnedAppsList)
+		{
+			pinnedApps.IsSelected = false;
+		}
+		PinnedAppsList.Clear();
+		_selectedIndex = -1;
+		IsWebSearchSelected = false;
+		if (string.IsNullOrEmpty(query))
+		{
+			UpdateWindowSize();
+			return;
+		}
+		foreach (PinnedApp item in _searchService.SearchApps(query, _allInstalledApps, SettingsService.Instance.AppLaunchCounts))
+		{
+			PinnedAppsList.Add(item);
+		}
+		UpdateWindowSize();
+		if (PinnedAppsList.Count > 0)
+		{
+			_selectedIndex = 0;
+			PinnedAppsList[0].IsSelected = true;
+			IsWebSearchSelected = false;
+			UpdateInspector(PinnedAppsList[0]);
+		}
+		else if (IsWebSearchAvailable())
+		{
+			_selectedIndex = 0;
+			IsWebSearchSelected = true;
+			UpdateInspector(null);
+		}
+		else
+		{
+			UpdateInspector(null);
+		}
+	}
+
+	private async Task ExecuteFileSearchAsync(string query)
+	{
+		_fileSearchCts?.Cancel();
+		_fileSearchCts = new CancellationTokenSource();
+		CancellationToken token = _fileSearchCts.Token;
+		if (string.IsNullOrWhiteSpace(query))
+		{
+			Dispatcher.Invoke(() =>
+			{
+				PinnedAppsList.Clear();
+				_selectedIndex = -1;
+				IsWebSearchSelected = false;
+				UpdateInspector(null);
+				UpdateWindowSize();
+			});
+			return;
+		}
+		try
+		{
+			List<PinnedApp> matchedFiles = await _searchService.SearchFilesAsync(query, 25, token);
+			Dispatcher.Invoke(() =>
+			{
+				if (!token.IsCancellationRequested)
+				{
+					foreach (PinnedApp pinnedApps in PinnedAppsList)
+					{
+						pinnedApps.IsSelected = false;
+					}
+					PinnedAppsList.Clear();
+					_selectedIndex = -1;
+					IsWebSearchSelected = false;
+					foreach (PinnedApp item in matchedFiles)
+					{
+						PinnedAppsList.Add(item);
+					}
+					UpdateWindowSize();
+					if (PinnedAppsList.Count > 0)
+					{
+						_selectedIndex = 0;
+						PinnedAppsList[0].IsSelected = true;
+						IsWebSearchSelected = false;
+						UpdateInspector(PinnedAppsList[0]);
+					}
+					else if (IsWebSearchAvailable())
+					{
+						_selectedIndex = 0;
+						IsWebSearchSelected = true;
+						UpdateInspector(null);
+					}
+					else
+					{
+						UpdateInspector(null);
+					}
+				}
+			});
+		}
+		catch (OperationCanceledException)
+		{
+		}
+		catch
+		{
+		}
+	}
+
+	private void ExecuteClipboardSearch(string query)
+	{
+		foreach (PinnedApp pinnedApps in PinnedAppsList)
+		{
+			pinnedApps.IsSelected = false;
+		}
+		PinnedAppsList.Clear();
+		_selectedIndex = -1;
+		IsWebSearchSelected = false;
+		foreach (PinnedApp item in _searchService.SearchClipboard(query, ClipboardService.Instance.History))
+		{
+			PinnedAppsList.Add(item);
+		}
+		UpdateWindowSize();
+	}
+
+	private async Task ExecuteAiSearchAsync(string prompt)
+	{
+		if (_searchMode != "AI")
+		{
+			SetSearchMode("AI");
+		}
+		if (!string.IsNullOrWhiteSpace(prompt))
+		{
+			await SendAiChatMessageAsync(prompt);
+		}
+	}
+
+	private async Task SendAiChatMessageAsync(string prompt)
+	{
+		if (string.IsNullOrWhiteSpace(prompt))
+		{
+			return;
+		}
+
+		string apiKey = SettingsService.Instance.GeminiApiKey ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(apiKey))
+		{
+			AiChatMessages.Add(new AiChatMessage
+			{
+				IsUser = false,
+				Content = "**API Key de Gemini no configurada**\n\nPara conversar con la IA en tiempo real, configura tu clave gratuita de Google AI Studio en la configuración de WallFlow."
+			});
+			UpdateAiChatVisibilities();
+			ScrollAiChatToBottom();
+			return;
+		}
+
+		AiChatMessage userMessage = new AiChatMessage
+		{
+			IsUser = true,
+			Content = prompt.Trim(),
+			Timestamp = DateTime.Now
+		};
+		AiChatMessages.Add(userMessage);
+
+		AiChatMessage aiMessage = new AiChatMessage
+		{
+			IsUser = false,
+			Content = string.Empty,
+			IsLoading = true,
+			Timestamp = DateTime.Now
+		};
+		AiChatMessages.Add(aiMessage);
+		UpdateAiChatVisibilities();
+		ScrollAiChatToBottom();
+		SoundService.Play(SoundType.Click);
+
+		try
+		{
+			List<(string role, string text)> history = new List<(string role, string text)>();
+			foreach (AiChatMessage msg in AiChatMessages)
+			{
+				if (!msg.IsLoading && !string.IsNullOrWhiteSpace(msg.Content))
+				{
+					history.Add((msg.IsUser ? "user" : "model", msg.Content));
+				}
+			}
+
+			string response = await _geminiService.QueryChatAsync(
+				history,
+				apiKey,
+				SettingsService.Instance.GeminiModel
+			);
+
+			aiMessage.IsLoading = false;
+			aiMessage.Content = response;
+			aiMessage.Timestamp = DateTime.Now;
+
+			SoundService.Play(SoundType.Ping);
+
+			try
+			{
+				ClipboardService.Instance.AddAiItem(response);
+			}
+			catch { }
+		}
+		catch (Exception ex)
+		{
+			aiMessage.IsLoading = false;
+			aiMessage.Content = "**Error al conectar con Gemini AI:** " + ex.Message + "\n\n*Verifica tu conexión a internet o tu API Key en la configuración.*";
+		}
+
+		UpdateAiChatVisibilities();
+		ScrollAiChatToBottom();
+	}
+
+	private void ScrollAiChatToBottom()
+	{
+		Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+		{
+			AiChatScrollViewer?.ScrollToEnd();
+		}));
+	}
+
+	private void AiNewChat_Click(object sender, RoutedEventArgs e)
+	{
+		AiChatMessages.Clear();
+		UpdateAiChatVisibilities();
+		SoundService.Play(SoundType.Click);
+		if (SearchBox != null)
+		{
+			SearchBox.Text = string.Empty;
+			SearchBox.Focus();
+		}
+	}
+
+	private void AiSuggestionChip_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is System.Windows.Controls.Button { Tag: string prompt })
+		{
+			if (SearchBox != null)
+			{
+				SearchBox.Text = string.Empty;
+			}
+			_ = SendAiChatMessageAsync(prompt);
+		}
+	}
+
+	private void AiCopyMessage_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is System.Windows.Controls.Button { Tag: string text } && !string.IsNullOrWhiteSpace(text))
+		{
+			try
+			{
+				System.Windows.Clipboard.SetText(text);
+				SoundService.Play(SoundType.Click);
+			}
+			catch { }
+		}
+	}
+
+	private void LoadAiHistory()
+	{
+		IsWebSearchSelected = false;
+		PinnedAppsList.Clear();
+		_selectedIndex = -1;
+		if (ResultsCardBorder != null)
+		{
+			ResultsCardBorder.Visibility = Visibility.Visible;
+		}
+		UpdateAiChatVisibilities();
+		UpdateWindowSize();
+	}
+
+	private void OnClipboardHistoryChanged()
+	{
+		if (!Dispatcher.CheckAccess())
+		{
+			Dispatcher.BeginInvoke(new Action(OnClipboardHistoryChanged));
+		}
+		else if (_searchMode == "Clipboard")
+		{
+			ExecuteClipboardSearch((SearchBox != null) ? SearchBox.Text.Trim() : "");
+		}
+		else if (_searchMode == "AI" && (SearchBox == null || string.IsNullOrWhiteSpace(SearchBox.Text)))
+		{
+			LoadAiHistory();
+		}
+	}
+
+	private void UpdateWindowSize()
+	{
+		double num = 1920.0;
+		double num2 = 1080.0;
+		double left = 0.0;
+		double top = 0.0;
+		try
+		{
+			Screen[] allScreens = Screen.AllScreens;
+			int num3 = Math.Clamp(SettingsService.Instance.DockMonitorIndex, 0, allScreens.Length - 1);
+			Screen obj = allScreens[num3];
+			DpiScale dpi = VisualTreeHelper.GetDpi(this);
+			num = (double)obj.Bounds.Width / dpi.DpiScaleX;
+			num2 = (double)obj.Bounds.Height / dpi.DpiScaleY;
+			left = (double)obj.Bounds.X / dpi.DpiScaleX;
+			top = (double)obj.Bounds.Y / dpi.DpiScaleY;
+		}
+		catch
+		{
+		}
+		Left = left;
+		Top = top;
+		Width = num;
+		Height = num2;
+		double spotlightContainerWidth = Math.Min(1020.0, Math.Max(720.0, num * 0.7));
+		SpotlightContainerWidth = spotlightContainerWidth;
+		if (SpotlightContentGrid != null)
+		{
+			SpotlightContentGrid.Margin = new Thickness(0.0);
+		}
+		string query = ((SearchBox != null) ? SearchBox.Text.Trim() : "");
+		if (string.IsNullOrEmpty(query) && _searchMode != "Clipboard" && _searchMode != "AI")
+		{
+			SpotlightFavoritesVisibility = ((!SettingsService.Instance.SpotlightShowFavorites) ? Visibility.Collapsed : Visibility.Visible);
+			ActiveWindowsVisibility = Visibility.Visible;
+			LoadActiveWindows();
+			UpdateSatelliteMediaInfo();
+			if (ResultsScrollViewer != null)
+			{
+				ResultsScrollViewer.Visibility = Visibility.Collapsed;
+			}
+			if (ResultsCardBorder != null)
+			{
+				ResultsCardBorder.Visibility = Visibility.Collapsed;
+			}
+			if (WebSearchButton != null)
+			{
+				WebSearchButton.Visibility = Visibility.Collapsed;
+			}
+			if (WebSearchSeparator != null)
+			{
+				WebSearchSeparator.Visibility = Visibility.Collapsed;
+			}
+			IsWebSearchSelected = false;
+			return;
+		}
+		SpotlightFavoritesVisibility = Visibility.Collapsed;
+		List<ActiveWindowModel> list = _allActiveWindows.Where((ActiveWindowModel w) => w.Title.Contains(query, StringComparison.OrdinalIgnoreCase) || w.ProcessName.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+		if (_searchMode == "Windows")
+		{
+			ActiveWindowsList.Clear();
+			foreach (ActiveWindowModel item in list)
+			{
+				ActiveWindowsList.Add(item);
+			}
+			ActiveWindowsCountText = $"{list.Count} coincidentes";
+			ActiveWindowsVisibility = Visibility.Visible;
+			if (ResultsScrollViewer != null)
+			{
+				ResultsScrollViewer.Visibility = Visibility.Collapsed;
+			}
+			if (ResultsCardBorder != null)
+			{
+				ResultsCardBorder.Visibility = Visibility.Collapsed;
+			}
+		}
+		else
+		{
+			ActiveWindowsVisibility = Visibility.Collapsed;
+			if (ResultsScrollViewer != null)
+			{
+				ResultsScrollViewer.Visibility = Visibility.Visible;
+			}
+			if (ResultsCardBorder != null)
+			{
+				ResultsCardBorder.Visibility = Visibility.Visible;
+			}
+		}
+		if (ResultsScrollViewer != null)
+		{
+			ResultsScrollViewer.MaxHeight = Math.Max(260.0, num2 * 0.58);
+		}
+		bool flag = (_searchMode == "Apps" || _searchMode == "Files") && !string.IsNullOrEmpty(query);
+		if (WebSearchButton != null)
+		{
+			WebSearchButton.Visibility = ((!flag) ? Visibility.Collapsed : Visibility.Visible);
+		}
+		if (WebSearchSeparator != null)
+		{
+			WebSearchSeparator.Visibility = ((!flag || PinnedAppsList.Count <= 0) ? Visibility.Collapsed : Visibility.Visible);
+		}
+		if (WebSearchText != null)
+		{
+			WebSearchText.Text = (flag ? ("Buscar \"" + query + "\" en la web") : "Buscar en la web");
+		}
+		if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+		{
+			UpdateInspector(PinnedAppsList[_selectedIndex]);
+		}
+		else if (IsWebSearchSelected)
+		{
+			UpdateInspector(null);
+		}
+		else if (PinnedAppsList.Count > 0)
+		{
+			_selectedIndex = 0;
+			PinnedAppsList[0].IsSelected = true;
+			UpdateInspector(PinnedAppsList[0]);
+		}
+		else
+		{
+			UpdateInspector(null);
+		}
+	}
+
+	private void RootBorder_MouseDown(object sender, MouseButtonEventArgs e)
+	{
+		if (e.ChangedButton != MouseButton.Left)
+		{
+			return;
+		}
+		if (SpotlightContentGrid != null)
+		{
+			Point position = e.GetPosition(SpotlightContentGrid);
+			if (!new Rect(0.0, 0.0, SpotlightContentGrid.ActualWidth, SpotlightContentGrid.ActualHeight).Contains(position))
+			{
+				SafeClose();
+			}
+		}
+		else if (e.OriginalSource == RootBorder)
+		{
+			SafeClose();
+		}
+	}
+
+	public void SetSearchMode(string mode)
+	{
+		if (_searchMode == mode)
+		{
+			return;
+		}
+		_isChangingMode = true;
+		try
+		{
+			_searchMode = mode;
+			_searchDebounceTimer?.Stop();
+			_musicDebounceTimer?.Stop();
+			_selectedIndex = -1;
+			IsWebSearchSelected = false;
+			if (SearchBox != null)
+			{
+				SearchBox.Text = string.Empty;
+			}
+			UpdateModeButtonsVisuals();
+			UpdateSearchPlaceholder();
+			switch (mode)
+			{
+			case "Apps":
+				PopulateDefaultList();
+				break;
+			case "Windows":
+				PinnedAppsList.Clear();
+				_selectedIndex = -1;
+				LoadActiveWindows();
+				ActiveWindowsVisibility = Visibility.Visible;
+				if (ResultsCardBorder != null)
+				{
+					ResultsCardBorder.Visibility = Visibility.Collapsed;
+				}
+				break;
+			case "Files":
+				PinnedAppsList.Clear();
+				_selectedIndex = -1;
+				UpdateWindowSize();
+				break;
+			case "Clipboard":
+				ExecuteClipboardSearch(string.Empty);
+				break;
+			case "AI":
+				LoadAiHistory();
+				break;
+			}
+			UpdateAiChatVisibilities();
+		}
+		finally
+		{
+			_isChangingMode = false;
+		}
+	}
+
+	private void CycleSearchMode()
+	{
+		SetSearchMode(_searchMode switch
+		{
+			"Apps" => "Windows", 
+			"Windows" => "Files", 
+			"Files" => "Clipboard", 
+			"Clipboard" => "AI", 
+			_ => "Apps", 
+		});
+	}
+
+	private void UpdateModeButtonsVisuals()
+	{
+		Brush spotlightSelectedBackgroundBrush = SpotlightSelectedBackgroundBrush;
+		Brush spotlightSelectedBorderBrush = SpotlightSelectedBorderBrush;
+		SolidColorBrush transparent = Brushes.Transparent;
+		Brush spotlightIconBrush = SpotlightIconBrush;
+		ModeAppsBrush = ((_searchMode == "Apps") ? spotlightSelectedBackgroundBrush : transparent);
+		ModeAppsForegroundBrush = ((_searchMode == "Apps") ? spotlightSelectedBorderBrush : spotlightIconBrush);
+		ModeWindowsBrush = ((_searchMode == "Windows") ? spotlightSelectedBackgroundBrush : transparent);
+		ModeWindowsForegroundBrush = ((_searchMode == "Windows") ? spotlightSelectedBorderBrush : spotlightIconBrush);
+		ModeFilesBrush = ((_searchMode == "Files") ? spotlightSelectedBackgroundBrush : transparent);
+		ModeFilesForegroundBrush = ((_searchMode == "Files") ? spotlightSelectedBorderBrush : spotlightIconBrush);
+		ModeClipboardBrush = ((_searchMode == "Clipboard") ? spotlightSelectedBackgroundBrush : transparent);
+		ModeClipboardForegroundBrush = ((_searchMode == "Clipboard") ? spotlightSelectedBorderBrush : spotlightIconBrush);
+		ModeAiBrush = ((_searchMode == "AI") ? spotlightSelectedBackgroundBrush : transparent);
+		ModeAiForegroundBrush = ((_searchMode == "AI") ? spotlightSelectedBorderBrush : spotlightIconBrush);
+	}
+
+	private void UpdateSearchPlaceholder()
+	{
+		if (PlaceholderText != null)
+		{
+			TextBlock placeholderText = PlaceholderText;
+			placeholderText.Text = _searchMode switch
+			{
+				"Windows" => "Filtrar ventanas en ejecución...", 
+				"Files" => "Buscar archivos...", 
+				"Clipboard" => "Buscar en el portapapeles...", 
+				"AI" => "Pregúntale a Gemini AI...", 
+				_ => "Buscar aplicaciones, archivos, o filtrar ventanas activas...", 
+			};
+		}
+	}
+
+	private void ModeButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is System.Windows.Controls.Button { Tag: string tag })
+		{
+			SetSearchMode(tag);
+			SearchBox?.Focus();
+		}
+	}
+
+	private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+	{
+		if (e.Key == Key.Escape)
+		{
+			if (NotificationsCardVisibility == Visibility.Visible)
+			{
+				NotificationsCardVisibility = Visibility.Collapsed;
+				e.Handled = true;
+			}
+			else if (ConnectedDevicesCardVisibility == Visibility.Visible)
+			{
+				ConnectedDevicesCardVisibility = Visibility.Collapsed;
+				e.Handled = true;
+			}
+			else if (IsPlayerExpandedVisibility == Visibility.Visible)
+			{
+				IsPlayerExpandedVisibility = Visibility.Collapsed;
+				e.Handled = true;
+			}
+			else if (WallpaperFanCardVisibility == Visibility.Visible)
+			{
+				WallpaperFanCardVisibility = Visibility.Collapsed;
+				RestoreCenterContentView();
+				e.Handled = true;
+			}
+			else
+			{
+				SafeClose();
+				e.Handled = true;
+			}
+			return;
+		}
+		if (WallpaperFanCardVisibility == Visibility.Visible)
+		{
+			if (e.Key == Key.Left)
+			{
+				PrevFanWallpaper();
+				e.Handled = true;
+				return;
+			}
+			if (e.Key == Key.Right)
+			{
+				NextFanWallpaper();
+				e.Handled = true;
+				return;
+			}
+			if (e.Key == Key.Return)
+			{
+				ApplyActiveFanWallpaper();
+				e.Handled = true;
+				return;
+			}
+		}
+		if (e.Key == Key.System)
+		{
+			if (e.SystemKey == Key.F4)
+			{
+				SafeClose();
+				e.Handled = true;
+				return;
+			}
+			if (e.SystemKey == Key.LeftAlt || e.SystemKey == Key.RightAlt || e.SystemKey == Key.Space || e.SystemKey == Key.None)
+			{
+				e.Handled = true;
+				FocusSearchBox();
+				return;
+			}
+			char c = ConvertKeyToChar(e.SystemKey);
+			if (c != '\0' && SearchBox != null)
+			{
+				FocusSearchBox();
+				int caretIndex = SearchBox.CaretIndex;
+				SearchBox.Text = SearchBox.Text.Insert(caretIndex, c.ToString());
+				SearchBox.CaretIndex = caretIndex + 1;
+				e.Handled = true;
+			}
+			else
+			{
+				e.Handled = true;
+				FocusSearchBox();
+			}
+			return;
+		}
+		if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+		{
+			if (e.Key == Key.D1 || e.Key == Key.NumPad1)
+			{
+				SetSearchMode("Apps");
+				e.Handled = true;
+				return;
+			}
+			if (e.Key == Key.D2 || e.Key == Key.NumPad2)
+			{
+				SetSearchMode("Files");
+				e.Handled = true;
+				return;
+			}
+			if (e.Key == Key.D3 || e.Key == Key.NumPad3)
+			{
+				SetSearchMode("Clipboard");
+				e.Handled = true;
+				return;
+			}
+			if (e.Key == Key.D4 || e.Key == Key.NumPad4)
+			{
+				SetSearchMode("AI");
+				e.Handled = true;
+				return;
+			}
+		}
+		if (SearchBox == null || SearchBox.IsFocused)
+		{
+			return;
+		}
+		if (e.Key == Key.Down || e.Key == Key.Up || e.Key == Key.Return || e.Key == Key.Return)
+		{
+			FocusSearchBox();
+			SearchBox_PreviewKeyDown(sender, e);
+			return;
+		}
+		if (e.Key == Key.Tab)
+		{
+			FocusSearchBox();
+			CycleSearchMode();
+			e.Handled = true;
+			return;
+		}
+		FocusSearchBox();
+		char c2 = ConvertKeyToChar(e.Key);
+		if (c2 != '\0')
+		{
+			int caretIndex2 = SearchBox.CaretIndex;
+			SearchBox.Text = SearchBox.Text.Insert(caretIndex2, c2.ToString());
+			SearchBox.CaretIndex = caretIndex2 + 1;
+			e.Handled = true;
+		}
+	}
+
+	private static char ConvertKeyToChar(Key key)
+	{
+		try
+		{
+			int num = KeyInterop.VirtualKeyFromKey(key);
+			if (num > 0)
+			{
+				byte[] array = new byte[256];
+				NativeMethods.GetKeyboardState(array);
+				array[18] = 0;
+				array[164] = 0;
+				array[165] = 0;
+				uint wScanCode = NativeMethods.MapVirtualKey((uint)num, 0u);
+				StringBuilder stringBuilder = new StringBuilder(2);
+				if (NativeMethods.ToUnicode((uint)num, wScanCode, array, stringBuilder, stringBuilder.Capacity, 0u) > 0 && stringBuilder.Length > 0)
+				{
+					char c = stringBuilder[0];
+					if (!char.IsControl(c))
+					{
+						return c;
+					}
+				}
+			}
+		}
+		catch
+		{
+		}
+		if (key >= Key.A && key <= Key.Z)
+		{
+			return (char)(((Keyboard.Modifiers & ModifierKeys.Shift) != 0) ? (65 + (key - 44)) : (97 + (key - 44)));
+		}
+		if (key >= Key.D0 && key <= Key.D9)
+		{
+			return (char)(48 + (key - 34));
+		}
+		if (key >= Key.NumPad0 && key <= Key.NumPad9)
+		{
+			return (char)(48 + (key - 74));
+		}
+		if (key == Key.Space)
+		{
+			return ' ';
+		}
+		return '\0';
+	}
+
+	private void SearchBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+	{
+		if (Keyboard.Modifiers == ModifierKeys.Alt && (e.SystemKey == Key.W || e.Key == Key.W) && _selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+		{
+			PinnedApp pinnedApp = PinnedAppsList[_selectedIndex];
+			string targetWp = pinnedApp.Path ?? "";
+			if (targetWp.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase))
+			{
+				targetWp = targetWp.Substring("clipboard:".Length);
+			}
+			if (!File.Exists(targetWp) && !string.IsNullOrEmpty(InspectorPath) && File.Exists(InspectorPath))
+			{
+				targetWp = InspectorPath;
+			}
+			if (!string.IsNullOrEmpty(targetWp) && File.Exists(targetWp))
+			{
+				bool flag;
+				switch (Path.GetExtension(targetWp).ToLowerInvariant())
+				{
+				case ".png":
+				case ".jpg":
+				case ".jpeg":
+				case ".webp":
+				case ".bmp":
+					flag = true;
+					break;
+				default:
+					flag = false;
+					break;
+				}
+				if (flag)
+				{
+					try
+					{
+						SoundService.Play(SoundType.Ping);
+						WallpaperTransitionService.ApplyWallpaper(targetWp, () =>
+						{
+							EventBus.Publish(new WallpaperChangedEvent(targetWp));
+						});
+						SafeClose();
+						e.Handled = true;
+						return;
+					}
+					catch
+					{
+					}
+				}
+			}
+		}
+		if (Keyboard.Modifiers == ModifierKeys.Alt && (e.SystemKey == Key.O || e.Key == Key.O) && _selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+		{
+			PinnedApp pinnedApp2 = PinnedAppsList[_selectedIndex];
+			string targetFolder = pinnedApp2.Path ?? "";
+			if (targetFolder.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase))
+			{
+				targetFolder = targetFolder.Substring("clipboard:".Length);
+			}
+			if (!File.Exists(targetFolder) && !string.IsNullOrEmpty(InspectorPath) && File.Exists(InspectorPath))
+			{
+				targetFolder = InspectorPath;
+			}
+			if (!string.IsNullOrEmpty(targetFolder) && File.Exists(targetFolder))
+			{
+				try
+				{
+					string text = IconExtractionService.ResolvePath(targetFolder);
+					using (Process.Start("explorer.exe", "/select,\"" + text + "\""))
+					{
+						SafeClose();
+						e.Handled = true;
+						return;
+					}
+				}
+				catch
+				{
+				}
+			}
+		}
+		if (Keyboard.Modifiers == ModifierKeys.Alt && (e.SystemKey == Key.C || e.Key == Key.C) && _selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+		{
+			System.Windows.Clipboard.SetText(PinnedAppsList[_selectedIndex].Path);
+			SoundService.Play(SoundType.Click);
+			e.Handled = true;
+		}
+		else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && (Keyboard.Modifiers & ModifierKeys.Shift) != 0 && (e.Key == Key.Return || e.Key == Key.Return))
+		{
+			if (IsWebSearchSelected)
+			{
+				OpenWebSearch();
+			}
+			else if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+			{
+				LaunchApp(PinnedAppsList[_selectedIndex].Path, asAdmin: true);
+			}
+			e.Handled = true;
+		}
+		else if (e.Key == Key.Tab)
+		{
+			CycleSearchMode();
+			e.Handled = true;
+		}
+		else if (e.Key == Key.Return || e.Key == Key.Return)
+		{
+			if (_searchMode == "AI")
+			{
+				string prompt = SearchBox?.Text.Trim() ?? "";
+				if (!string.IsNullOrWhiteSpace(prompt))
+				{
+					if (SearchBox != null)
+					{
+						SearchBox.Text = string.Empty;
+					}
+					_ = SendAiChatMessageAsync(prompt);
+				}
+				e.Handled = true;
+				return;
+			}
+			if (_searchMode == "Windows" || (ActiveWindowsVisibility == Visibility.Visible && _selectedIndex == -1 && ActiveWindowsList.Count > 0))
+			{
+				ActiveWindowModel activeWindowModel = ActiveWindowsList.FirstOrDefault();
+				if (activeWindowModel != null)
+				{
+					ActiveWindowManager.Instance.SwitchToWindow(activeWindowModel.Hwnd);
+					SoundService.Play(SoundType.Click);
+					SafeClose();
+					e.Handled = true;
+					return;
+				}
+			}
+			if (IsWebSearchSelected)
+			{
+				OpenWebSearch();
+			}
+			else if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+			{
+				PinnedApp pinnedApp3 = PinnedAppsList[_selectedIndex];
+				LaunchApp(pinnedApp3.Path, pinnedApp3.RunAsAdmin);
+			}
+			else if (!string.IsNullOrEmpty(SearchBox?.Text.Trim()))
+			{
+				OpenWebSearch();
+			}
+			e.Handled = true;
+		}
+		else if (e.Key == Key.Down)
+		{
+			MoveSelection(1);
+			e.Handled = true;
+		}
+		else if (e.Key == Key.Up)
+		{
+			MoveSelection(-1);
+			e.Handled = true;
+		}
+	}
+
+	private void MoveSelection(int direction)
+	{
+		bool flag = IsWebSearchAvailable();
+		int count = PinnedAppsList.Count;
+		int num = count + (flag ? 1 : 0);
+		if (num == 0)
+		{
+			return;
+		}
+		int num2 = (IsWebSearchSelected ? count : _selectedIndex);
+		int num3 = ((num2 >= 0) ? (num2 + direction) : ((direction <= 0) ? (num - 1) : 0));
+		if (num3 < 0)
+		{
+			num3 = 0;
+		}
+		if (num3 >= num)
+		{
+			num3 = num - 1;
+		}
+		if (num3 == num2 && (_selectedIndex >= 0 || IsWebSearchSelected))
+		{
+			return;
+		}
+		if (IsWebSearchSelected)
+		{
+			IsWebSearchSelected = false;
+		}
+		else if (_selectedIndex >= 0 && _selectedIndex < count)
+		{
+			PinnedAppsList[_selectedIndex].IsSelected = false;
+		}
+		if (flag && num3 == count)
+		{
+			_selectedIndex = count;
+			IsWebSearchSelected = true;
+			WebSearchButton?.BringIntoView();
+			UpdateInspector(null);
+		}
+		else if (num3 >= 0 && num3 < count)
+		{
+			_selectedIndex = num3;
+			IsWebSearchSelected = false;
+			PinnedAppsList[_selectedIndex].IsSelected = true;
+			if (AppsControl != null)
+			{
+				(AppsControl.ItemContainerGenerator.ContainerFromIndex(_selectedIndex) as FrameworkElement)?.BringIntoView();
+			}
+			UpdateInspector(PinnedAppsList[_selectedIndex]);
+		}
+	}
+
+	private void LaunchApp(string path, bool asAdmin)
+	{
+		if (string.IsNullOrEmpty(path))
+		{
+			return;
+		}
+		switch (path)
+		{
+		case "AI_LOADING":
+			return;
+		case "AI_EMPTY":
+			return;
+		}
+		if (path.StartsWith("ytmusic:", StringComparison.OrdinalIgnoreCase))
+		{
+			try
+			{
+				if (path.StartsWith("ytmusic:play:", StringComparison.OrdinalIgnoreCase))
+				{
+					string trackIdOrQuery = path.Substring("ytmusic:play:".Length).Trim();
+					ApplicationHost.Instance?.PlayMusic(trackIdOrQuery);
+					FloatingMediaOrbWindow.ShowOrb(trackIdOrQuery, "YouTube Music", null, isPlaying: true);
+					InspectorMusicStatus = "▶ Reproduciendo ahora...";
+					InspectorMusicEqualizerVisibility = Visibility.Visible;
+					IsMediaPlaying = true;
+					SoundService.Play(SoundType.Click);
+					Task.Delay(800).ContinueWith((Task _) =>
+					{
+						Dispatcher.Invoke(UpdateSatelliteMediaInfo);
+					});
+				}
+				else if (path.StartsWith("ytmusic:search:", StringComparison.OrdinalIgnoreCase))
+				{
+					string trackIdOrQuery2 = path.Substring("ytmusic:search:".Length).Trim();
+					ApplicationHost.Instance?.PlayMusic(trackIdOrQuery2);
+					FloatingMediaOrbWindow.ShowOrb(trackIdOrQuery2, "YouTube Music", null, isPlaying: true);
+					InspectorMusicStatus = "▶ Reproduciendo ahora...";
+					InspectorMusicEqualizerVisibility = Visibility.Visible;
+					IsMediaPlaying = true;
+					SoundService.Play(SoundType.Click);
+					Task.Delay(800).ContinueWith((Task _) =>
+					{
+						Dispatcher.Invoke(UpdateSatelliteMediaInfo);
+					});
+				}
+				else if (path.Equals("ytmusic:toggle", StringComparison.OrdinalIgnoreCase))
+				{
+					SatelliteMedia_PlayPause_Click(this, new RoutedEventArgs());
+				}
+				else if (path.Equals("ytmusic:next", StringComparison.OrdinalIgnoreCase))
+				{
+					SatelliteMedia_Next_Click(this, new RoutedEventArgs());
+				}
+				else if (path.Equals("ytmusic:prev", StringComparison.OrdinalIgnoreCase))
+				{
+					SatelliteMedia_Prev_Click(this, new RoutedEventArgs());
+				}
+				else if (path.Equals("ytmusic:open", StringComparison.OrdinalIgnoreCase))
+				{
+					SatelliteMedia_OpenYtMusic_Click(this, new RoutedEventArgs());
+					SafeClose();
+				}
+				return;
+			}
+			catch
+			{
+				return;
+			}
+		}
+		if (path.StartsWith("system:", StringComparison.OrdinalIgnoreCase))
+		{
+			switch (path.Substring("system:".Length).ToLowerInvariant())
+			{
+			case "shutdown":
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "shutdown.exe",
+					Arguments = "/s /t 0",
+					CreateNoWindow = true,
+					UseShellExecute = false
+				});
+				break;
+			case "restart":
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "shutdown.exe",
+					Arguments = "/r /t 0",
+					CreateNoWindow = true,
+					UseShellExecute = false
+				});
+				break;
+			case "lock":
+				Process.Start("rundll32.exe", "user32.dll,LockWorkStation");
+				break;
+			case "sleep":
+				Process.Start("rundll32.exe", "powrprof.dll,SetSuspendState 0,1,0");
+				break;
+			case "recyclebin":
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "powershell.exe",
+					Arguments = "-NoProfile -Command Clear-RecycleBin -Force -ErrorAction SilentlyContinue",
+					CreateNoWindow = true,
+					UseShellExecute = false
+				});
+				break;
+			}
+			SafeClose();
+			return;
+		}
+		if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+		{
+			try
+			{
+				using (Process.Start(new ProcessStartInfo
+				{
+					FileName = path,
+					UseShellExecute = true
+				}))
+				{
+				}
+			}
+			catch
+			{
+			}
+			SafeClose();
+			return;
+		}
+		if (path.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase))
+		{
+			string text = path.Substring("clipboard:".Length);
+			if (File.Exists(text))
+			{
+				string ext = Path.GetExtension(text).ToLowerInvariant();
+				if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".webp")
+				{
+					try
+					{
+						var uri = new Uri(text, UriKind.Absolute);
+						var bmi = new BitmapImage();
+						bmi.BeginInit();
+						bmi.CacheOption = BitmapCacheOption.OnLoad;
+						bmi.UriSource = uri;
+						bmi.EndInit();
+						bmi.Freeze();
+						System.Windows.Clipboard.SetImage(bmi);
+						SoundService.Play(SoundType.Click);
+						SafeClose();
+						return;
+					}
+					catch
+					{
+					}
+				}
+			}
+			try
+			{
+				System.Windows.Clipboard.SetText(text);
+				SoundService.Play(SoundType.Click);
+			}
+			catch
+			{
+			}
+			SafeClose();
+			return;
+		}
+		if (path.StartsWith("ms-settings:", StringComparison.OrdinalIgnoreCase))
+		{
+			try
+			{
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = path,
+					UseShellExecute = true
+				});
+			}
+			catch
+			{
+			}
+			SafeClose();
+			return;
+		}
+		if (path.StartsWith("cmd:", StringComparison.OrdinalIgnoreCase))
+		{
+			string text2 = path.Substring(4).Trim();
+			try
+			{
+				ProcessStartInfo processStartInfo = new ProcessStartInfo
+				{
+					FileName = "cmd.exe",
+					Arguments = "/c start \"\" " + text2,
+					UseShellExecute = true,
+					CreateNoWindow = true
+				};
+				if (asAdmin)
+				{
+					processStartInfo.Verb = "runas";
+				}
+				Process.Start(processStartInfo);
+			}
+			catch
+			{
+			}
+			SafeClose();
+			return;
+		}
+		Dictionary<string, int> appLaunchCounts = SettingsService.Instance.AppLaunchCounts;
+		if (appLaunchCounts != null)
+		{
+			appLaunchCounts[path] = ((!appLaunchCounts.TryGetValue(path, out var value)) ? 1 : (value + 1));
+			SettingsService.Save();
+		}
+		if (path.StartsWith("uwp:", StringComparison.OrdinalIgnoreCase))
+		{
+			string text3 = path.Substring(4).Split('|')[0];
+			try
+			{
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "explorer.exe",
+					Arguments = "shell:AppsFolder\\" + text3,
+					UseShellExecute = true
+				});
+			}
+			catch
+			{
+			}
+			SafeClose();
+			return;
+		}
+		try
+		{
+			string fileName = IconExtractionService.ResolvePath(path);
+			ProcessStartInfo processStartInfo2 = new ProcessStartInfo
+			{
+				FileName = fileName,
+				UseShellExecute = true
+			};
+			if (asAdmin)
+			{
+				processStartInfo2.Verb = "runas";
+			}
+			Process.Start(processStartInfo2);
+		}
+		catch
+		{
+		}
+		SafeClose();
+	}
+
+	private void AppButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (_isFavDragging)
+		{
+			_isFavDragging = false;
+			e.Handled = true;
+		}
+		else
+		{
+			if (!(sender is System.Windows.Controls.Button { Tag: var tag }))
+			{
+				return;
+			}
+			string path = tag as string;
+			if (path == null)
+			{
+				return;
+			}
+			if (path == "ADD_APP")
+			{
+				AddNewApp();
+				return;
+			}
+			PinnedApp pinnedApp = PinnedAppsList.FirstOrDefault((PinnedApp a) => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase));
+			LaunchApp(path, pinnedApp?.RunAsAdmin ?? false);
+		}
+	}
+
+	private void WebSearchButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (IsWebSearchSelected)
+		{
+			OpenWebSearch();
+			return;
+		}
+		if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+		{
+			PinnedAppsList[_selectedIndex].IsSelected = false;
+		}
+		_selectedIndex = PinnedAppsList.Count;
+		IsWebSearchSelected = true;
+		UpdateInspector(null);
+	}
+
+	private void OpenWebSearch()
+	{
+		string text = SearchBox?.Text.Trim() ?? "";
+		if (string.IsNullOrEmpty(text))
+		{
+			return;
+		}
+		string fileName;
+		if (IsLikelyUrl(text))
+		{
+			fileName = ((text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) ? text : ("https://" + text));
+		}
+		else
+		{
+			fileName = "https://www.google.com/search?q=" + Uri.EscapeDataString(text);
+		}
+		try
+		{
+			using (Process.Start(new ProcessStartInfo
+			{
+				FileName = fileName,
+				UseShellExecute = true
+			}))
+			{
+			}
+		}
+		catch
+		{
+		}
+		SafeClose();
+	}
+
+	private static bool IsLikelyUrl(string text)
+	{
+		if (string.IsNullOrWhiteSpace(text))
+		{
+			return false;
+		}
+		if (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+		{
+			return true;
+		}
+		return Regex.IsMatch(text, "^[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z]{2,})(:\\d+)?(/\\S*)?$");
+	}
+
+	private void AddNewApp()
+	{
+		_isShowingDialog = true;
+		try
+		{
+			Microsoft.Win32.OpenFileDialog openFileDialog = new Microsoft.Win32.OpenFileDialog
+			{
+				Title = "Seleccionar aplicación para anclar",
+				Filter = "Aplicaciones (*.exe, *.lnk)|*.exe;*.lnk|Todos los archivos (*.*)|*.*",
+				InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
+			};
+			if (openFileDialog.ShowDialog() == true && File.Exists(openFileDialog.FileName))
+			{
+				AppSettings instance = SettingsService.Instance;
+				List<string> list = instance.PinnedAppPaths ?? (instance.PinnedAppPaths = new List<string>());
+				if (!list.Contains(openFileDialog.FileName))
+				{
+					list.Add(openFileDialog.FileName);
+					SettingsService.Save();
+					LoadFavoritesImmediately();
+				}
+				LoadAppsAsync();
+			}
+		}
+		finally
+		{
+			_isShowingDialog = false;
+			try
+			{
+				Activate();
+			}
+			catch
+			{
+			}
+		}
+	}
+
+	private void PinButton_Click(object sender, RoutedEventArgs e)
+	{
+		e.Handled = true;
+		if (sender is System.Windows.Controls.Button { Tag: string tag })
+		{
+			TogglePinApp(tag);
+		}
+	}
+
+	private void TogglePinApp(string path)
+	{
+		if (!string.IsNullOrEmpty(path) && !(path == "ADD_APP"))
+		{
+			AppSettings instance = SettingsService.Instance;
+			List<string> list = instance.PinnedAppPaths ?? (instance.PinnedAppPaths = new List<string>());
+			if (list.Contains(path))
+			{
+				list.Remove(path);
+			}
+			else
+			{
+				list.Add(path);
+			}
+			SettingsService.Save();
+			LoadFavoritesImmediately();
+			LoadAppsAsync();
+		}
+	}
+
+	private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
+	{
+		if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+		{
+			e.Effects = System.Windows.DragDropEffects.Copy;
+			e.Handled = true;
+		}
+	}
+
+	private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+	{
+		if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+		{
+			return;
+		}
+		string[] array = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop);
+		AppSettings instance = SettingsService.Instance;
+		List<string> list = instance.PinnedAppPaths ?? (instance.PinnedAppPaths = new List<string>());
+		bool flag = false;
+		string[] array2 = array;
+		foreach (string text in array2)
+		{
+			string text2 = Path.GetExtension(text).ToLower();
+			if ((text2 == ".exe" || text2 == ".lnk" || Directory.Exists(text) || text.StartsWith("shell:AppsFolder\\")) && !list.Contains(text))
+			{
+				list.Add(text);
+				flag = true;
+			}
+		}
+		if (flag)
+		{
+			SettingsService.Save();
+			LoadFavoritesImmediately();
+			LoadAppsAsync();
+		}
+		e.Handled = true;
+	}
+
+	private void FavButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		_isFavDragging = false;
+		if (sender is FrameworkElement { DataContext: PinnedApp dataContext } && dataContext.Path != "ADD_APP")
+		{
+			_favDragStartPoint = e.GetPosition(this);
+			_draggedFavApp = dataContext;
+		}
+	}
+
+	private void FavButton_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+	{
+		if (e.LeftButton != MouseButtonState.Pressed || _draggedFavApp == null)
+		{
+			return;
+		}
+		Point position = e.GetPosition(this);
+		Vector vector = _favDragStartPoint - position;
+		if (!(Math.Abs(vector.X) > SystemParameters.MinimumHorizontalDragDistance) && !(Math.Abs(vector.Y) > SystemParameters.MinimumVerticalDragDistance))
+		{
+			return;
+		}
+		_isFavDragging = true;
+		_draggedFavApp.IsDragging = true;
+		if (sender is FrameworkElement dragSource)
+		{
+			System.Windows.DataObject data = new System.Windows.DataObject("PinnedAppDrag", _draggedFavApp);
+			DragDrop.DoDragDrop(dragSource, data, System.Windows.DragDropEffects.Move);
+			if (_draggedFavApp != null)
+			{
+				_draggedFavApp.IsDragging = false;
+				_draggedFavApp = null;
+			}
+			e.Handled = true;
+		}
+	}
+
+	private void FavButton_DragOver(object sender, System.Windows.DragEventArgs e)
+	{
+		if (e.Data.GetDataPresent("PinnedAppDrag"))
+		{
+			PinnedApp pinnedApp = e.Data.GetData("PinnedAppDrag") as PinnedApp;
+			if (sender is FrameworkElement { DataContext: PinnedApp dataContext } && dataContext.Path != "ADD_APP" && pinnedApp != null && pinnedApp != dataContext)
+			{
+				int num = FavoritesList.IndexOf(pinnedApp);
+				int num2 = FavoritesList.IndexOf(dataContext);
+				if (num >= 0 && num2 >= 0 && num != num2)
+				{
+					FavoritesList.Move(num, num2);
+				}
+				e.Effects = System.Windows.DragDropEffects.Move;
+				e.Handled = true;
+				return;
+			}
+		}
+		e.Effects = System.Windows.DragDropEffects.None;
+		e.Handled = true;
+	}
+
+	private void FavButton_Drop(object sender, System.Windows.DragEventArgs e)
+	{
+		if (e.Data.GetDataPresent("PinnedAppDrag"))
+		{
+			if (e.Data.GetData("PinnedAppDrag") is PinnedApp pinnedApp)
+			{
+				pinnedApp.IsDragging = false;
+			}
+			List<string> pinnedAppPaths = (from f in FavoritesList
+				where !string.IsNullOrEmpty(f.Path) && f.Path != "ADD_APP"
+				select f.Path).ToList();
+			SettingsService.Instance.PinnedAppPaths = pinnedAppPaths;
+			SettingsService.Save();
+			e.Handled = true;
+		}
+	}
+
+	private void RunAsAdminMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is MenuItem { Tag: string tag })
+		{
+			LaunchApp(tag, asAdmin: true);
+		}
+	}
+
+	private void OpenLocationMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (!(sender is MenuItem { Tag: string tag }))
+		{
+			return;
+		}
+		try
+		{
+			string text = IconExtractionService.ResolvePath(tag);
+			if (File.Exists(text))
+			{
+				using (Process.Start("explorer.exe", "/select,\"" + text + "\""))
+				{
+					return;
+				}
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void PinMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is MenuItem { Tag: string tag })
+		{
+			TogglePinApp(tag);
+		}
+	}
+
+	private void UnpinMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is MenuItem { Tag: string tag })
+		{
+			List<string> pinnedAppPaths = SettingsService.Instance.PinnedAppPaths;
+			if (pinnedAppPaths != null && pinnedAppPaths.Contains(tag))
+			{
+				pinnedAppPaths.Remove(tag);
+				SettingsService.Save();
+				LoadFavoritesImmediately();
+			}
+			LoadAppsAsync();
+		}
+	}
+
+	private void DeleteClipboardItemMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is MenuItem { Tag: var tag } && tag is Guid id)
+		{
+			ClipboardService.Instance.DeleteItem(id);
+		}
+	}
+
+	private void SearchGoogleMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (!(sender is MenuItem { Tag: string tag }))
+		{
+			return;
+		}
+		string stringToEscape = tag.Substring("clipboard:".Length);
+		try
+		{
+			using (Process.Start(new ProcessStartInfo
+			{
+				FileName = "https://www.google.com/search?q=" + Uri.EscapeDataString(stringToEscape),
+				UseShellExecute = true
+			}))
+			{
+			}
+		}
+		catch
+		{
+		}
+		SafeClose();
+	}
+
+	private void OpenLinkMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (!(sender is MenuItem { Tag: string tag }))
+		{
+			return;
+		}
+		string text = tag.Substring("clipboard:".Length);
+		if (!text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+		{
+			text = "https://" + text;
+		}
+		try
+		{
+			using (Process.Start(new ProcessStartInfo
+			{
+				FileName = text,
+				UseShellExecute = true
+			}))
+			{
+			}
+		}
+		catch
+		{
+		}
+		SafeClose();
+	}
+
+	private void OpenFilesMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (!(sender is MenuItem { Tag: string tag }))
+		{
+			return;
+		}
+		string[] array = tag.Substring("clipboard:".Length).Split(new string[3] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+		foreach (string text in array)
+		{
+			if (!File.Exists(text) && !Directory.Exists(text))
+			{
+				continue;
+			}
+			try
+			{
+				using (Process.Start(new ProcessStartInfo
+				{
+					FileName = text,
+					UseShellExecute = true
+				}))
+				{
+				}
+			}
+			catch
+			{
+			}
+		}
+		SafeClose();
+	}
+
+	private void OpenFilesLocationMenu_Click(object sender, RoutedEventArgs e)
+	{
+		if (!(sender is MenuItem { Tag: string tag }))
+		{
+			return;
+		}
+		string[] array = tag.Substring("clipboard:".Length).Split(new string[3] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+		if (array.Length != 0 && File.Exists(array[0]))
+		{
+			try
+			{
+				using (Process.Start("explorer.exe", "/select,\"" + array[0] + "\""))
+				{
+				}
+			}
+			catch
+			{
+			}
+		}
+		SafeClose();
+	}
+
+	public async Task LoadBentoDataAsync()
+	{
+		LoadActiveWallpaperAsync();
+		try
+		{
+			WeatherData weatherData = await WeatherService.Instance.GetWeatherAsync();
+			if (weatherData != null)
+			{
+				BentoWeatherTemp = $"{Math.Round(weatherData.Temperature)}°C";
+				BentoWeatherCity = ((!string.IsNullOrEmpty(weatherData.City)) ? weatherData.City : "Clima local");
+				BentoWeatherCondition = weatherData.Condition;
+				BentoWeatherGlyph = weatherData.Glyph;
+			}
+		}
+		catch
+		{
+		}
+		try
+		{
+			CultureInfo cultureInfo = new CultureInfo("es-ES");
+			string text = DateTime.Now.ToString("dddd, d 'de' MMMM", cultureInfo);
+			if (!string.IsNullOrEmpty(text))
+			{
+				BentoWeatherDate = char.ToUpper(text[0]) + text.Substring(1);
+			}
+		}
+		catch
+		{
+		}
+		try
+		{
+			ClipboardItem clipboardItem = ClipboardService.Instance.History?.FirstOrDefault();
+			if (clipboardItem != null && !string.IsNullOrWhiteSpace(clipboardItem.Content))
+			{
+				string text3 = clipboardItem.Content.Trim();
+				BentoClipboardSnippet = ((text3.Length > 90) ? (text3.Substring(0, 90) + "...") : text3);
+				PinnedAppsWindow pinnedAppsWindow2 = this;
+				string bentoClipboardType;
+				if (clipboardItem.Type == "Link")
+				{
+					bentoClipboardType = "Enlace";
+				}
+				else
+				{
+					bentoClipboardType = ((clipboardItem.Type == "Image") ? "Imagen" : "Texto");
+				}
+				pinnedAppsWindow2.BentoClipboardType = bentoClipboardType;
+			}
+			else
+			{
+				BentoClipboardSnippet = "Portapapeles vacío";
+				BentoClipboardType = "Sin elementos";
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void ShowInspectorView(string view)
+	{
+		InspectorFileViewVisibility = ((!(view == "File")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorCodeViewVisibility = ((!(view == "Code")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorAppViewVisibility = ((!(view == "App")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorClipboardViewVisibility = ((!(view == "Clipboard")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorAiViewVisibility = ((!(view == "AI")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorWebViewVisibility = ((!(view == "Web")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorMusicViewVisibility = ((!(view == "Music")) ? Visibility.Collapsed : Visibility.Visible);
+		InspectorDefaultViewVisibility = ((!(view == "Default")) ? Visibility.Collapsed : Visibility.Visible);
+	}
+
+	public async void UpdateInspector(PinnedApp? item)
+	{
+		try
+		{
+			try
+			{
+				_inspectorCts?.Cancel();
+				_inspectorCts?.Dispose();
+			}
+			catch
+			{
+			}
+			_inspectorCts = new CancellationTokenSource();
+			CancellationToken token = _inspectorCts.Token;
+			if (IsWebSearchSelected)
+			{
+				InspectorTitle = "Buscar en la web";
+				InspectorSubtitle = ((SearchBox != null) ? SearchBox.Text.Trim() : "");
+				InspectorWebQuery = InspectorSubtitle;
+				ShowInspectorView("Web");
+				return;
+			}
+			if (item == null)
+			{
+				InspectorSelectedItem = null;
+				ShowInspectorView("Default");
+				return;
+			}
+			InspectorSelectedItem = item;
+			InspectorTitle = item.Name ?? "";
+			InspectorAppName = item.Name ?? "";
+			InspectorAppIcon = item.Icon;
+			InspectorSubtitle = ((!string.IsNullOrEmpty(item.Subtitle)) ? item.Subtitle : (item.FriendlyPath ?? ""));
+			InspectorPath = item.Path ?? "";
+			if (item.Path != null && item.Path.StartsWith("ytmusic:", StringComparison.OrdinalIgnoreCase))
+			{
+				string path = item.Path;
+				InspectorMusicArtwork = item.Icon;
+				if (!string.IsNullOrEmpty(item.ThumbnailUrl))
+				{
+					Task.Run(async () =>
+					{
+						BitmapImage bmp = await SpotlightSearchService.LoadBitmapFromUrlAsync(item.ThumbnailUrl, 640, token);
+						if (bmp != null)
+						{
+							Dispatcher.Invoke(() =>
+							{
+								if (!token.IsCancellationRequested && InspectorSelectedItem == item)
+								{
+									InspectorMusicArtwork = bmp;
+								}
+							});
+						}
+					}, token);
+				}
+				if (!string.IsNullOrEmpty(item.Duration))
+				{
+					InspectorMusicDuration = item.Duration;
+					InspectorMusicDurationVisibility = Visibility.Visible;
+				}
+				else
+				{
+					InspectorMusicDurationVisibility = Visibility.Collapsed;
+				}
+				if (path.StartsWith("ytmusic:play:", StringComparison.OrdinalIgnoreCase))
+				{
+					InspectorMusicTitle = item.Name ?? "Canción de YouTube";
+					InspectorMusicSubtitle = ((!string.IsNullOrEmpty(item.Channel)) ? item.Channel : "YouTube");
+					InspectorMusicQuery = item.Name ?? "";
+					InspectorMusicStatus = "Listo para reproducir (↵)";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				else if (path.StartsWith("ytmusic:search:", StringComparison.OrdinalIgnoreCase))
+				{
+					string text = path.Substring("ytmusic:search:".Length);
+					InspectorMusicTitle = item.Name ?? text;
+					InspectorMusicSubtitle = "Búsqueda en YouTube Music";
+					InspectorMusicQuery = text;
+					InspectorMusicStatus = "Listo para reproducir (↵)";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				else if (path.Equals("ytmusic:toggle", StringComparison.OrdinalIgnoreCase))
+				{
+					InspectorMusicTitle = "Reproducir / Pausar";
+					InspectorMusicSubtitle = "Control de Reproducción";
+					InspectorMusicQuery = "Alternar estado del reproductor";
+					InspectorMusicStatus = "Envía comando Play/Pause a YouTube Music";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				else if (path.Equals("ytmusic:next", StringComparison.OrdinalIgnoreCase))
+				{
+					InspectorMusicTitle = "Siguiente Canción";
+					InspectorMusicSubtitle = "Control de Reproducción";
+					InspectorMusicQuery = "Avanzar a la siguiente pista";
+					InspectorMusicStatus = "Envía comando Siguiente a YouTube Music";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				else if (path.Equals("ytmusic:prev", StringComparison.OrdinalIgnoreCase))
+				{
+					InspectorMusicTitle = "Canción Anterior";
+					InspectorMusicSubtitle = "Control de Reproducción";
+					InspectorMusicQuery = "Retroceder a la pista anterior";
+					InspectorMusicStatus = "Envía comando Anterior a YouTube Music";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				else if (path.Equals("ytmusic:open", StringComparison.OrdinalIgnoreCase))
+				{
+					InspectorMusicTitle = "Abrir YouTube Music";
+					InspectorMusicSubtitle = "Ventana de Reproductor";
+					InspectorMusicQuery = "Visualizar ventana completa";
+					InspectorMusicStatus = "Abre o enfoca la ventana de YouTube Music";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				else
+				{
+					InspectorMusicTitle = item.Name ?? "Música";
+					InspectorMusicSubtitle = "YouTube Music";
+					InspectorMusicQuery = item.ToolTip ?? "";
+					InspectorMusicStatus = "Listo";
+					InspectorMusicEqualizerVisibility = Visibility.Collapsed;
+				}
+				ShowInspectorView("Music");
+				return;
+			}
+			if (item.IsAiItem || _searchMode == "AI")
+			{
+				InspectorAiResponse = item.Name ?? "";
+				ShowInspectorView("AI");
+				return;
+			}
+			if (item.IsClipboardItem || _searchMode == "Clipboard")
+			{
+				string text2 = (InspectorFullClipboardText = item.Name ?? "");
+				int length = text2.Length;
+				int value = text2.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+				InspectorClipboardWordCount = $"{length} caracteres • {value} palabras";
+
+				bool isClipboardImage = item.IsClipboardImage || item.ClipboardType == "Image" || (item.Name != null && item.Name.StartsWith("[Imagen]", StringComparison.OrdinalIgnoreCase));
+				string? imgPath = null;
+				if (!string.IsNullOrEmpty(item.Path) && item.Path.StartsWith("clipboard:", StringComparison.OrdinalIgnoreCase))
+				{
+					string candidate = item.Path.Substring("clipboard:".Length);
+					if (File.Exists(candidate))
+					{
+						imgPath = candidate;
+					}
+				}
+				if (string.IsNullOrEmpty(imgPath) && item.ClipboardId != Guid.Empty)
+				{
+					var clip = ClipboardService.Instance.History?.FirstOrDefault(c => c.Id == item.ClipboardId);
+					if (clip != null && !string.IsNullOrEmpty(clip.ImagePath) && File.Exists(clip.ImagePath))
+					{
+						imgPath = clip.ImagePath;
+					}
+				}
+				if (string.IsNullOrEmpty(imgPath) && !string.IsNullOrEmpty(item.Name) && item.Name.StartsWith("[Imagen]"))
+				{
+					string fname = item.Name.Substring("[Imagen]".Length).Trim();
+					var clip = ClipboardService.Instance.History?.FirstOrDefault(c => !string.IsNullOrEmpty(c.ImagePath) && Path.GetFileName(c.ImagePath).Equals(fname, StringComparison.OrdinalIgnoreCase));
+					if (clip != null && File.Exists(clip.ImagePath))
+					{
+						imgPath = clip.ImagePath;
+					}
+				}
+
+				if (isClipboardImage || !string.IsNullOrEmpty(imgPath))
+				{
+					if (!string.IsNullOrEmpty(imgPath) && File.Exists(imgPath))
+					{
+						InspectorHasClipboardImage = true;
+						InspectorClipboardImageViewVisibility = Visibility.Visible;
+						InspectorClipboardTextViewVisibility = Visibility.Collapsed;
+						InspectorPath = imgPath;
+						InspectorClipboardCopyButtonText = "Copiar imagen (↵)";
+						InspectorClipboardImageDimensions = "Imagen del portapapeles";
+						InspectorClipboardImageDetails = Path.GetFileName(imgPath);
+
+						if (item.Icon != null)
+						{
+							InspectorClipboardImageSource = item.Icon;
+						}
+
+						string previewPath = imgPath;
+						Task.Run(() =>
+						{
+							try
+							{
+								var bmp = new BitmapImage();
+								bmp.BeginInit();
+								bmp.DecodePixelWidth = 720;
+								bmp.CacheOption = BitmapCacheOption.OnLoad;
+								bmp.UriSource = new Uri(previewPath, UriKind.Absolute);
+								bmp.EndInit();
+								bmp.Freeze();
+
+								long fileLen = 0;
+								try { fileLen = new FileInfo(previewPath).Length; } catch { }
+
+								Dispatcher.BeginInvoke(new Action(() =>
+								{
+									if (!token.IsCancellationRequested && InspectorSelectedItem == item)
+									{
+										InspectorClipboardImageSource = bmp;
+										InspectorClipboardImageDimensions = $"{bmp.PixelWidth} × {bmp.PixelHeight}";
+										if (fileLen > 0)
+										{
+											InspectorClipboardImageDetails = $"{FormatBytes(fileLen)} • {Path.GetFileName(previewPath)}";
+										}
+									}
+								}), System.Windows.Threading.DispatcherPriority.Background);
+							}
+							catch
+							{
+								if (item.Icon != null)
+								{
+									Dispatcher.BeginInvoke(new Action(() =>
+									{
+										if (!token.IsCancellationRequested && InspectorSelectedItem == item)
+										{
+											InspectorClipboardImageSource = item.Icon;
+										}
+									}), System.Windows.Threading.DispatcherPriority.Background);
+								}
+							}
+						});
+					}
+					else if (item.Icon != null)
+					{
+						InspectorClipboardImageSource = item.Icon;
+						InspectorHasClipboardImage = true;
+						InspectorClipboardImageViewVisibility = Visibility.Visible;
+						InspectorClipboardTextViewVisibility = Visibility.Collapsed;
+						InspectorClipboardCopyButtonText = "Copiar imagen (↵)";
+						InspectorClipboardImageDimensions = "Imagen del portapapeles";
+						InspectorClipboardImageDetails = item.Subtitle ?? "";
+					}
+					else
+					{
+						InspectorHasClipboardImage = false;
+						InspectorClipboardImageSource = null;
+						InspectorClipboardImageViewVisibility = Visibility.Collapsed;
+						InspectorClipboardTextViewVisibility = Visibility.Visible;
+						InspectorClipboardCopyButtonText = "Copiar (Enter)";
+					}
+				}
+				else
+				{
+					InspectorHasClipboardImage = false;
+					InspectorClipboardImageSource = null;
+					InspectorClipboardImageViewVisibility = Visibility.Collapsed;
+					InspectorClipboardTextViewVisibility = Visibility.Visible;
+					InspectorClipboardCopyButtonText = "Copiar (Enter)";
+				}
+
+				Match match = Regex.Match(text2.Trim(), "^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$");
+				if (match.Success)
+				{
+					try
+					{
+						Color color = (Color)ColorConverter.ConvertFromString(match.Value);
+						InspectorColorPreviewBrush = new SolidColorBrush(color);
+						InspectorIsColor = true;
+					}
+					catch
+					{
+						InspectorIsColor = false;
+					}
+				}
+				else
+				{
+					InspectorIsColor = false;
+				}
+				InspectorIsLink = item.IsClipboardLink || text2.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text2.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+				ShowInspectorView("Clipboard");
+				return;
+			}
+			string itemPath = item.Path ?? "";
+			bool flag = false;
+			bool flag2 = false;
+			try
+			{
+				if (!string.IsNullOrEmpty(itemPath))
+				{
+					flag = File.Exists(itemPath);
+					flag2 = !flag && Directory.Exists(itemPath);
+				}
+			}
+			catch
+			{
+			}
+			if (flag2)
+			{
+				InspectorImageSource = item.Icon;
+				InspectorDimensions = itemPath;
+				InspectorFileSize = "Carpeta de archivos";
+				try
+				{
+					InspectorModifiedDate = Directory.GetLastWriteTime(itemPath).ToString("dd/MM/yyyy HH:mm");
+				}
+				catch
+				{
+				}
+				ShowInspectorView("File");
+				return;
+			}
+			string ext;
+			string text4;
+			if (flag)
+			{
+				ext = "";
+				try
+				{
+					ext = Path.GetExtension(itemPath).ToLowerInvariant();
+				}
+				catch
+				{
+				}
+				try
+				{
+					FileInfo fileInfo = new FileInfo(itemPath);
+					InspectorFileSize = FormatBytes(fileInfo.Length);
+					InspectorModifiedDate = fileInfo.LastWriteTime.ToString("dd/MM/yyyy HH:mm");
+				}
+				catch
+				{
+					InspectorFileSize = "";
+					InspectorModifiedDate = "";
+				}
+				text4 = ext;
+				if (text4 != null)
+				{
+					int length2 = text4.Length;
+					if (length2 != 4)
+					{
+						if (length2 == 5)
+						{
+							char c = text4[1];
+							if (c != 'j')
+							{
+								if (c == 'w' && text4 == ".webp")
+								{
+									goto IL_0908;
+								}
+							}
+							else if (text4 == ".jpeg")
+							{
+								goto IL_0908;
+							}
+						}
+					}
+					else
+					{
+						switch (text4[1])
+						{
+						case 'p':
+							break;
+						case 'j':
+							goto IL_08aa;
+						case 'b':
+							goto IL_08ba;
+						case 'g':
+							goto IL_08ca;
+						case 'i':
+							goto IL_08da;
+						default:
+							goto IL_090d;
+						}
+						if (text4 == ".png")
+						{
+							goto IL_0908;
+						}
+					}
+				}
+				goto IL_090d;
+			}
+			goto IL_10a7;
+			IL_08ba:
+			if (text4 == ".bmp")
+			{
+				goto IL_0908;
+			}
+			goto IL_090d;
+			IL_08aa:
+			if (text4 == ".jpg")
+			{
+				goto IL_0908;
+			}
+			goto IL_090d;
+			IL_08da:
+			if (text4 == ".ico")
+			{
+				goto IL_0908;
+			}
+			goto IL_090d;
+			IL_10a7:
+			if (!string.IsNullOrEmpty(itemPath) && itemPath.StartsWith("system:", StringComparison.OrdinalIgnoreCase))
+			{
+				InspectorAppIcon = item.Icon;
+				InspectorAppName = item.Name ?? "";
+				InspectorAppStatus = "Acción del Sistema";
+				InspectorAppRamUsage = "—";
+				InspectorAppPid = "—";
+				InspectorIsAppRunning = false;
+				ShowInspectorView("App");
+				return;
+			}
+			string text5 = itemPath;
+			if (text5.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+			{
+				try
+				{
+					string text6 = IconExtractionService.ResolvePath(text5);
+					if (!string.IsNullOrEmpty(text6) && File.Exists(text6))
+					{
+						text5 = text6;
+					}
+				}
+				catch
+				{
+				}
+			}
+			string appProcessName = "";
+			try
+			{
+				appProcessName = Path.GetFileNameWithoutExtension(text5);
+			}
+			catch
+			{
+			}
+			bool isRunning = false;
+			long memBytes = 0L;
+			int primaryPid = 0;
+			int procCount = 0;
+			if (!string.IsNullOrEmpty(appProcessName))
+			{
+				await Task.Run(() =>
+				{
+					if (token.IsCancellationRequested)
+					{
+						return;
+					}
+					try
+					{
+						Process[] processesByName = Process.GetProcessesByName(appProcessName);
+						if (processesByName.Length != 0)
+						{
+							isRunning = true;
+							primaryPid = processesByName[0].Id;
+							procCount = processesByName.Length;
+							try
+							{
+								memBytes = processesByName.Sum((Process p) => p.WorkingSet64);
+								return;
+							}
+							catch
+							{
+								return;
+							}
+						}
+					}
+					catch
+					{
+					}
+				});
+			}
+			if (!token.IsCancellationRequested)
+			{
+				InspectorIsAppRunning = isRunning;
+				InspectorAppIcon = item.Icon;
+				InspectorAppName = item.Name ?? "";
+				InspectorAppStatus = (isRunning ? "En ejecución" : "Listo para iniciar");
+				InspectorAppRunningStatus = (isRunning ? ("En ejecución • " + FormatBytes(memBytes) + " RAM") : "Listo para iniciar");
+				InspectorAppRamUsage = (isRunning ? FormatBytes(memBytes) : "No activo");
+				PinnedAppsWindow pinnedAppsWindow = this;
+				string inspectorAppPid;
+				if (isRunning)
+				{
+					inspectorAppPid = ((procCount > 1) ? $"{primaryPid} (+{procCount - 1})" : $"{primaryPid}");
+				}
+				else
+				{
+					inspectorAppPid = "Inactivo";
+				}
+				pinnedAppsWindow.InspectorAppPid = inspectorAppPid;
+				ShowInspectorView("App");
+			}
+			return;
+			IL_0908:
+			bool flag3 = true;
+			goto IL_0910;
+			IL_090d:
+			flag3 = false;
+			goto IL_0910;
+			IL_08ca:
+			if (text4 == ".gif")
+			{
+				goto IL_0908;
+			}
+			goto IL_090d;
+			IL_0910:
+			if (flag3)
+			{
+				try
+				{
+					BitmapImage bitmapImage = new BitmapImage();
+					bitmapImage.BeginInit();
+					bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+					bitmapImage.DecodePixelWidth = 500;
+					bitmapImage.UriSource = new Uri(itemPath);
+					bitmapImage.EndInit();
+					bitmapImage.Freeze();
+					InspectorImageSource = bitmapImage;
+					InspectorDimensions = $"{bitmapImage.PixelWidth} × {bitmapImage.PixelHeight} px";
+				}
+				catch
+				{
+					InspectorImageSource = item.Icon;
+					InspectorDimensions = "";
+				}
+				ShowInspectorView("File");
+				return;
+			}
+			switch (ext)
+			{
+			case ".cs":
+			case ".py":
+			case ".js":
+			case ".ts":
+			case ".md":
+			case ".sh":
+			case ".rs":
+			case ".html":
+			case ".json":
+			case ".xaml":
+			case ".xml":
+			case ".css":
+			case ".cpp":
+			case ".txt":
+			case ".sql":
+			case ".ps1":
+			case ".c":
+			case ".h":
+				flag3 = true;
+				break;
+			default:
+				flag3 = false;
+				break;
+			}
+			if (flag3)
+			{
+				try
+				{
+					List<string> list = await Task.Run(() =>
+					{
+						List<string> list2 = new List<string>();
+						int num = 0;
+						using StreamReader streamReader = new StreamReader(itemPath);
+						while (!streamReader.EndOfStream && num < 35 && !token.IsCancellationRequested)
+						{
+							string text7 = streamReader.ReadLine();
+							if (text7 != null)
+							{
+								list2.Add(text7);
+								num++;
+							}
+						}
+						return list2;
+					});
+					if (!token.IsCancellationRequested)
+					{
+						switch (ext)
+						{
+						case ".cs":
+							text4 = "C# Source";
+							break;
+						case ".xaml":
+							text4 = "XAML Markup";
+							break;
+						case ".json":
+							text4 = "JSON Data";
+							break;
+						case ".py":
+							text4 = "Python Script";
+							break;
+						case ".js":
+						case ".ts":
+							text4 = "JavaScript / TypeScript";
+							break;
+						case ".html":
+						case ".css":
+							text4 = "Web / Styling";
+							break;
+						case ".sh":
+						case ".ps1":
+							text4 = "Shell Script";
+							break;
+						case ".cpp":
+						case ".c":
+						case ".h":
+							text4 = "C/C++ Code";
+							break;
+						case ".rs":
+							text4 = "Rust Source";
+							break;
+						case ".sql":
+							text4 = "SQL Query";
+							break;
+						case ".md":
+						case ".txt":
+							text4 = "Documento de Texto";
+							break;
+						default:
+							text4 = ext.ToUpperInvariant().TrimStart('.');
+							break;
+						}
+						string inspectorCodeLanguage = text4;
+						InspectorCodeLanguage = inspectorCodeLanguage;
+						InspectorCodeSnippet = string.Join(Environment.NewLine, list);
+						InspectorCodeLines = $"{list.Count} líneas previsualizadas";
+						ShowInspectorView("Code");
+					}
+					return;
+				}
+				catch
+				{
+				}
+			}
+			if (!(ext == ".exe") && !(ext == ".lnk"))
+			{
+				InspectorImageSource = item.Icon;
+				InspectorDimensions = ext.ToUpperInvariant().TrimStart('.') + " Archivo";
+				ShowInspectorView("File");
+				return;
+			}
+			goto IL_10a7;
+		}
+		catch (OperationCanceledException)
+		{
+		}
+		catch (Exception)
+		{
+		}
+	}
+
+	private static string FormatBytes(long bytes)
+	{
+		if (bytes >= 1024)
+		{
+			if (bytes >= 1048576)
+			{
+				if (bytes >= 1073741824)
+				{
+					return $"{(double)bytes / 1073741824.0:F2} GB";
+				}
+				return $"{(double)bytes / 1048576.0:F1} MB";
+			}
+			return $"{(double)bytes / 1024.0:F1} KB";
+		}
+		return $"{bytes} B";
+	}
+
+	private void OnWallpaperChanged(WallpaperChangedEvent @event)
+	{
+		Dispatcher.BeginInvoke((Func<Task>)(() => LoadActiveWallpaperAsync(force: true, @event.WallpaperPath)));
+	}
+
+	public async Task LoadActiveWallpaperAsync(bool force = false, string? explicitPath = null)
+	{
+		try
+		{
+			string path = !string.IsNullOrEmpty(explicitPath) && File.Exists(explicitPath)
+				? explicitPath
+				: WallpaperThemeService.GetCurrentWallpaperPath();
+			if (string.IsNullOrEmpty(path) || !File.Exists(path) || (!force && path == _currentWallpaperPath && BentoWallpaperSource != null))
+			{
+				return;
+			}
+			_currentWallpaperPath = path;
+			var (bitmapImage, bentoWallpaperName, bentoWallpaperResolution) = await Task.Run(() =>
+			{
+				try
+				{
+					using FileStream fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+					BitmapDecoder bitmapDecoder = BitmapDecoder.Create(fileStream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+					int num = 0;
+					int num2 = 0;
+					if (bitmapDecoder.Frames.Count > 0)
+					{
+						num = bitmapDecoder.Frames[0].PixelWidth;
+						num2 = bitmapDecoder.Frames[0].PixelHeight;
+					}
+					fileStream.Position = 0L;
+					BitmapImage bitmapImage2 = new BitmapImage();
+					bitmapImage2.BeginInit();
+					bitmapImage2.CacheOption = BitmapCacheOption.OnLoad;
+					bitmapImage2.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+					if (num > 384)
+					{
+						bitmapImage2.DecodePixelWidth = 384;
+					}
+					bitmapImage2.StreamSource = fileStream;
+					bitmapImage2.EndInit();
+					bitmapImage2.Freeze();
+					string text = Path.GetFileNameWithoutExtension(path);
+					if (text.Equals("TranscodedWallpaper", StringComparison.OrdinalIgnoreCase))
+					{
+						text = "Fondo de Windows";
+					}
+					else if (text.Length > 24)
+					{
+						text = text.Substring(0, 24) + "...";
+					}
+					string item = ((num > 0) ? $"{num}×{num2}" : "HD");
+					if (num >= 3840 || num2 >= 2160)
+					{
+						item = "4K UHD";
+					}
+					else if (num >= 2560 || num2 >= 1440)
+					{
+						item = "2K QHD";
+					}
+					else if (num >= 1920 || num2 >= 1080)
+					{
+						item = "Full HD";
+					}
+					return (bitmapImage2, text, item);
+				}
+				catch
+				{
+					return ((BitmapImage?, string, string))(null, Path.GetFileName(path), "");
+				}
+			});
+			if (bitmapImage != null)
+			{
+				BentoWallpaperSource = bitmapImage;
+				BentoWallpaperName = bentoWallpaperName;
+				BentoWallpaperResolution = bentoWallpaperResolution;
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoWallpaperCard_Click(object sender, MouseButtonEventArgs e)
+	{
+		try
+		{
+			if (e.ClickCount >= 2 && !string.IsNullOrEmpty(_currentWallpaperPath) && File.Exists(_currentWallpaperPath))
+			{
+				Process.Start(new ProcessStartInfo(_currentWallpaperPath)
+				{
+					UseShellExecute = true
+				});
+				SoundService.Play(SoundType.Click);
+				SafeClose();
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoWallpaper_Next_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			BentoAction_Wallpaper_Click(sender, e);
+			_ = LoadActiveWallpaperAsync(force: true);
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoWallpaper_OpenFolder_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			if (!string.IsNullOrEmpty(_currentWallpaperPath) && File.Exists(_currentWallpaperPath))
+			{
+				string text = IconExtractionService.ResolvePath(_currentWallpaperPath);
+				Process.Start("explorer.exe", "/select,\"" + text + "\"");
+				SoundService.Play(SoundType.Click);
+				SafeClose();
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoAction_Terminal_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			Process.Start(new ProcessStartInfo
+			{
+				FileName = "powershell.exe",
+				UseShellExecute = true
+			});
+			SoundService.Play(SoundType.Click);
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoWeatherCard_Click(object sender, MouseButtonEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Hover);
+			WeatherService.Instance.ResetCache();
+			_ = LoadBentoDataAsync();
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoClipboardCard_Click(object sender, MouseButtonEventArgs e)
+	{
+		try
+		{
+			ClipboardItem clipboardItem = ClipboardService.Instance.History?.FirstOrDefault();
+			if (clipboardItem != null && !string.IsNullOrEmpty(clipboardItem.Content))
+			{
+				System.Windows.Clipboard.SetText(clipboardItem.Content);
+				SoundService.Play(SoundType.Click);
+				SafeClose();
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoAction_Wallpaper_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			string text = SettingsService.Instance.WallpaperDirectory;
+			if ((string.IsNullOrEmpty(text) || !Directory.Exists(text)) && !string.IsNullOrEmpty(_currentWallpaperPath) && File.Exists(_currentWallpaperPath))
+			{
+				string directoryName = Path.GetDirectoryName(_currentWallpaperPath);
+				if (!string.IsNullOrEmpty(directoryName) && Directory.Exists(directoryName))
+				{
+					text = directoryName;
+				}
+			}
+			if (!string.IsNullOrEmpty(text) && Directory.Exists(text))
+			{
+				HashSet<string> exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp", ".bmp" };
+				List<string> list = (from f in Directory.GetFiles(text)
+					where exts.Contains(Path.GetExtension(f))
+					select f).ToList();
+				if (list.Count > 0)
+				{
+					Random random = new Random();
+					string text2 = list[random.Next(list.Count)];
+					SoundService.Play(SoundType.Ping);
+					WallpaperTransitionService.ApplyWallpaper(text2, () =>
+					{
+						EventBus.Publish(new WallpaperChangedEvent(text2));
+					});
+				}
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoAction_RecycleBin_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			Process.Start(new ProcessStartInfo
+			{
+				FileName = "powershell.exe",
+				Arguments = "-NoProfile -Command Clear-RecycleBin -Force -ErrorAction SilentlyContinue",
+				CreateNoWindow = true,
+				UseShellExecute = false
+			});
+			SoundService.Play(SoundType.Whoosh);
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoAction_Lock_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			Process.Start("rundll32.exe", "user32.dll,LockWorkStation");
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private void BentoAction_Focus_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Ping);
+		}
+		catch
+		{
+		}
+	}
+
+	private void InspectorSetWallpaper_Click(object sender, RoutedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(InspectorPath) && File.Exists(InspectorPath))
+		{
+			try
+			{
+				string path = InspectorPath;
+				SoundService.Play(SoundType.Ping);
+				WallpaperTransitionService.ApplyWallpaper(path, () =>
+				{
+					EventBus.Publish(new WallpaperChangedEvent(path));
+				});
+				SafeClose();
+			}
+			catch
+			{
+			}
+		}
+	}
+
+	private void InspectorOpenFolder_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrEmpty(InspectorPath))
+		{
+			return;
+		}
+		try
+		{
+			string text = InspectorPath;
+			if (text.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+			{
+				string text2 = IconExtractionService.ResolvePath(text);
+				if (!string.IsNullOrEmpty(text2) && (File.Exists(text2) || Directory.Exists(text2)))
+				{
+					text = text2;
+				}
+			}
+			if (File.Exists(text))
+			{
+				using (Process.Start("explorer.exe", "/select,\"" + text + "\""))
+				{
+					SafeClose();
+					return;
+				}
+			}
+			if (Directory.Exists(text))
+			{
+				using (Process.Start("explorer.exe", "\"" + text + "\""))
+				{
+					SafeClose();
+					return;
+				}
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void InspectorOpenWeb_Click(object sender, RoutedEventArgs e)
+	{
+		OpenWebSearch();
+	}
+
+	private void InspectorPlayMusic_Click(object sender, RoutedEventArgs e)
+	{
+		if (InspectorSelectedItem != null && !string.IsNullOrEmpty(InspectorSelectedItem.Path))
+		{
+			LaunchApp(InspectorSelectedItem.Path, asAdmin: false);
+		}
+	}
+
+	private void InspectorOpenMusicWindow_Click(object sender, RoutedEventArgs e)
+	{
+		SatelliteMedia_OpenYtMusic_Click(sender, e);
+	}
+
+	private void InspectorOpenMusicBrowser_Click(object sender, RoutedEventArgs e)
+	{
+		string text = "";
+		if (InspectorSelectedItem != null && !string.IsNullOrEmpty(InspectorSelectedItem.VideoId))
+		{
+			text = "https://www.youtube.com/watch?v=" + InspectorSelectedItem.VideoId;
+		}
+		else if (!string.IsNullOrWhiteSpace(InspectorMusicQuery))
+		{
+			text = "https://www.youtube.com/results?search_query=" + Uri.EscapeDataString(InspectorMusicQuery);
+		}
+		if (!string.IsNullOrEmpty(text))
+		{
+			try
+			{
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = text,
+					UseShellExecute = true
+				});
+				SafeClose();
+			}
+			catch
+			{
+			}
+		}
+	}
+
+	private void SearchResultRow_Click(object sender, RoutedEventArgs e)
+	{
+		if (!(sender is FrameworkElement { DataContext: PinnedApp dataContext }))
+		{
+			return;
+		}
+		int num = PinnedAppsList.IndexOf(dataContext);
+		if (num >= 0)
+		{
+			if (_selectedIndex == num && dataContext.IsSelected)
+			{
+				LaunchApp(dataContext.Path, dataContext.RunAsAdmin);
+			}
+			else
+			{
+				SelectAppByIndex(num);
+			}
+		}
+	}
+
+	private void SearchResultRow_DoubleClick(object sender, MouseButtonEventArgs e)
+	{
+		if (sender is FrameworkElement { DataContext: PinnedApp dataContext })
+		{
+			LaunchApp(dataContext.Path, dataContext.RunAsAdmin);
+			e.Handled = true;
+		}
+	}
+
+	private void SelectAppByIndex(int index)
+	{
+		if (index >= 0 && index < PinnedAppsList.Count)
+		{
+			if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+			{
+				PinnedAppsList[_selectedIndex].IsSelected = false;
+			}
+			_selectedIndex = index;
+			IsWebSearchSelected = false;
+			PinnedApp pinnedApp = PinnedAppsList[index];
+			pinnedApp.IsSelected = true;
+			UpdateInspector(pinnedApp);
+		}
+	}
+
+	private void InspectorOpenFile_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrEmpty(InspectorPath))
+		{
+			return;
+		}
+		try
+		{
+			using (Process.Start(new ProcessStartInfo
+			{
+				FileName = InspectorPath,
+				UseShellExecute = true
+			}))
+			{
+				SafeClose();
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void InspectorCopyPath_Click(object sender, RoutedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(InspectorPath))
+		{
+			System.Windows.Clipboard.SetText(InspectorPath);
+			SoundService.Play(SoundType.Click);
+		}
+	}
+
+	private void InspectorCopyContent_Click(object sender, RoutedEventArgs e)
+	{
+		if (InspectorHasClipboardImage && !string.IsNullOrEmpty(InspectorPath) && File.Exists(InspectorPath))
+		{
+			try
+			{
+				var uri = new Uri(InspectorPath, UriKind.Absolute);
+				var bmi = new BitmapImage();
+				bmi.BeginInit();
+				bmi.CacheOption = BitmapCacheOption.OnLoad;
+				bmi.UriSource = uri;
+				bmi.EndInit();
+				bmi.Freeze();
+				System.Windows.Clipboard.SetImage(bmi);
+				SoundService.Play(SoundType.Click);
+				SafeClose();
+				return;
+			}
+			catch
+			{
+			}
+		}
+
+		string text;
+		if (string.IsNullOrEmpty(InspectorCodeSnippet))
+		{
+			text = ((!string.IsNullOrEmpty(InspectorFullClipboardText)) ? InspectorFullClipboardText : InspectorAiResponse);
+		}
+		else
+		{
+			text = InspectorCodeSnippet;
+		}
+		if (!string.IsNullOrEmpty(text))
+		{
+			System.Windows.Clipboard.SetText(text);
+			SoundService.Play(SoundType.Click);
+			SafeClose();
+		}
+	}
+
+	private void InspectorLaunchApp_Click(object sender, RoutedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(InspectorPath))
+		{
+			LaunchApp(InspectorPath, asAdmin: false);
+		}
+	}
+
+	private void InspectorRunAsAdmin_Click(object sender, RoutedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(InspectorPath))
+		{
+			LaunchApp(InspectorPath, asAdmin: true);
+		}
+	}
+
+	private void InspectorKillProcess_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrEmpty(InspectorPath))
+		{
+			return;
+		}
+		try
+		{
+			Process[] processesByName = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(InspectorPath));
+			foreach (Process process in processesByName)
+			{
+				try
+				{
+					process.Kill();
+				}
+				catch
+				{
+				}
+			}
+			InspectorIsAppRunning = false;
+			InspectorAppRunningStatus = "Proceso finalizado";
+			SoundService.Play(SoundType.Whoosh);
+		}
+		catch
+		{
+		}
+	}
+
+	private void InspectorTogglePin_Click(object sender, RoutedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(InspectorPath))
+		{
+			TogglePinApp(InspectorPath);
+		}
+	}
+
+	private void InspectorOpenLink_Click(object sender, RoutedEventArgs e)
+	{
+		if (string.IsNullOrEmpty(InspectorFullClipboardText))
+		{
+			return;
+		}
+		try
+		{
+			using (Process.Start(new ProcessStartInfo
+			{
+				FileName = InspectorFullClipboardText,
+				UseShellExecute = true
+			}))
+			{
+				SafeClose();
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void AppButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+	{
+		if (!(sender is FrameworkElement { DataContext: PinnedApp dataContext }))
+		{
+			return;
+		}
+		int num = PinnedAppsList.IndexOf(dataContext);
+		if (num >= 0 && num != _selectedIndex)
+		{
+			if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+			{
+				PinnedAppsList[_selectedIndex].IsSelected = false;
+			}
+			_selectedIndex = num;
+			IsWebSearchSelected = false;
+			dataContext.IsSelected = true;
+			UpdateInspector(dataContext);
+		}
+	}
+
+	private void WebSearchButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+	{
+		if (_selectedIndex >= 0 && _selectedIndex < PinnedAppsList.Count)
+		{
+			PinnedAppsList[_selectedIndex].IsSelected = false;
+		}
+		_selectedIndex = PinnedAppsList.Count;
+		IsWebSearchSelected = true;
+		UpdateInspector(null);
+	}
+
+	private bool IsFullscreenOrGameActive()
+	{
+		if (ApplicationHost.IsGameModeActive) return true;
+		try
+		{
+			if (NativeMethods.SHQueryUserNotificationState(out int state) == 0)
+			{
+				return state == 2 || state == 3 || state == 4 || state == 6 || state == 7;
+			}
+		}
+		catch { }
+		return false;
+	}
+
+	private void Window_Deactivated(object? sender, EventArgs e)
+	{
+		if (!_isShowingDialog && !_isOpeningSubWidget)
+		{
+			if (IsFullscreenOrGameActive())
+			{
+				// En modo juego o pantalla completa, no desactivar ni cerrar la ventana por pérdida de foco.
+				// Los juegos suelen disputar el foco en segundo plano; se mantiene abierto Spotlight
+				// hasta que el usuario presione Escape o use el atajo de teclado para cerrarlo.
+				return;
+			}
+
+			if ((DateTime.Now - _loadedTime).TotalMilliseconds < 800.0)
+			{
+				ForceForeground();
+				FocusSearchBox();
+			}
+			else
+			{
+				SafeClose();
+			}
+		}
+	}
+
+	private void SafeClose()
+	{
+		if (_isClosing)
+		{
+			return;
+		}
+		_isClosing = true;
+		_clockTimer?.Stop();
+		_searchDebounceTimer?.Stop();
+		_musicDebounceTimer?.Stop();
+		_musicSearchCts?.Cancel();
+		try
+		{
+			Topmost = false;
+		}
+		catch
+		{
+		}
+		if (ApplicationHost.Instance != null)
+		{
+			ApplicationHost.Instance.IsPinnedFlyoutOpen = false;
+			ApplicationHost.Instance.RecordWidgetClose("PinnedApps");
+		}
+		if (HasActiveMusicTrack || IsMediaPlaying || (ApplicationHost.Instance != null && ApplicationHost.Instance.IsInternalMusicActive))
+		{
+			try
+			{
+				FloatingMediaOrbWindow.ShowOrb(SatelliteMediaTitle, SatelliteMediaArtist, SatelliteMediaArtwork, IsMediaPlaying, _currentMediaSession);
+			}
+			catch
+			{
+			}
+		}
+		DoubleAnimation doubleAnimation = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(180.0))
+		{
+			EasingFunction = new CubicEase
+			{
+				EasingMode = EasingMode.EaseIn
+			}
+		};
+		doubleAnimation.Completed += (object? snd, EventArgs args) =>
+		{
+			try
+			{
+				Close();
+			}
+			catch
+			{
+				_isClosing = false;
+			}
+		};
+		BeginAnimation(UIElement.OpacityProperty, doubleAnimation);
+	}
+
+	protected override void OnClosing(CancelEventArgs e)
+	{
+		if (ApplicationHost.Instance != null)
+		{
+			ApplicationHost.Instance.IsPinnedFlyoutOpen = false;
+		}
+		base.OnClosing(e);
+	}
+
+	private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+	{
+	}
+
+	private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
+	{
+	}
+
+	public void LoadActiveWindows()
+	{
+		try
+		{
+			nint handle = new WindowInteropHelper(this).Handle;
+			List<ActiveWindowModel> list = (_allActiveWindows = ActiveWindowManager.Instance.GetActiveWindows(handle));
+			string query = SearchBox?.Text.Trim() ?? "";
+			if (!string.IsNullOrEmpty(query))
+			{
+				list = list.Where((ActiveWindowModel w) => w.Title.Contains(query, StringComparison.OrdinalIgnoreCase) || w.ProcessName.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+			}
+			ActiveWindowsList.Clear();
+			foreach (ActiveWindowModel item in list)
+			{
+				ActiveWindowsList.Add(item);
+			}
+			UpdateFavoritesRunningState(list);
+			ActiveWindowsCountText = $"{list.Count} en ejecución";
+			List<ActiveWindowModel> snapshot = list.ToList();
+			Task.Run(() =>
+			{
+				foreach (ActiveWindowModel win in snapshot)
+				{
+					if (!win.IsMinimized)
+					{
+						try
+						{
+							ImageSource thumb = ActiveWindowManager.Instance.CaptureWindowThumbnail(win.Hwnd);
+							if (thumb != null)
+							{
+								Dispatcher.InvokeAsync(() =>
+								{
+									win.Thumbnail = thumb;
+								}, DispatcherPriority.Normal);
+							}
+						}
+						catch
+						{
+						}
+					}
+				}
+			});
+		}
+		catch
+		{
+		}
+	}
+
+	private void UpdateFavoritesRunningState(List<ActiveWindowModel> activeWindows)
+	{
+		try
+		{
+			if (FavoritesList == null || FavoritesList.Count == 0 || activeWindows == null) return;
+			foreach (var fav in FavoritesList)
+			{
+				if (fav.Path == "ADD_APP") continue;
+				string exeName = System.IO.Path.GetFileNameWithoutExtension(fav.Path);
+				fav.IsRunning = activeWindows.Any(w =>
+					(!string.IsNullOrEmpty(w.ProcessName) && string.Equals(w.ProcessName, exeName, StringComparison.OrdinalIgnoreCase)) ||
+					(!string.IsNullOrEmpty(w.Title) && !string.IsNullOrEmpty(fav.Name) && w.Title.Contains(fav.Name, StringComparison.OrdinalIgnoreCase)));
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	public async void InitSatelliteMedia()
+	{
+		try
+		{
+			_mediaSessionManager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+			if (_mediaSessionManager != null)
+			{
+				_mediaSessionManager.CurrentSessionChanged += (GlobalSystemMediaTransportControlsSessionManager s, CurrentSessionChangedEventArgs e) =>
+				{
+					Dispatcher.BeginInvoke(new Action(UpdateSatelliteMediaInfo));
+				};
+			}
+		}
+		catch
+		{
+		}
+		UpdateSatelliteMediaInfo();
+	}
+
+	public async void UpdateSatelliteMediaInfo()
+	{
+		_mediaCts?.Cancel();
+		CancellationToken token = (_mediaCts = new CancellationTokenSource()).Token;
+		try
+		{
+			if (ApplicationHost.Instance?.IsInternalMusicActive ?? false)
+			{
+				string internalMusicTitle = ApplicationHost.Instance.InternalMusicTitle;
+				if (!string.IsNullOrEmpty(internalMusicTitle))
+				{
+					string cleanInternalTitle = internalMusicTitle.Trim();
+					if (cleanInternalTitle.EndsWith(" - YouTube", StringComparison.OrdinalIgnoreCase))
+					{
+						cleanInternalTitle = cleanInternalTitle.Substring(0, cleanInternalTitle.Length - " - YouTube".Length).Trim();
+					}
+					else if (cleanInternalTitle.EndsWith(" - YouTube Music", StringComparison.OrdinalIgnoreCase))
+					{
+						cleanInternalTitle = cleanInternalTitle.Substring(0, cleanInternalTitle.Length - " - YouTube Music".Length).Trim();
+					}
+					SatelliteMediaTitle = string.IsNullOrEmpty(cleanInternalTitle) ? "Reproductor" : cleanInternalTitle;
+
+					string cleanInternalArtist = ApplicationHost.Instance.InternalMusicArtist?.Trim() ?? string.Empty;
+					if (cleanInternalArtist.Contains("vistas", StringComparison.OrdinalIgnoreCase) ||
+					    cleanInternalArtist.Contains("views", StringComparison.OrdinalIgnoreCase) ||
+					    cleanInternalArtist.StartsWith("•"))
+					{
+						cleanInternalArtist = string.Empty;
+					}
+					SatelliteMediaArtist = cleanInternalArtist;
+					IsMediaPlaying = ApplicationHost.Instance.IsInternalMusicPlaying;
+					SatelliteMediaGlyph = (IsMediaPlaying ? "\ue12e" : "\ue13c");
+					HasActiveMusicTrack = true;
+					ImageSource internalMusicArtwork = ApplicationHost.Instance.InternalMusicArtwork;
+					if (internalMusicArtwork != null)
+					{
+						SatelliteMediaArtwork = internalMusicArtwork;
+					}
+					if (IsMediaPlaying)
+					{
+						try
+						{
+							FloatingMediaOrbWindow.ShowOrb(SatelliteMediaTitle, SatelliteMediaArtist, SatelliteMediaArtwork, isPlaying: true);
+						}
+						catch { }
+					}
+					return;
+				}
+			}
+			if (_mediaSessionManager != null)
+			{
+				_currentMediaSession = _mediaSessionManager.GetCurrentSession();
+			}
+			if (_currentMediaSession != null)
+			{
+				GlobalSystemMediaTransportControlsSessionMediaProperties globalSystemMediaTransportControlsSessionMediaProperties = await _currentMediaSession.TryGetMediaPropertiesAsync();
+				if (token.IsCancellationRequested)
+				{
+					return;
+				}
+				GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = _currentMediaSession.GetPlaybackInfo();
+				bool flag = playbackInfo != null && playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+				if (globalSystemMediaTransportControlsSessionMediaProperties != null && !string.IsNullOrEmpty(globalSystemMediaTransportControlsSessionMediaProperties.Title))
+				{
+					string cleanTitle = globalSystemMediaTransportControlsSessionMediaProperties.Title.Trim();
+					if (cleanTitle.EndsWith(" - YouTube", StringComparison.OrdinalIgnoreCase))
+					{
+						cleanTitle = cleanTitle.Substring(0, cleanTitle.Length - " - YouTube".Length).Trim();
+					}
+					else if (cleanTitle.EndsWith(" - YouTube Music", StringComparison.OrdinalIgnoreCase))
+					{
+						cleanTitle = cleanTitle.Substring(0, cleanTitle.Length - " - YouTube Music".Length).Trim();
+					}
+					SatelliteMediaTitle = string.IsNullOrEmpty(cleanTitle) ? "Reproductor" : cleanTitle;
+
+					string cleanArtist = globalSystemMediaTransportControlsSessionMediaProperties.Artist?.Trim() ?? string.Empty;
+					if (cleanArtist.Contains("vistas", StringComparison.OrdinalIgnoreCase) ||
+					    cleanArtist.Contains("views", StringComparison.OrdinalIgnoreCase) ||
+					    cleanArtist.Contains("suscriptor", StringComparison.OrdinalIgnoreCase) ||
+					    cleanArtist.Contains("subscriber", StringComparison.OrdinalIgnoreCase) ||
+					    cleanArtist.StartsWith("•"))
+					{
+						cleanArtist = string.Empty;
+					}
+					SatelliteMediaArtist = cleanArtist;
+					IsMediaPlaying = flag;
+					SatelliteMediaGlyph = (flag ? "\ue12e" : "\ue13c");
+					HasActiveMusicTrack = true;
+					if (flag)
+					{
+						try
+						{
+							FloatingMediaOrbWindow.ShowOrb(SatelliteMediaTitle, SatelliteMediaArtist, SatelliteMediaArtwork, isPlaying: true, _currentMediaSession);
+						}
+						catch { }
+					}
+					if (globalSystemMediaTransportControlsSessionMediaProperties.Thumbnail != null)
+					{
+						try
+						{
+							using (IRandomAccessStreamWithContentType stream = await globalSystemMediaTransportControlsSessionMediaProperties.Thumbnail.OpenReadAsync())
+							{
+								if (token.IsCancellationRequested)
+								{
+									return;
+								}
+								using MemoryStream memStream = new MemoryStream();
+								await stream.AsStreamForRead().CopyToAsync(memStream);
+								if (token.IsCancellationRequested)
+								{
+									return;
+								}
+								memStream.Position = 0L;
+								BitmapImage bitmapImage = new BitmapImage();
+								bitmapImage.BeginInit();
+								bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+								bitmapImage.StreamSource = memStream;
+								bitmapImage.EndInit();
+								bitmapImage.Freeze();
+								SatelliteMediaArtwork = bitmapImage;
+							}
+							return;
+						}
+						catch
+						{
+							SatelliteMediaArtwork = null;
+							return;
+						}
+					}
+					SatelliteMediaArtwork = null;
+					return;
+				}
+			}
+			SatelliteMediaTitle = "Reproductor";
+			SatelliteMediaArtist = string.Empty;
+			SatelliteMediaGlyph = "\ue13c";
+			IsMediaPlaying = false;
+			SatelliteMediaArtwork = null;
+			HasActiveMusicTrack = false;
+		}
+		catch
+		{
+			SatelliteMediaTitle = "Reproductor";
+			SatelliteMediaArtist = string.Empty;
+			SatelliteMediaGlyph = "\ue13c";
+			IsMediaPlaying = false;
+			SatelliteMediaArtwork = null;
+			HasActiveMusicTrack = false;
+		}
+	}
+
+	private void ActiveWindow_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is FrameworkElement { DataContext: ActiveWindowModel dataContext })
+		{
+			ActiveWindowManager.Instance.SwitchToWindow(dataContext.Hwnd);
+			SoundService.Play(SoundType.Click);
+			SafeClose();
+		}
+	}
+
+	private void ActiveWindow_Minimize_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is System.Windows.Controls.Button { Tag: var tag } && tag is nint hwnd)
+		{
+			ActiveWindowManager.Instance.MinimizeWindow(hwnd);
+			SoundService.Play(SoundType.Hover);
+			LoadActiveWindows();
+			e.Handled = true;
+		}
+	}
+
+	private void ActiveWindow_Close_Click(object sender, RoutedEventArgs e)
+	{
+		if (sender is System.Windows.Controls.Button { Tag: var tag } && tag is nint)
+		{
+			nint hwnd = (nint)tag;
+			ActiveWindowManager.Instance.CloseWindow(hwnd);
+			SoundService.Play(SoundType.Click);
+			ActiveWindowModel activeWindowModel = ActiveWindowsList.FirstOrDefault((ActiveWindowModel w) => w.Hwnd == hwnd);
+			if (activeWindowModel != null)
+			{
+				ActiveWindowsList.Remove(activeWindowModel);
+			}
+			ActiveWindowsCountText = $"{ActiveWindowsList.Count} en ejecución";
+			e.Handled = true;
+		}
+	}
+
+	private async void SatelliteMedia_Prev_Click(object sender, RoutedEventArgs e)
+	{
+		_ = 1;
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			if (ApplicationHost.Instance?.IsInternalMusicActive ?? false)
+			{
+				await ApplicationHost.Instance.PreviousMusicTrackAsync();
+				await Task.Delay(400);
+				UpdateSatelliteMediaInfo();
+				return;
+			}
+			if (_currentMediaSession != null)
+			{
+				await _currentMediaSession.TrySkipPreviousAsync();
+			}
+			else
+			{
+				NativeMethods.keybd_event(177, 0, 0u, 0);
+				NativeMethods.keybd_event(177, 0, 2u, 0);
+			}
+			await Task.Delay(350);
+			UpdateSatelliteMediaInfo();
+		}
+		catch
+		{
+		}
+	}
+
+	private async void SatelliteMedia_PlayPause_Click(object sender, RoutedEventArgs e)
+	{
+		_ = 2;
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			if (ApplicationHost.Instance?.IsInternalMusicActive ?? false)
+			{
+				bool flag = (IsMediaPlaying = await ApplicationHost.Instance.TogglePlayPauseMusicAsync());
+				SatelliteMediaGlyph = (flag ? "\ue12e" : "\ue13c");
+				await Task.Delay(350);
+				UpdateSatelliteMediaInfo();
+				return;
+			}
+			if (_currentMediaSession != null)
+			{
+				GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = _currentMediaSession.GetPlaybackInfo();
+				if (playbackInfo != null && playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+				{
+					await _currentMediaSession.TryPauseAsync();
+					IsMediaPlaying = false;
+					SatelliteMediaGlyph = "\ue13c";
+				}
+				else
+				{
+					await _currentMediaSession.TryPlayAsync();
+					IsMediaPlaying = true;
+					SatelliteMediaGlyph = "\ue12e";
+				}
+			}
+			else
+			{
+				NativeMethods.keybd_event(179, 0, 0u, 0);
+				NativeMethods.keybd_event(179, 0, 2u, 0);
+			}
+			await Task.Delay(350);
+			UpdateSatelliteMediaInfo();
+		}
+		catch
+		{
+		}
+	}
+
+	private async void SatelliteMedia_Next_Click(object sender, RoutedEventArgs e)
+	{
+		_ = 1;
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			if (ApplicationHost.Instance?.IsInternalMusicActive ?? false)
+			{
+				await ApplicationHost.Instance.NextMusicTrackAsync();
+				await Task.Delay(400);
+				UpdateSatelliteMediaInfo();
+				return;
+			}
+			if (_currentMediaSession != null)
+			{
+				await _currentMediaSession.TrySkipNextAsync();
+			}
+			else
+			{
+				NativeMethods.keybd_event(176, 0, 0u, 0);
+				NativeMethods.keybd_event(176, 0, 2u, 0);
+			}
+			await Task.Delay(350);
+			UpdateSatelliteMediaInfo();
+		}
+		catch
+		{
+		}
+	}
+
+	private void SatelliteMedia_OpenYtMusic_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			_isOpeningSubWidget = true;
+			ApplicationHost.Instance?.ToggleWidget("YouTube");
+			Task.Delay(1500).ContinueWith((Task _) => Dispatcher.Invoke(() => _isOpeningSubWidget = false));
+		}
+		catch
+		{
+		}
+	}
+
+	private void SatelliteMedia_ToggleCard_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			if (IsPlayerExpandedVisibility == Visibility.Visible)
+			{
+				IsPlayerExpandedVisibility = Visibility.Collapsed;
+				return;
+			}
+			if (WallpaperFanCardVisibility == Visibility.Visible)
+			{
+				WallpaperFanCardVisibility = Visibility.Collapsed;
+				RestoreCenterContentView();
+			}
+			NotificationsCardVisibility = Visibility.Collapsed;
+			ConnectedDevicesCardVisibility = Visibility.Collapsed;
+			IsPlayerExpandedVisibility = Visibility.Visible;
+		}
+		catch
+		{
+		}
+	}
+
+	private void SatelliteWallpaper_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			ToggleWallpaperFanCard();
+		}
+		catch
+		{
+		}
+	}
+
+	private void SatelliteWallpaper_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			BentoAction_Wallpaper_Click(sender, e);
+			_ = LoadActiveWallpaperAsync(force: true);
+			if (WallpaperFanCardVisibility == Visibility.Visible)
+			{
+				_ = LoadFanWallpapersAsync();
+			}
+			e.Handled = true;
+		}
+		catch
+		{
+		}
+	}
+
+	private void SatelliteNotifications_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			ToggleNotificationsCard();
+		}
+		catch
+		{
+		}
+	}
+
+	private void ToggleNotificationsCard()
+	{
+		if (NotificationsCardVisibility == Visibility.Visible)
+		{
+			NotificationsCardVisibility = Visibility.Collapsed;
+			return;
+		}
+		if (WallpaperFanCardVisibility == Visibility.Visible)
+		{
+			WallpaperFanCardVisibility = Visibility.Collapsed;
+			RestoreCenterContentView();
+		}
+		IsPlayerExpandedVisibility = Visibility.Collapsed;
+		ConnectedDevicesCardVisibility = Visibility.Collapsed;
+		NotificationsCardVisibility = Visibility.Visible;
+		_ = LoadNotificationsAsync();
+	}
+
+	private void CloseNotificationsCard_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			NotificationsCardVisibility = Visibility.Collapsed;
+		}
+		catch
+		{
+		}
+	}
+
+	private void ClearAllNotifications_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			NotificationsList.Clear();
+			HasUnreadNotifications = false;
+			HasNoNotifications = true;
+			NotificationsCountText = "0 notificaciones";
+			try
+			{
+				UserNotificationListener.Current.ClearNotifications();
+			}
+			catch
+			{
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void DismissNotification_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			if (!(sender is System.Windows.Controls.Button { Tag: var tag }) || !(tag is uint))
+			{
+				return;
+			}
+			uint notifId = (uint)tag;
+			SpotlightNotificationItem spotlightNotificationItem = NotificationsList.FirstOrDefault((SpotlightNotificationItem n) => n.Id == notifId);
+			if (spotlightNotificationItem != null)
+			{
+				NotificationsList.Remove(spotlightNotificationItem);
+				try
+				{
+					UserNotificationListener.Current.RemoveNotification(notifId);
+				}
+				catch
+				{
+				}
+				HasUnreadNotifications = NotificationsList.Count > 0;
+				HasNoNotifications = NotificationsList.Count == 0;
+				NotificationsCountText = NotificationsList.Count switch
+				{
+					0 => "0 notificaciones", 
+					1 => "1 notificación", 
+					_ => $"{NotificationsList.Count} notificaciones", 
+				};
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	private void OpenWindowsNotificationCenter_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			byte bVk = (byte)((Environment.OSVersion.Version.Build >= 22000) ? 78u : 65u);
+			NativeMethods.keybd_event(91, 0, 0u, 0);
+			NativeMethods.keybd_event(bVk, 0, 0u, 0);
+			NativeMethods.keybd_event(bVk, 0, 2u, 0);
+			NativeMethods.keybd_event(91, 0, 2u, 0);
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private async Task LoadNotificationsAsync()
+	{
+		_ = 1;
+		try
+		{
+			IsNotificationsLoading = true;
+			UserNotificationListener listener = UserNotificationListener.Current;
+			if (await listener.RequestAccessAsync() != UserNotificationListenerAccessStatus.Allowed)
+			{
+				Dispatcher.Invoke(() =>
+				{
+					NotificationsCountText = "Sin acceso";
+					HasUnreadNotifications = false;
+					HasNoNotifications = true;
+				});
+				return;
+			}
+			IReadOnlyList<UserNotification> rawNotifs = await listener.GetNotificationsAsync(NotificationKinds.Toast);
+			Dispatcher.Invoke(() =>
+			{
+				NotificationsList.Clear();
+				if (rawNotifs != null && rawNotifs.Count > 0)
+				{
+					foreach (UserNotification item in rawNotifs.OrderByDescending((UserNotification n) => n.CreationTime))
+					{
+						string text = "Sistema";
+						try
+						{
+							text = item.AppInfo?.DisplayInfo?.DisplayName ?? "Sistema";
+						}
+						catch
+						{
+						}
+						string text2 = string.Empty;
+						string text3 = string.Empty;
+						try
+						{
+							NotificationBinding notificationBinding = item.Notification?.Visual?.GetBinding(KnownNotificationBindings.ToastGeneric);
+							if (notificationBinding != null)
+							{
+								IReadOnlyList<AdaptiveNotificationText> textElements = notificationBinding.GetTextElements();
+								if (textElements != null && textElements.Count > 0)
+								{
+									text2 = textElements[0]?.Text ?? string.Empty;
+									if (textElements.Count > 1)
+									{
+										text3 = string.Join(" ", from t in textElements.Skip(1)
+											select t?.Text ?? string.Empty into s
+											where !string.IsNullOrWhiteSpace(s)
+											select s);
+									}
+								}
+							}
+						}
+						catch
+						{
+						}
+						if (string.IsNullOrWhiteSpace(text2) && string.IsNullOrWhiteSpace(text3))
+						{
+							text2 = text;
+						}
+						TimeSpan timeSpan = DateTimeOffset.Now - item.CreationTime;
+						string timeText = ((!(timeSpan.TotalMinutes < 1.0)) ? ((!(timeSpan.TotalMinutes < 60.0)) ? ((!(timeSpan.TotalHours < 24.0)) ? item.CreationTime.ToLocalTime().ToString("dd/MM HH:mm") : item.CreationTime.ToLocalTime().ToString("HH:mm")) : $"hace {(int)timeSpan.TotalMinutes}m") : "Ahora");
+						string notificationGlyphForApp = GetNotificationGlyphForApp(text);
+						NotificationsList.Add(new SpotlightNotificationItem
+						{
+							Id = item.Id,
+							AppName = text,
+							Title = text2,
+							Body = text3,
+							TimeText = timeText,
+							AppGlyph = notificationGlyphForApp
+						});
+					}
+				}
+				HasUnreadNotifications = NotificationsList.Count > 0;
+				HasNoNotifications = NotificationsList.Count == 0;
+				string notificationsCountText = NotificationsList.Count switch
+				{
+					0 => "0 notificaciones", 
+					1 => "1 notificación", 
+					_ => $"{NotificationsList.Count} notificaciones", 
+				};
+				NotificationsCountText = notificationsCountText;
+			});
+		}
+		catch (Exception)
+		{
+			Dispatcher.Invoke(() =>
+			{
+				HasUnreadNotifications = false;
+				HasNoNotifications = true;
+				NotificationsCountText = "0 notificaciones";
+			});
+		}
+		finally
+		{
+			Dispatcher.Invoke(() => IsNotificationsLoading = false);
+		}
+	}
+
+	private static string GetNotificationGlyphForApp(string appName)
+	{
+		string text = appName.ToLowerInvariant();
+		if (text.Contains("chrome") || text.Contains("edge") || text.Contains("firefox") || text.Contains("brave") || text.Contains("browser"))
+		{
+			return "\uE774";
+		}
+		if (text.Contains("mail") || text.Contains("correo") || text.Contains("outlook") || text.Contains("thunderbird"))
+		{
+			return "\uE715";
+		}
+		if (text.Contains("whatsapp") || text.Contains("telegram") || text.Contains("discord") || text.Contains("slack") || text.Contains("chat") || text.Contains("teams"))
+		{
+			return "\uE8BD";
+		}
+		if (text.Contains("calendar") || text.Contains("calendario"))
+		{
+			return "\uE787";
+		}
+		if (text.Contains("spotify") || text.Contains("music") || text.Contains("música") || text.Contains("youtube"))
+		{
+			return "\uE8D6";
+		}
+		if (text.Contains("download") || text.Contains("descarga"))
+		{
+			return "\uE896";
+		}
+		if (text.Contains("seguridad") || text.Contains("defender") || text.Contains("security") || text.Contains("antivirus"))
+		{
+			return "\uEA18";
+		}
+		if (text.Contains("sistema") || text.Contains("system") || text.Contains("windows"))
+		{
+			return "\uE713";
+		}
+		return "\uEA8F";
+	}
+
+	private void SatelliteDevices_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			ToggleConnectedDevicesCard();
+		}
+		catch
+		{
+		}
+	}
+
+	private void ToggleConnectedDevicesCard()
+	{
+		if (ConnectedDevicesCardVisibility == Visibility.Visible)
+		{
+			ConnectedDevicesCardVisibility = Visibility.Collapsed;
+			return;
+		}
+		if (WallpaperFanCardVisibility == Visibility.Visible)
+		{
+			WallpaperFanCardVisibility = Visibility.Collapsed;
+			RestoreCenterContentView();
+		}
+		IsPlayerExpandedVisibility = Visibility.Collapsed;
+		NotificationsCardVisibility = Visibility.Collapsed;
+		ConnectedDevicesCardVisibility = Visibility.Visible;
+		_ = LoadConnectedDevicesAsync();
+	}
+
+	private void CloseConnectedDevicesCard_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			ConnectedDevicesCardVisibility = Visibility.Collapsed;
+		}
+		catch
+		{
+		}
+	}
+
+	private void RefreshConnectedDevices_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			_ = LoadConnectedDevicesAsync();
+		}
+		catch
+		{
+		}
+	}
+
+	private void OpenBluetoothSettings_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			Process.Start(new ProcessStartInfo("ms-settings:bluetooth")
+			{
+				UseShellExecute = true
+			});
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private void OpenSoundSettings_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			Process.Start(new ProcessStartInfo("ms-settings:sound")
+			{
+				UseShellExecute = true
+			});
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private async Task LoadConnectedDevicesAsync()
+	{
+		_ = 3;
+		try
+		{
+			IsConnectedDevicesLoading = true;
+			List<SpotlightConnectedDeviceItem> items = new List<SpotlightConnectedDeviceItem>();
+			HashSet<string> seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			try
+			{
+				DeviceInformationCollection deviceInformationCollection = await DeviceInformation.FindAllAsync(MediaDevice.GetAudioRenderSelector());
+				string b = string.Empty;
+				try
+				{
+					b = MediaDevice.GetDefaultAudioRenderId(AudioDeviceRole.Default);
+				}
+				catch
+				{
+				}
+				foreach (DeviceInformation item in deviceInformationCollection)
+				{
+					if (item.IsEnabled && !string.IsNullOrWhiteSpace(item.Name))
+					{
+						string text = item.Name.Trim();
+						if (seenNames.Add(text))
+						{
+							bool flag = string.Equals(item.Id, b, StringComparison.OrdinalIgnoreCase);
+							var (glyph, category) = ClassifyAudioDevice(text, isInput: false);
+							items.Add(new SpotlightConnectedDeviceItem
+							{
+								Id = item.Id,
+								Name = text,
+								Category = category,
+								Glyph = glyph,
+								IsDefault = flag,
+								StatusText = (flag ? "Predeterminado" : "Conectado"),
+								DetailsText = (flag ? "Salida de audio principal" : "Salida de audio"),
+								IsConnected = true
+							});
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				DeviceInformationCollection deviceInformationCollection2 = await DeviceInformation.FindAllAsync(MediaDevice.GetAudioCaptureSelector());
+				string b2 = string.Empty;
+				try
+				{
+					b2 = MediaDevice.GetDefaultAudioCaptureId(AudioDeviceRole.Default);
+				}
+				catch
+				{
+				}
+				foreach (DeviceInformation item2 in deviceInformationCollection2)
+				{
+					if (item2.IsEnabled && !string.IsNullOrWhiteSpace(item2.Name))
+					{
+						string text2 = item2.Name.Trim();
+						if (seenNames.Add(text2))
+						{
+							bool flag2 = string.Equals(item2.Id, b2, StringComparison.OrdinalIgnoreCase);
+							items.Add(new SpotlightConnectedDeviceItem
+							{
+								Id = item2.Id,
+								Name = text2,
+								Category = "Micrófono",
+								Glyph = "\uE720",
+								IsDefault = flag2,
+								StatusText = (flag2 ? "Predeterminado" : "Conectado"),
+								DetailsText = (flag2 ? "Entrada de voz principal" : "Entrada de voz"),
+								IsConnected = true
+							});
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				foreach (DeviceInformation item3 in await DeviceInformation.FindAllAsync(BluetoothDevice.GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus.Connected)))
+				{
+					if (!string.IsNullOrWhiteSpace(item3.Name))
+					{
+						string text3 = item3.Name.Trim();
+						if (seenNames.Add(text3))
+						{
+							var (glyph2, category2) = ClassifyPeripheral(text3);
+							items.Add(new SpotlightConnectedDeviceItem
+							{
+								Id = item3.Id,
+								Name = text3,
+								Category = category2,
+								Glyph = glyph2,
+								StatusText = "Conectado",
+								DetailsText = "Bluetooth",
+								IsConnected = true
+							});
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				foreach (DeviceInformation item4 in await DeviceInformation.FindAllAsync(BluetoothLEDevice.GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus.Connected)))
+				{
+					if (!string.IsNullOrWhiteSpace(item4.Name))
+					{
+						string text4 = item4.Name.Trim();
+						if (seenNames.Add(text4))
+						{
+							var (glyph3, category3) = ClassifyPeripheral(text4);
+							items.Add(new SpotlightConnectedDeviceItem
+							{
+								Id = item4.Id,
+								Name = text4,
+								Category = category3,
+								Glyph = glyph3,
+								StatusText = "Conectado",
+								DetailsText = "Bluetooth LE",
+								IsConnected = true
+							});
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				IReadOnlyList<RawGameController> rawGameControllers = RawGameController.RawGameControllers;
+				if (rawGameControllers != null)
+				{
+					foreach (RawGameController item5 in rawGameControllers)
+					{
+						string text5 = (string.IsNullOrWhiteSpace(item5.DisplayName) ? "Mando de juego" : item5.DisplayName.Trim());
+						if (seenNames.Add(text5))
+						{
+							items.Add(new SpotlightConnectedDeviceItem
+							{
+								Id = (item5.NonRoamableId ?? Guid.NewGuid().ToString()),
+								Name = text5,
+								Category = "Mando / Control",
+								Glyph = "\uE7FC",
+								StatusText = "Conectado",
+								DetailsText = "Listo para jugar",
+								IsConnected = true
+							});
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				DriveInfo[] drives = DriveInfo.GetDrives();
+				foreach (DriveInfo driveInfo in drives)
+				{
+					if (driveInfo.DriveType == DriveType.Removable && driveInfo.IsReady)
+					{
+						string text6 = driveInfo.Name.TrimEnd('\\');
+						string text7 = (string.IsNullOrWhiteSpace(driveInfo.VolumeLabel) ? ("Disco Extraíble (" + text6 + ")") : (driveInfo.VolumeLabel + " (" + text6 + ")"));
+						if (seenNames.Add(text7))
+						{
+							string text8 = FormatBytes(driveInfo.AvailableFreeSpace);
+							string text9 = FormatBytes(driveInfo.TotalSize);
+							items.Add(new SpotlightConnectedDeviceItem
+							{
+								Id = driveInfo.Name,
+								Name = text7,
+								Category = "Almacenamiento USB",
+								Glyph = "\uE8B7",
+								StatusText = "Listo",
+								DetailsText = text8 + " libres de " + text9,
+								IsConnected = true
+							});
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			List<SpotlightConnectedDeviceItem> sorted = items.OrderBy((SpotlightConnectedDeviceItem item) => GetSortPriority(item)).ThenBy((SpotlightConnectedDeviceItem spotlightConnectedDeviceItem) => spotlightConnectedDeviceItem.Name).ToList();
+			Dispatcher.Invoke(() =>
+			{
+				ConnectedDevicesList.Clear();
+				foreach (SpotlightConnectedDeviceItem item6 in sorted)
+				{
+					ConnectedDevicesList.Add(item6);
+				}
+				HasConnectedDevices = ConnectedDevicesList.Count > 0;
+				HasNoConnectedDevices = ConnectedDevicesList.Count == 0;
+				string connectedDevicesCountText = ConnectedDevicesList.Count switch
+				{
+					0 => "0 dispositivos", 
+					1 => "1 dispositivo", 
+					_ => $"{ConnectedDevicesList.Count} dispositivos", 
+				};
+				ConnectedDevicesCountText = connectedDevicesCountText;
+			});
+		}
+		catch (Exception)
+		{
+			Dispatcher.Invoke(() =>
+			{
+				HasConnectedDevices = false;
+				HasNoConnectedDevices = true;
+				ConnectedDevicesCountText = "0 dispositivos";
+			});
+		}
+		finally
+		{
+			Dispatcher.Invoke(() => IsConnectedDevicesLoading = false);
+		}
+	}
+
+	private static (string glyph, string category) ClassifyAudioDevice(string name, bool isInput)
+	{
+		if (isInput)
+		{
+			return (glyph: "\uE720", category: "Micrófono");
+		}
+		string text = name.ToLowerInvariant();
+		if (text.Contains("headphone") || text.Contains("auricular") || text.Contains("auriculares") || text.Contains("headset") || text.Contains("earphone") || text.Contains("airpod") || text.Contains("buds") || text.Contains("freebuds") || text.Contains("wh-1000") || text.Contains("e-3105") || text.Contains("cascos") || text.Contains("in-ear"))
+		{
+			return (glyph: "\uE7F6", category: "Audio (Auriculares)");
+		}
+		return (glyph: "\uE767", category: "Audio (Altavoces)");
+	}
+
+	private static (string glyph, string category) ClassifyPeripheral(string name)
+	{
+		string text = name.ToLowerInvariant();
+		if (text.Contains("headphone") || text.Contains("auricular") || text.Contains("auriculares") || text.Contains("headset") || text.Contains("airpod") || text.Contains("buds") || text.Contains("freebuds") || text.Contains("earphone") || text.Contains("e-3105"))
+		{
+			return (glyph: "\uE7F6", category: "Audio (Auriculares)");
+		}
+		if (text.Contains("teclado") || text.Contains("keyboard") || text.Contains("ak820") || text.Contains("keychron") || text.Contains("k380") || text.Contains("rk61") || text.Contains("keypad"))
+		{
+			return (glyph: "\uE765", category: "Teclado");
+		}
+		if (text.Contains("ratón") || text.Contains("raton") || text.Contains("mouse") || text.Contains("aj139") || text.Contains("trackpad") || text.Contains("touchpad") || text.Contains("mx master") || text.Contains("deathadder") || text.Contains("viper"))
+		{
+			return (glyph: "\uE962", category: "Ratón");
+		}
+		if (text.Contains("mando") || text.Contains("gamepad") || text.Contains("controller") || text.Contains("xbox") || text.Contains("gamesir") || text.Contains("dualsense") || text.Contains("dualshock") || text.Contains("joystick"))
+		{
+			return (glyph: "\uE7FC", category: "Mando / Control");
+		}
+		if (text.Contains("phone") || text.Contains("celular") || text.Contains("móvil") || text.Contains("movil") || text.Contains("galaxy") || text.Contains("iphone") || text.Contains("pixel") || text.Contains("xiaomi") || text.Contains("huawei"))
+		{
+			return (glyph: "\uE8EA", category: "Teléfono");
+		}
+		if (text.Contains("speaker") || text.Contains("altavoz") || text.Contains("bocina"))
+		{
+			return (glyph: "\uE767", category: "Audio (Altavoz)");
+		}
+		return (glyph: "\uE702", category: "Dispositivo Bluetooth");
+	}
+
+	private static int GetSortPriority(SpotlightConnectedDeviceItem item)
+	{
+		if (item.IsDefault)
+		{
+			return 0;
+		}
+		if (item.Category.StartsWith("Audio (Auriculares)"))
+		{
+			return 1;
+		}
+		if (item.Category.StartsWith("Audio"))
+		{
+			return 2;
+		}
+		if (item.Category.StartsWith("Mando"))
+		{
+			return 3;
+		}
+		if (item.Category == "Teclado")
+		{
+			return 4;
+		}
+		if (item.Category == "Ratón")
+		{
+			return 5;
+		}
+		if (item.Category == "Micrófono")
+		{
+			return 6;
+		}
+		if (item.Category.StartsWith("Almacenamiento"))
+		{
+			return 7;
+		}
+		return 8;
+	}
+
+	private void SatelliteVolume_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			NativeMethods.keybd_event(173, 0, 0u, 0);
+			NativeMethods.keybd_event(173, 0, 2u, 0);
+			SoundService.Play(SoundType.Click);
+		}
+		catch
+		{
+		}
+	}
+
+	private void SatelliteRecycleBin_Click(object sender, RoutedEventArgs e)
+	{
+		BentoAction_RecycleBin_Click(sender, e);
+	}
+
+	private void SatelliteLock_Click(object sender, RoutedEventArgs e)
+	{
+		BentoAction_Lock_Click(sender, e);
+	}
+
+	private void SatelliteAi_Click(object sender, RoutedEventArgs e)
+	{
+		SetSearchMode("AI");
+		SearchBox?.Focus();
+	}
+
+	public void ToggleWallpaperFanCard()
+	{
+		if (WallpaperFanCardVisibility == Visibility.Visible)
+		{
+			WallpaperFanCardVisibility = Visibility.Collapsed;
+			RestoreCenterContentView();
+			return;
+		}
+		IsPlayerExpandedVisibility = Visibility.Collapsed;
+		ConnectedDevicesCardVisibility = Visibility.Collapsed;
+		NotificationsCardVisibility = Visibility.Collapsed;
+		ActiveWindowsVisibility = Visibility.Collapsed;
+		SpotlightFavoritesVisibility = Visibility.Collapsed;
+		if (ResultsCardBorder != null)
+		{
+			ResultsCardBorder.Visibility = Visibility.Collapsed;
+		}
+		WallpaperFanCardVisibility = Visibility.Visible;
+		_ = LoadFanWallpapersAsync();
+	}
+
+	private void RestoreCenterContentView()
+	{
+		if (string.IsNullOrEmpty((SearchBox != null) ? SearchBox.Text.Trim() : ""))
+		{
+			SpotlightFavoritesVisibility = ((!SettingsService.Instance.SpotlightShowFavorites) ? Visibility.Collapsed : Visibility.Visible);
+			ActiveWindowsVisibility = Visibility.Visible;
+			if (ResultsCardBorder != null)
+			{
+				ResultsCardBorder.Visibility = Visibility.Collapsed;
+			}
+		}
+		else
+		{
+			ActiveWindowsVisibility = ((!(_searchMode == "Windows")) ? Visibility.Collapsed : Visibility.Visible);
+			if (ResultsCardBorder != null)
+			{
+				ResultsCardBorder.Visibility = ((_searchMode == "Windows") ? Visibility.Collapsed : Visibility.Visible);
+			}
+		}
+	}
+
+	private void CloseWallpaperFanCard_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			WallpaperFanCardVisibility = Visibility.Collapsed;
+			RestoreCenterContentView();
+		}
+		catch
+		{
+		}
+	}
+
+	private async Task LoadFanWallpapersAsync()
+	{
+		try
+		{
+			string dir = SettingsService.Instance.WallpaperDirectory;
+			if ((string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) && !string.IsNullOrEmpty(_currentWallpaperPath) && File.Exists(_currentWallpaperPath))
+			{
+				string directoryName = Path.GetDirectoryName(_currentWallpaperPath);
+				if (!string.IsNullOrEmpty(directoryName) && Directory.Exists(directoryName))
+				{
+					dir = directoryName;
+				}
+			}
+			if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+			{
+				FanWallpapersList.Clear();
+				HasFanWallpapers = false;
+				FanWallpapersCountText = "0 Fondos";
+				ActiveFanTitleText = "Carpeta no configurada";
+				ActiveFanMetaText = "Configura tu carpeta en Ajustes o descarga fondos 4K";
+				FanCounterText = "0 / 0";
+				return;
+			}
+
+			string currentWp = _currentWallpaperPath;
+			HashSet<string> exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp", ".bmp" };
+			var (items, targetIndex) = await Task.Run(() =>
+			{
+				try
+				{
+					var files = (from f in Directory.GetFiles(dir)
+						where exts.Contains(Path.GetExtension(f))
+						orderby File.GetLastWriteTimeUtc(f) descending
+						select f).ToList();
+
+					var list = new List<WallpaperFanItem>(files.Count);
+					int selectedIdx = 0;
+
+					for (int i = 0; i < files.Count; i++)
+					{
+						string text = files[i];
+						var fileInfo = new FileInfo(text);
+						string displayTitle = Path.GetFileNameWithoutExtension(text).Replace('_', ' ').Replace('-', ' ');
+						string text2 = ((double)fileInfo.Length / 1048576.0).ToString("F1") + " MB";
+						var item = new WallpaperFanItem
+						{
+							FilePath = text,
+							FileName = fileInfo.Name,
+							DisplayTitle = displayTitle,
+							FileSizeText = text2,
+							ResolutionText = "Ultra HD • " + text2,
+							BadgeText = ((fileInfo.Length > 4194304) ? "4K UHD" : "HD"),
+							Visibility = Visibility.Collapsed,
+							Opacity = 0.0,
+							Scale = 0.4
+						};
+						if (!string.IsNullOrEmpty(currentWp) && string.Equals(text, currentWp, StringComparison.OrdinalIgnoreCase))
+						{
+							selectedIdx = i;
+						}
+						list.Add(item);
+					}
+					return (list, selectedIdx);
+				}
+				catch
+				{
+					return (new List<WallpaperFanItem>(), 0);
+				}
+			});
+
+			if (items.Count == 0)
+			{
+				FanWallpapersList.Clear();
+				HasFanWallpapers = false;
+				FanWallpapersCountText = "0 Fondos";
+				ActiveFanTitleText = "Sin imágenes encontradas";
+				ActiveFanMetaText = dir;
+				FanCounterText = "0 / 0";
+				return;
+			}
+
+			// If directory and count didn't change and we already loaded items, just sync the index
+			if (_lastLoadedFanDir == dir && FanWallpapersList.Count == items.Count)
+			{
+				HasFanWallpapers = true;
+				FanWallpapersCountText = $"{items.Count} Fondos";
+				_fanCurrentIndex = Math.Clamp(targetIndex, 0, FanWallpapersList.Count - 1);
+				UpdateFanDeckTransforms();
+				EnsureVisibleThumbnails();
+				return;
+			}
+
+			_lastLoadedFanDir = dir;
+			_lastLoadedFanCount = items.Count;
+
+			FanWallpapersList.Clear();
+			foreach (var item in items)
+			{
+				FanWallpapersList.Add(item);
+			}
+
+			HasFanWallpapers = true;
+			FanWallpapersCountText = $"{items.Count} Fondos";
+			_fanCurrentIndex = Math.Clamp(targetIndex, 0, FanWallpapersList.Count - 1);
+			UpdateFanDeckTransforms();
+			EnsureVisibleThumbnails();
+		}
+		catch
+		{
+		}
+	}
+
+	private void UpdateFanDeckTransforms()
+	{
+		if (FanWallpapersList.Count == 0)
+		{
+			return;
+		}
+		for (int i = 0; i < FanWallpapersList.Count; i++)
+		{
+			WallpaperFanItem wallpaperFanItem = FanWallpapersList[i];
+			int num = i - _fanCurrentIndex;
+			int num2 = Math.Abs(num);
+			if (num2 > 4)
+			{
+				wallpaperFanItem.Visibility = Visibility.Collapsed;
+				wallpaperFanItem.Opacity = 0.0;
+				wallpaperFanItem.Scale = 0.4;
+				wallpaperFanItem.TranslateX = (double)Math.Sign(num) * 750.0;
+				wallpaperFanItem.TranslateY = 160.0;
+				wallpaperFanItem.RotationAngle = (double)Math.Sign(num) * 35.0;
+				wallpaperFanItem.ZIndex = 0;
+				wallpaperFanItem.IsHero = false;
+			}
+			else
+			{
+				wallpaperFanItem.Visibility = Visibility.Visible;
+				wallpaperFanItem.RotationAngle = (double)num * 7.5;
+				wallpaperFanItem.TranslateX = (double)num * 150.0;
+				wallpaperFanItem.TranslateY = (double)num2 * 22.0 + (double)(num * num) * 2.0;
+				wallpaperFanItem.Scale = ((num == 0) ? 1.15 : Math.Max(0.6, 0.92 - (double)num2 * 0.08));
+				wallpaperFanItem.Opacity = ((num == 0) ? 1.0 : Math.Max(0.35, 0.95 - (double)num2 * 0.15));
+				wallpaperFanItem.ZIndex = 80 - num2 * 5;
+				wallpaperFanItem.IsHero = num == 0;
+			}
+		}
+		if (_fanCurrentIndex >= 0 && _fanCurrentIndex < FanWallpapersList.Count)
+		{
+			WallpaperFanItem wallpaperFanItem2 = FanWallpapersList[_fanCurrentIndex];
+			ActiveFanTitleText = wallpaperFanItem2.DisplayTitle;
+			ActiveFanMetaText = $"{wallpaperFanItem2.BadgeText} • {wallpaperFanItem2.FileSizeText} • {wallpaperFanItem2.FileName}";
+			FanCounterText = $"{_fanCurrentIndex + 1} / {FanWallpapersList.Count}";
+		}
+	}
+
+	private void EnsureVisibleThumbnails()
+	{
+		if (FanWallpapersList.Count == 0)
+		{
+			return;
+		}
+		int num = Math.Max(0, _fanCurrentIndex - 5);
+		int num2 = Math.Min(FanWallpapersList.Count - 1, _fanCurrentIndex + 5);
+		for (int i = num; i <= num2; i++)
+		{
+			WallpaperFanItem wallpaperFanItem = FanWallpapersList[i];
+			if (wallpaperFanItem.Thumbnail == null && !string.IsNullOrEmpty(wallpaperFanItem.FilePath))
+			{
+				bool shouldLoad = false;
+				lock (_inFlightThumbnails)
+				{
+					if (_inFlightThumbnails.Add(wallpaperFanItem.FilePath))
+					{
+						shouldLoad = true;
+					}
+				}
+				if (shouldLoad)
+				{
+					_ = LoadThumbnailForItemAsync(wallpaperFanItem);
+				}
+			}
+		}
+	}
+
+	private async Task LoadThumbnailForItemAsync(WallpaperFanItem item)
+	{
+		try
+		{
+			BitmapImage? bmp = await ThumbnailCacheService.Instance.GetThumbnailAsync(item.FilePath, 500);
+			if (bmp != null)
+			{
+				await Dispatcher.InvokeAsync(() =>
+				{
+					item.Thumbnail = bmp;
+				}, DispatcherPriority.Background);
+			}
+		}
+		catch
+		{
+		}
+		finally
+		{
+			lock (_inFlightThumbnails)
+			{
+				_inFlightThumbnails.Remove(item.FilePath);
+			}
+		}
+	}
+
+	private void NextFanWallpaper()
+	{
+		if (FanWallpapersList.Count != 0)
+		{
+			SoundService.Play(SoundType.Click);
+			_fanCurrentIndex = (_fanCurrentIndex + 1) % FanWallpapersList.Count;
+			UpdateFanDeckTransforms();
+			EnsureVisibleThumbnails();
+		}
+	}
+
+	private void PrevFanWallpaper()
+	{
+		if (FanWallpapersList.Count != 0)
+		{
+			SoundService.Play(SoundType.Click);
+			_fanCurrentIndex = (_fanCurrentIndex - 1 + FanWallpapersList.Count) % FanWallpapersList.Count;
+			UpdateFanDeckTransforms();
+			EnsureVisibleThumbnails();
+		}
+	}
+
+	private void ApplyActiveFanWallpaper()
+	{
+		if (FanWallpapersList.Count == 0 || _fanCurrentIndex < 0 || _fanCurrentIndex >= FanWallpapersList.Count)
+		{
+			return;
+		}
+		WallpaperFanItem wallpaperFanItem = FanWallpapersList[_fanCurrentIndex];
+		if (string.IsNullOrEmpty(wallpaperFanItem.FilePath) || !File.Exists(wallpaperFanItem.FilePath))
+		{
+			return;
+		}
+		try
+		{
+			SoundService.Play(SoundType.Ping);
+			ActiveFanTitleText = "¡Aplicado al Escritorio! " + wallpaperFanItem.DisplayTitle;
+
+			if (wallpaperFanItem.Thumbnail != null)
+			{
+				BentoWallpaperSource = wallpaperFanItem.Thumbnail;
+				BentoWallpaperName = wallpaperFanItem.DisplayTitle;
+			}
+
+			string path = wallpaperFanItem.FilePath;
+			WallpaperTransitionService.ApplyWallpaper(path, () =>
+			{
+				EventBus.Publish(new WallpaperChangedEvent(path));
+			});
+		}
+		catch
+		{
+		}
+	}
+
+	private void ApplyActiveFanWallpaper_Click(object sender, RoutedEventArgs e)
+	{
+		ApplyActiveFanWallpaper();
+	}
+
+	private void FanCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		if (sender is FrameworkElement { DataContext: WallpaperFanItem dataContext })
+		{
+			int num = FanWallpapersList.IndexOf(dataContext);
+			if (num >= 0)
+			{
+				SoundService.Play(SoundType.Click);
+				_fanCurrentIndex = num;
+				UpdateFanDeckTransforms();
+				EnsureVisibleThumbnails();
+				ApplyActiveFanWallpaper();
+				e.Handled = true;
+			}
+		}
+	}
+
+	private void FanStage_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+	{
+		if (FanWallpapersList.Count != 0)
+		{
+			long now = Environment.TickCount64;
+			if (now - _lastWheelTicks < 50)
+			{
+				e.Handled = true;
+				return;
+			}
+			_lastWheelTicks = now;
+
+			if (e.Delta < 0)
+			{
+				NextFanWallpaper();
+			}
+			else if (e.Delta > 0)
+			{
+				PrevFanWallpaper();
+			}
+			e.Handled = true;
+		}
+	}
+
+	private void FanPrev_Click(object sender, RoutedEventArgs e)
+	{
+		PrevFanWallpaper();
+	}
+
+	private void FanNext_Click(object sender, RoutedEventArgs e)
+	{
+		NextFanWallpaper();
+	}
+
+	private void FanRandomWallpaper_Click(object sender, RoutedEventArgs e)
+	{
+		if (FanWallpapersList.Count > 1)
+		{
+			Random random = new Random();
+			int num;
+			do
+			{
+				num = random.Next(FanWallpapersList.Count);
+			}
+			while (num == _fanCurrentIndex);
+			SoundService.Play(SoundType.Whoosh);
+			_fanCurrentIndex = num;
+			UpdateFanDeckTransforms();
+			EnsureVisibleThumbnails();
+		}
+	}
+
+	private void FanLaunchAltW_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			_isOpeningSubWidget = true;
+			ApplicationHost.Instance?.ToggleWidget("LocalGallery");
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private void FanLaunchUHDPaper_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			SoundService.Play(SoundType.Click);
+			_isOpeningSubWidget = true;
+			ApplicationHost.Instance?.ToggleWidget("OnlineGallery");
+			SafeClose();
+		}
+		catch
+		{
+		}
+	}
+
+	private void FanOpenFolder_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			string wallpaperDirectory = SettingsService.Instance.WallpaperDirectory;
+			if (!string.IsNullOrEmpty(wallpaperDirectory) && Directory.Exists(wallpaperDirectory))
+			{
+				Process.Start("explorer.exe", "\"" + wallpaperDirectory + "\"");
+				SoundService.Play(SoundType.Click);
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	protected void OnPropertyChanged(string propertyName)
+	{
+		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+	}
+
+	void IWidget.Close()
+	{
+		Close();
+	}
 }

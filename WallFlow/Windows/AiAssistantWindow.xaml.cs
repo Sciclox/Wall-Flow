@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -96,36 +97,56 @@ public partial class AiAssistantWindow : Window, IWidget
         }
     }
 
-    private async void InitializeWebViewAsync()
+    private Microsoft.Web.WebView2.Wpf.WebView2 ActiveWebView =>
+        CurrentMode == "Gemini" ? webViewGemini : webViewChatGpt;
+
+    private async Task EnsureCurrentWebViewInitializedAsync()
     {
         try
         {
-            var settingsFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "WallFlow");
-            var webViewFolder = Path.Combine(settingsFolder, "WebView2_AiAssistant");
-            
-            if (!Directory.Exists(webViewFolder))
+            if (ErrorOverlay != null) ErrorOverlay.Visibility = Visibility.Collapsed;
+
+            if (_webViewEnv == null)
             {
+                var settingsFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "WallFlow");
+                var webViewFolder = Path.Combine(settingsFolder, "WebView2_AiAssistant");
                 Directory.CreateDirectory(webViewFolder);
+                _webViewEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(userDataFolder: webViewFolder);
             }
 
-            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(userDataFolder: webViewFolder);
-            _webViewEnv = env;
-            await webView.EnsureCoreWebView2Async(env);
-            
-            if (webView.CoreWebView2 != null)
+            var targetView = ActiveWebView;
+            if (targetView.CoreWebView2 == null)
             {
-                webView.CoreWebView2.HistoryChanged += (s, args) => UpdateNavigationButtonStates();
-                UpdateNavigationButtonStates();
+                await targetView.EnsureCoreWebView2Async(_webViewEnv);
+                if (targetView.CoreWebView2 != null)
+                {
+                    targetView.CoreWebView2.HistoryChanged += (s, args) => UpdateNavigationButtonStates();
+                    string initialUrl = CurrentMode == "Gemini" ? GeminiUrl : ChatGPTUrl;
+                    targetView.Source = new Uri(initialUrl);
+                }
             }
-
-            SwitchToMode(CurrentMode);
+            UpdateNavigationButtonStates();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error al iniciar el navegador de IA: {ex.Message}", "Error WebView2", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (ErrorOverlay != null)
+            {
+                ErrorMessageText.Text = $"Error al iniciar {CurrentMode}: {ex.Message}";
+                ErrorOverlay.Visibility = Visibility.Visible;
+            }
         }
+    }
+
+    private async void InitializeWebViewAsync()
+    {
+        await EnsureCurrentWebViewInitializedAsync();
+    }
+
+    private async void RetryInit_Click(object sender, RoutedEventArgs e)
+    {
+        await EnsureCurrentWebViewInitializedAsync();
     }
 
     public void SwitchToChatGPT()
@@ -138,16 +159,24 @@ public partial class AiAssistantWindow : Window, IWidget
         SwitchToMode("Gemini");
     }
 
-    public void SwitchToMode(string mode)
+    public async void SwitchToMode(string mode)
     {
         CurrentMode = mode;
         UpdateTabUI();
 
-        if (webView != null && webView.CoreWebView2 != null)
+        if (mode == "Gemini")
         {
-            string targetUrl = mode == "Gemini" ? GeminiUrl : ChatGPTUrl;
-            webView.Source = new Uri(targetUrl);
+            webViewChatGpt.Visibility = Visibility.Collapsed;
+            webViewGemini.Visibility = Visibility.Visible;
         }
+        else
+        {
+            webViewGemini.Visibility = Visibility.Collapsed;
+            webViewChatGpt.Visibility = Visibility.Visible;
+        }
+
+        await EnsureCurrentWebViewInitializedAsync();
+        UpdateNavigationButtonStates();
     }
 
     private void UpdateTabUI()
@@ -178,26 +207,32 @@ public partial class AiAssistantWindow : Window, IWidget
 
     private void UpdateNavigationButtonStates()
     {
-        if (webView != null && webView.CoreWebView2 != null)
+        var wv = ActiveWebView;
+        if (wv != null && wv.CoreWebView2 != null)
         {
-            BackButton.IsEnabled = webView.CanGoBack;
-            ForwardButton.IsEnabled = webView.CanGoForward;
+            BackButton.IsEnabled = wv.CanGoBack;
+            ForwardButton.IsEnabled = wv.CanGoForward;
+        }
+        else
+        {
+            BackButton.IsEnabled = false;
+            ForwardButton.IsEnabled = false;
         }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (webView.CanGoBack) webView.GoBack();
+        if (ActiveWebView.CanGoBack) ActiveWebView.GoBack();
     }
 
     private void ForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (webView.CanGoForward) webView.GoForward();
+        if (ActiveWebView.CanGoForward) ActiveWebView.GoForward();
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        webView.Reload();
+        ActiveWebView.Reload();
     }
 
     private void TabChatGpt_Click(object sender, RoutedEventArgs e)
@@ -216,6 +251,7 @@ public partial class AiAssistantWindow : Window, IWidget
         PinButton.Background = _isPinned 
             ? (SolidColorBrush)FindResource("AccentBrush") 
             : Brushes.Transparent;
+        PinButton.Content = _isPinned ? "\uE840" : "\uE718";
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -340,7 +376,7 @@ public partial class AiAssistantWindow : Window, IWidget
         }
         else if (e.Key == Key.F5)
         {
-            webView.Reload();
+            ActiveWebView.Reload();
         }
     }
 

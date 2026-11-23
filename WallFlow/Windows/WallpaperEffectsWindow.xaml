@@ -11,8 +11,5 @@
         ShowInTaskbar="False"
         Loaded="Window_Loaded">
     
-    <Grid>
-        <!-- Canvas for particle system -->
-        <Canvas x:Name="ParticleCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-    </Grid>
+    <Grid x:Name="RootGrid" />
 </Window>

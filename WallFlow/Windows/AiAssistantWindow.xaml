@@ -37,7 +37,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="16" SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextBlock.FontFamily="Segoe MDL2 Assets" TextBlock.FontSize="13" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -63,7 +64,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="16" SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextBlock.FontFamily="Segoe MDL2 Assets" TextBlock.FontSize="13" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -147,45 +149,35 @@
 
                     <!-- Browser Navigation Buttons -->
                     <StackPanel Orientation="Horizontal" Margin="14,0,0,0">
-                        <Button x:Name="BackButton" Click="BackButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Atrás">
-                            <Viewbox Width="14" Height="14">
-                                <Path Data="M19 12H5 M12 19l-7-7 7-7" Stroke="#D0FFFFFF" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                            </Viewbox>
-                        </Button>
-                        <Button x:Name="ForwardButton" Click="ForwardButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Adelante">
-                            <Viewbox Width="14" Height="14">
-                                <Path Data="M5 12h14 M12 5l7 7-7 7" Stroke="#D0FFFFFF" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                            </Viewbox>
-                        </Button>
-                        <Button x:Name="RefreshButton" Click="RefreshButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Recargar">
-                            <Viewbox Width="14" Height="14">
-                                <Path Data="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5 M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16 M21 21v-5h-5" Stroke="#D0FFFFFF" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                            </Viewbox>
-                        </Button>
+                        <Button x:Name="BackButton" Content="&#xE72B;" Click="BackButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Atrás" />
+                        <Button x:Name="ForwardButton" Content="&#xE72A;" Click="ForwardButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Adelante" />
+                        <Button x:Name="RefreshButton" Content="&#xE72C;" Click="RefreshButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Recargar" />
                     </StackPanel>
                 </StackPanel>
 
                 <!-- Window actions (Pin and Close) -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Pin Button -->
-                    <Button x:Name="PinButton" Click="PinButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Mantener visible (Anclar)" Margin="0,0,4,0">
-                        <Viewbox Width="14" Height="14">
-                            <Path x:Name="PinIconPath" Data="M12 17v5 M9 2h6 M12 2v7 M5 9h14 M7 9l1 8h8l1-8" Stroke="#D0FFFFFF" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                        </Viewbox>
-                    </Button>
+                    <Button x:Name="PinButton" Content="&#xE718;" Click="PinButton_Click" Style="{StaticResource HeaderButtonStyle}" ToolTip="Mantener visible (Anclar)" Margin="0,0,4,0" />
 
                     <!-- Close Button -->
-                    <Button x:Name="CloseButton" Click="CloseButton_Click" Style="{StaticResource HeaderAccentButtonStyle}" ToolTip="Ocultar asistente">
-                        <Viewbox Width="14" Height="14">
-                            <Path Data="M18 6L6 18 M6 6l12 12" Stroke="#FFFFFFFF" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                        </Viewbox>
-                    </Button>
+                    <Button x:Name="CloseButton" Content="&#xE10A;" Click="CloseButton_Click" Style="{StaticResource HeaderAccentButtonStyle}" ToolTip="Ocultar asistente" />
                 </StackPanel>
             </Grid>
 
             <!-- WebView2 Browser Control Panel -->
             <Border Grid.Row="1" CornerRadius="12" ClipToBounds="True" Background="#FF121212">
-                <wv2:WebView2 x:Name="webView" />
+                <Grid>
+                    <wv2:WebView2 x:Name="webViewChatGpt" />
+                    <wv2:WebView2 x:Name="webViewGemini" Visibility="Collapsed" />
+                    <Border x:Name="ErrorOverlay" Visibility="Collapsed" Background="#F0121212" CornerRadius="12">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="340">
+                            <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="36" Foreground="#FF5555" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                            <TextBlock x:Name="ErrorMessageText" Text="Error al inicializar WebView2" Foreground="White" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,12" />
+                            <Button Content="Reintentar" Style="{StaticResource HeaderButtonStyle}" Click="RetryInit_Click" HorizontalAlignment="Center" Padding="16,6" Background="{DynamicResource AccentBrush}" Foreground="White" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Border>
         </Grid>
     </Border>

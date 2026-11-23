@@ -32,6 +32,7 @@ public class HotkeyService
     private IntPtr _hWnd;
     private readonly Dictionary<int, Action> _hotkeyActions = new();
     private readonly List<int> _registeredIds = new();
+    private readonly HashSet<int> _allowedDuringPauseIds = new();
     private int _currentId = 1;
 
     public void Initialize(IntPtr hWnd)
@@ -54,7 +55,7 @@ public class HotkeyService
         }
     }
 
-    public bool Register(string hotkeyText, Action callback)
+    public bool Register(string hotkeyText, Action callback, bool allowDuringPause = false)
     {
         if (string.IsNullOrWhiteSpace(hotkeyText) || _hWnd == IntPtr.Zero)
             return false;
@@ -67,6 +68,10 @@ public class HotkeyService
         {
             _hotkeyActions[id] = callback;
             _registeredIds.Add(id);
+            if (allowDuringPause)
+            {
+                _allowedDuringPauseIds.Add(id);
+            }
             return true;
         }
         return false;
@@ -84,6 +89,7 @@ public class HotkeyService
 
         _registeredIds.Clear();
         _hotkeyActions.Clear();
+        _allowedDuringPauseIds.Clear();
         _currentId = 1;
     }
 
@@ -91,12 +97,12 @@ public class HotkeyService
     {
         if (msg == WM_HOTKEY)
         {
-            if (IsPaused)
+            int id = wParam.ToInt32();
+            if (IsPaused && !_allowedDuringPauseIds.Contains(id))
             {
                 handled = true;
                 return IntPtr.Zero;
             }
-            int id = wParam.ToInt32();
             if (_hotkeyActions.TryGetValue(id, out var action))
             {
                 action?.Invoke();

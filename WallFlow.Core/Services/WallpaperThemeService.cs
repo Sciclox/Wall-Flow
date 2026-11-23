@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -14,7 +15,12 @@ public class WallpaperThemeService
 
     public WallpaperThemeService()
     {
-        EventBus.Subscribe<WallpaperChangedEvent>(@event => UpdateThemeFromWallpaper(true));
+        EventBus.Subscribe<WallpaperChangedEvent>(OnWallpaperChanged);
+    }
+
+    private void OnWallpaperChanged(WallpaperChangedEvent @event)
+    {
+        UpdateThemeFromWallpaper(true);
     }
 
     private string _lastProcessedWallpaper = "";
@@ -53,16 +59,16 @@ public class WallpaperThemeService
 
             _lastProcessedWallpaper = wallpaperPath;
 
-            // Load and analyze wallpaper colors asynchronously
-            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            // Load and analyze wallpaper colors asynchronously in background thread
+            Task.Run(() =>
             {
                 ExtractAndApplyColors(wallpaperPath);
-            }));
+            });
         }
         catch { /* ignored */ }
     }
 
-    private string GetCurrentWallpaperPath()
+    public static string GetCurrentWallpaperPath()
     {
         try
         {
@@ -70,11 +76,27 @@ public class WallpaperThemeService
             {
                 if (key != null)
                 {
-                    return key.GetValue("Wallpaper") as string ?? "";
+                    string? path = key.GetValue("Wallpaper") as string;
+                    if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    {
+                        return path;
+                    }
                 }
             }
         }
         catch { }
+
+        try
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string transcoded = Path.Combine(appData, @"Microsoft\Windows\Themes\TranscodedWallpaper");
+            if (File.Exists(transcoded))
+            {
+                return transcoded;
+            }
+        }
+        catch { }
+
         return "";
     }
 
@@ -82,7 +104,7 @@ public class WallpaperThemeService
     {
         try
         {
-            // Load bitmap frame safely
+            // Load bitmap frame safely in background
             using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
@@ -106,38 +128,49 @@ public class WallpaperThemeService
                 // Lighten for hover
                 Color hover = LightenColor(dominant);
 
-                // Apply resources dynamically
-                Application.Current.Resources["AccentColor"] = dominant;
-                Application.Current.Resources["AccentHoverColor"] = hover;
-                Application.Current.Resources["AccentBrush"] = new SolidColorBrush(dominant);
-                Application.Current.Resources["AccentHoverBrush"] = new SolidColorBrush(hover);
-                Application.Current.Resources["AccentGlowBrush"] = new SolidColorBrush(Color.FromArgb(0x18, dominant.R, dominant.G, dominant.B));
-                Application.Current.Resources["AccentActiveBrush"] = new SolidColorBrush(Color.FromArgb(0x65, dominant.R, dominant.G, dominant.B));
-
-                // Border colors (gradient stops)
-                Application.Current.Resources["BorderColor1"] = dominant;
-                Application.Current.Resources["BorderColor2"] = LightenColor(dominant, 20);
-                Application.Current.Resources["BorderColor3"] = hover;
-
-                // Visualizer wave brush
-                var waveBrush = new LinearGradientBrush
+                // Dispatch UI updates to main thread
+                Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    StartPoint = new Point(0, 0),
-                    EndPoint = new Point(0, 1)
-                };
-                waveBrush.GradientStops.Add(new GradientStop(hover, 0));
-                waveBrush.GradientStops.Add(new GradientStop(dominant, 1));
-                Application.Current.Resources["VisualizerWaveBrush"] = waveBrush;
-
-                // DockBorderBrush
-                var defaultBrush = Application.Current.Resources["AccentBrush"] as Brush ?? new SolidColorBrush(dominant);
-                Application.Current.Resources["DockBorderBrush"] = defaultBrush;
-
-                // Notify UI update
-                EventBus.Publish(new PreviewColorsRequestedEvent());
+                    ApplyThemeResources(dominant, hover);
+                }));
             }
         }
         catch { /* ignored */ }
+    }
+
+    private static void ApplyThemeResources(Color dominant, Color hover)
+    {
+        if (Application.Current == null) return;
+
+        // Apply resources dynamically
+        Application.Current.Resources["AccentColor"] = dominant;
+        Application.Current.Resources["AccentHoverColor"] = hover;
+        Application.Current.Resources["AccentBrush"] = new SolidColorBrush(dominant);
+        Application.Current.Resources["AccentHoverBrush"] = new SolidColorBrush(hover);
+        Application.Current.Resources["AccentGlowBrush"] = new SolidColorBrush(Color.FromArgb(0x18, dominant.R, dominant.G, dominant.B));
+        Application.Current.Resources["AccentActiveBrush"] = new SolidColorBrush(Color.FromArgb(0x65, dominant.R, dominant.G, dominant.B));
+
+        // Border colors (gradient stops)
+        Application.Current.Resources["BorderColor1"] = dominant;
+        Application.Current.Resources["BorderColor2"] = LightenColor(dominant, 20);
+        Application.Current.Resources["BorderColor3"] = hover;
+
+        // Visualizer wave brush
+        var waveBrush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(0, 1)
+        };
+        waveBrush.GradientStops.Add(new GradientStop(hover, 0));
+        waveBrush.GradientStops.Add(new GradientStop(dominant, 1));
+        Application.Current.Resources["VisualizerWaveBrush"] = waveBrush;
+
+        // DockBorderBrush
+        var defaultBrush = Application.Current.Resources["AccentBrush"] as Brush ?? new SolidColorBrush(dominant);
+        Application.Current.Resources["DockBorderBrush"] = defaultBrush;
+
+        // Notify UI update
+        EventBus.Publish(new PreviewColorsRequestedEvent());
     }
 
     private Color FindDominantColor(byte[] pixels)
@@ -224,7 +257,7 @@ public class WallpaperThemeService
         }
     }
 
-    private Color LightenColor(Color color, int amount = 35)
+    private static Color LightenColor(Color color, int amount = 35)
     {
         byte r = (byte)Math.Min(255, color.R + amount);
         byte g = (byte)Math.Min(255, color.G + amount);

@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WallFlow.Core", "WallFlow.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WallFlow.Spotlight", "WallFlow.Spotlight\WallFlow.Spotlight.csproj", "{3FF46972-E74D-4CB6-965D-108AE79F8602}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WallFlow.Tests", "WallFlow.Tests\WallFlow.Tests.csproj", "{573BA334-DFCE-4C4E-B215-6D2269440CF5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{3FF46972-E74D-4CB6-965D-108AE79F8602}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3FF46972-E74D-4CB6-965D-108AE79F8602}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3FF46972-E74D-4CB6-965D-108AE79F8602}.Release|Any CPU.Build.0 = Release|Any CPU
+		{573BA334-DFCE-4C4E-B215-6D2269440CF5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{573BA334-DFCE-4C4E-B215-6D2269440CF5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{573BA334-DFCE-4C4E-B215-6D2269440CF5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{573BA334-DFCE-4C4E-B215-6D2269440CF5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

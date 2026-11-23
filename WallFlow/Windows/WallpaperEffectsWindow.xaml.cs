@@ -2,60 +2,30 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
+using WallFlow.Native;
+using static WallFlow.Native.NativeMethods;
 
 namespace WallFlow.Windows;
 
 public partial class WallpaperEffectsWindow : Window
 {
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TRANSPARENT = 0x00000020;
-    private const int WS_EX_NOACTIVATE = 0x08000000;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
-
-    [DllImport("user32.dll")]
-    private extern static int GetWindowLong(IntPtr hwnd, int index);
-
-    [DllImport("user32.dll")]
-    private extern static int SetWindowLong(IntPtr hwnd, int index, int dwNewLong);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Win32Point
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out Win32Point lppoint);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-    private static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
-    private const uint SWP_NOMOVE = 0x0002;
-    private const uint SWP_NOSIZE = 0x0001;
-    private const uint SWP_NOACTIVATE = 0x0010;
-
     private class Particle
     {
-        public Shape Visual { get; set; } = null!;
         public double X { get; set; }
         public double Y { get; set; }
         public double Speed { get; set; }
         public double Size { get; set; }
         public double Opacity { get; set; }
-        
+
         // For swaying (snow, bubbles, sakura, leaves, aurora)
         public double BaseX { get; set; }
         public double Amplitude { get; set; }
         public double SpeedX { get; set; }
         public double TargetAngle { get; set; }
-        
+
         // For stars/fireflies/energy twinkling
         public double MaxOpacity { get; set; }
         public double TwinkleSpeed { get; set; }
@@ -67,10 +37,27 @@ public partial class WallpaperEffectsWindow : Window
 
         // For fireflies movement direction
         public double DirectionAngle { get; set; }
-        
+
         // Velocity (for energy particles)
         public double SpeedXVelocity { get; set; }
         public double SpeedYVelocity { get; set; }
+    }
+
+    private class ParticleSurface : FrameworkElement
+    {
+        private readonly WallpaperEffectsWindow _window;
+
+        public ParticleSurface(WallpaperEffectsWindow window)
+        {
+            _window = window;
+            IsHitTestVisible = false;
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            base.OnRender(dc);
+            _window.RenderParticles(dc);
+        }
     }
 
     private readonly List<Particle> _particles = new();
@@ -79,8 +66,14 @@ public partial class WallpaperEffectsWindow : Window
     private bool _isRendering;
     private double _canvasWidth;
     private double _canvasHeight;
-    private Rectangle? _lightningOverlay;
+    private double _lightningAlpha = 0;
     private DispatcherTimer? _zOrderTimer;
+    private ParticleSurface? _surface;
+
+    // Cached frozen brushes and pens
+    private Brush? _cachedBrush1;
+    private Brush? _cachedBrush2;
+    private Pen? _cachedPen;
 
     public WallpaperEffectsWindow()
     {
@@ -92,7 +85,7 @@ public partial class WallpaperEffectsWindow : Window
         try
         {
             var hwnd = new WindowInteropHelper(this).Handle;
-            
+
             // Hide from Alt+Tab and make it completely click-through
             var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
@@ -102,16 +95,22 @@ public partial class WallpaperEffectsWindow : Window
         }
         catch { }
 
-        // Start rendering loop
-        _canvasWidth = SystemParameters.PrimaryScreenWidth;
-        _canvasHeight = SystemParameters.PrimaryScreenHeight;
+        // Start rendering loop (covers full virtual screen across multi-monitors)
+        _canvasWidth = SystemParameters.VirtualScreenWidth > 0 ? SystemParameters.VirtualScreenWidth : SystemParameters.PrimaryScreenWidth;
+        _canvasHeight = SystemParameters.VirtualScreenHeight > 0 ? SystemParameters.VirtualScreenHeight : SystemParameters.PrimaryScreenHeight;
         Width = _canvasWidth;
         Height = _canvasHeight;
-        Left = 0;
-        Top = 0;
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+
+        _surface = new ParticleSurface(this)
+        {
+            Width = _canvasWidth,
+            Height = _canvasHeight
+        };
+        RootGrid.Children.Add(_surface);
 
         // Safety timer: keep window at bottom of Z-order every 2 seconds
-        // This ensures effects stay visible even if WorkerW parenting fails
         _zOrderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _zOrderTimer.Tick += (s, args) =>
         {
@@ -142,7 +141,6 @@ public partial class WallpaperEffectsWindow : Window
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd != IntPtr.Zero)
             {
-                // Force window to stay at the bottom of Z-order (behind desktop icons)
                 SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
         }
@@ -158,9 +156,9 @@ public partial class WallpaperEffectsWindow : Window
             if (newEffect == "Ninguno")
             {
                 StopRendering();
-                ParticleCanvas.Children.Clear();
                 _particles.Clear();
-                _lightningOverlay = null;
+                _lightningAlpha = 0;
+                _surface?.InvalidateVisual();
             }
             else
             {
@@ -211,10 +209,8 @@ public partial class WallpaperEffectsWindow : Window
 
     private void InitParticles()
     {
-        // Clear old visual particles
-        ParticleCanvas.Children.Clear();
         _particles.Clear();
-        _lightningOverlay = null;
+        _lightningAlpha = 0;
 
         int maxParticles = _currentEffect switch
         {
@@ -231,27 +227,70 @@ public partial class WallpaperEffectsWindow : Window
             _ => 0
         };
 
-        // Apply density settings
         double densityMult = Services.SettingsService.Instance.WeatherEffectDensity / 100.0;
         maxParticles = (int)(maxParticles * densityMult);
 
-        if (_currentEffect == "Tormenta Eléctrica" && maxParticles > 0)
-        {
-            _lightningOverlay = new Rectangle
-            {
-                Width = _canvasWidth,
-                Height = _canvasHeight,
-                Fill = Brushes.White,
-                Opacity = 0
-            };
-            ParticleCanvas.Children.Add(_lightningOverlay);
-        }
+        UpdateCachedBrushes();
 
         for (int i = 0; i < maxParticles; i++)
         {
-            var p = CreateParticle();
+            var p = new Particle();
+            ResetParticle(p, false);
             _particles.Add(p);
-            ParticleCanvas.Children.Add(p.Visual);
+        }
+
+        _surface?.InvalidateVisual();
+    }
+
+    private void UpdateCachedBrushes()
+    {
+        var s = Services.SettingsService.Instance;
+        switch (_currentEffect)
+        {
+            case "Lluvia":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Rain, s.EffectColor_Rain2, new Point(0, 0), new Point(0, 1));
+                _cachedPen = new Pen(_cachedBrush1, 1.5);
+                _cachedPen.Freeze();
+                break;
+            case "Tormenta Eléctrica":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Thunderstorm, s.EffectColor_Thunderstorm2, new Point(0, 0), new Point(0, 1));
+                _cachedPen = new Pen(_cachedBrush1, 2.0);
+                _cachedPen.Freeze();
+                break;
+            case "Nieve":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Snow, s.EffectColor_Snow2, new Point(0, 0), new Point(0, 1));
+                break;
+            case "Hojas de Cerezo":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Sakura, s.EffectColor_Sakura2, new Point(0, 0), new Point(0, 1));
+                break;
+            case "Hojas de Otoño":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Leaves, s.EffectColor_Leaves2, new Point(0, 0), new Point(0, 1));
+                break;
+            case "Burbujas":
+                _cachedBrush1 = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+                _cachedBrush1.Freeze();
+                _cachedBrush2 = GetFrozenGradientBrush(s.EffectColor_Fog, s.EffectColor_Fog2, new Point(0, 0), new Point(1, 1));
+                _cachedPen = new Pen(_cachedBrush2, 1.0);
+                _cachedPen.Freeze();
+                break;
+            case "Estrellas":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Stars, s.EffectColor_Stars2, new Point(0, 0), new Point(1, 1));
+                break;
+            case "Luciérnagas":
+                _cachedBrush1 = GetFrozenBrush(s.EffectColor_Fireflies);
+                _cachedBrush2 = GetFrozenBrush(s.EffectColor_Fireflies2);
+                break;
+            case "Aurora Boreal":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Aurora, s.EffectColor_Aurora2, new Point(0, 0), new Point(1, 1));
+                break;
+            case "Partículas de Energía":
+                _cachedBrush1 = GetFrozenGradientBrush(s.EffectColor_Energy, s.EffectColor_Energy2, new Point(0, 0), new Point(1, 1));
+                break;
+            default:
+                _cachedBrush1 = Brushes.White;
+                _cachedBrush2 = null;
+                _cachedPen = null;
+                break;
         }
     }
 
@@ -288,53 +327,10 @@ public partial class WallpaperEffectsWindow : Window
         }
     }
 
-    private Particle CreateParticle(bool startAtTop = false)
-    {
-        var p = new Particle();
-        
-        if (_currentEffect == "Lluvia" || _currentEffect == "Tormenta Eléctrica")
-        {
-            p.Visual = new Line();
-        }
-        else if (_currentEffect == "Nieve" || _currentEffect == "Estrellas" || _currentEffect == "Luciérnagas" || _currentEffect == "Burbujas" || _currentEffect == "Partículas de Energía" || _currentEffect == "Hojas de Cerezo" || _currentEffect == "Hojas de Otoño")
-        {
-            var ell = new Ellipse();
-            if (_currentEffect == "Hojas de Cerezo" || _currentEffect == "Hojas de Otoño")
-            {
-                ell.RenderTransformOrigin = new Point(0.5, 0.5);
-                ell.RenderTransform = new RotateTransform(0);
-            }
-            else if (_currentEffect == "Luciérnagas")
-            {
-                var glow = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = (Color)ColorConverter.ConvertFromString(Services.SettingsService.Instance.EffectColor_Fireflies),
-                    BlurRadius = 10,
-                    ShadowDepth = 0,
-                    Opacity = 0.8
-                };
-                ell.Effect = glow;
-            }
-            p.Visual = ell;
-        }
-        else if (_currentEffect == "Aurora Boreal")
-        {
-            p.Visual = new Rectangle();
-        }
-        else
-        {
-            p.Visual = new Ellipse();
-        }
-
-        ResetParticle(p, startAtTop);
-        return p;
-    }
-
     private void ResetParticle(Particle p, bool startAtTop)
     {
         p.X = _random.NextDouble() * _canvasWidth;
         double sizeMult = Services.SettingsService.Instance.WeatherEffectSize;
-        var s = Services.SettingsService.Instance;
 
         if (_currentEffect == "Lluvia" || _currentEffect == "Tormenta Eléctrica")
         {
@@ -343,19 +339,6 @@ public partial class WallpaperEffectsWindow : Window
             p.Speed = (isStorm ? 22 : 16) + _random.NextDouble() * 12;
             p.Size = (1 + _random.NextDouble() * 1.5) * sizeMult;
             p.Opacity = 0.15 + _random.NextDouble() * 0.25;
-
-            if (p.Visual is Line line)
-            {
-                var hex1 = isStorm ? s.EffectColor_Thunderstorm : s.EffectColor_Rain;
-                var hex2 = isStorm ? s.EffectColor_Thunderstorm2 : s.EffectColor_Rain2;
-                line.Stroke = GetFrozenGradientBrush(hex1, hex2, new Point(0, 0), new Point(0, 1));
-                line.StrokeThickness = p.Size;
-                line.X1 = 0;
-                line.Y1 = 0;
-                line.X2 = -2;
-                line.Y2 = (isStorm ? (24 + _random.NextDouble() * 12) : (18 + _random.NextDouble() * 10)) * sizeMult;
-                line.Opacity = p.Opacity;
-            }
         }
         else if (_currentEffect == "Nieve")
         {
@@ -367,18 +350,9 @@ public partial class WallpaperEffectsWindow : Window
             p.Amplitude = 5 + _random.NextDouble() * 15;
             p.SpeedX = _random.NextDouble() * 0.05;
             p.TargetAngle = _random.NextDouble() * Math.PI * 2;
-
-            if (p.Visual is Ellipse ell)
-            {
-                ell.Width = p.Size;
-                ell.Height = p.Size;
-                ell.Fill = GetFrozenGradientBrush(s.EffectColor_Snow, s.EffectColor_Snow2, new Point(0, 0), new Point(0, 1));
-                ell.Opacity = p.Opacity;
-            }
         }
         else if (_currentEffect == "Hojas de Cerezo" || _currentEffect == "Hojas de Otoño")
         {
-            bool isCerezo = _currentEffect == "Hojas de Cerezo";
             p.Y = startAtTop ? -20 : _random.NextDouble() * _canvasHeight;
             p.Speed = 1.0 + _random.NextDouble() * 1.8;
             p.Size = (8.0 + _random.NextDouble() * 8.0) * sizeMult;
@@ -389,21 +363,6 @@ public partial class WallpaperEffectsWindow : Window
             p.TargetAngle = _random.NextDouble() * Math.PI * 2;
             p.Rotation = _random.Next(360);
             p.RotationSpeed = 1.0 + _random.NextDouble() * 2.5;
-
-            if (p.Visual is Ellipse ell)
-            {
-                ell.Width = p.Size;
-                ell.Height = p.Size * 0.55;
-                
-                var hex1 = isCerezo ? s.EffectColor_Sakura : s.EffectColor_Leaves;
-                var hex2 = isCerezo ? s.EffectColor_Sakura2 : s.EffectColor_Leaves2;
-                ell.Fill = GetFrozenGradientBrush(hex1, hex2, new Point(0, 0), new Point(0, 1));
-                ell.Opacity = p.Opacity;
-                if (ell.RenderTransform is RotateTransform rot)
-                {
-                    rot.Angle = p.Rotation;
-                }
-            }
         }
         else if (_currentEffect == "Burbujas")
         {
@@ -415,18 +374,6 @@ public partial class WallpaperEffectsWindow : Window
             p.Amplitude = 8 + _random.NextDouble() * 12;
             p.SpeedX = 0.02 + _random.NextDouble() * 0.03;
             p.TargetAngle = _random.NextDouble() * Math.PI * 2;
-
-            if (p.Visual is Ellipse ell)
-            {
-                ell.Width = p.Size;
-                ell.Height = p.Size;
-                ell.Stroke = GetFrozenGradientBrush(s.EffectColor_Fog, s.EffectColor_Fog2, new Point(0, 0), new Point(1, 1)); 
-                ell.StrokeThickness = 1;
-                var fillBrush = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
-                fillBrush.Freeze();
-                ell.Fill = fillBrush;
-                ell.Opacity = p.Opacity;
-            }
         }
         else if (_currentEffect == "Estrellas")
         {
@@ -436,68 +383,29 @@ public partial class WallpaperEffectsWindow : Window
             p.Opacity = _random.NextDouble() * p.MaxOpacity;
             p.TwinkleSpeed = 0.005 + _random.NextDouble() * 0.015;
             p.TwinkleDirection = _random.Next(2) == 0;
-
-            if (p.Visual is Ellipse ell)
-            {
-                ell.Width = p.Size;
-                ell.Height = p.Size;
-                ell.Fill = GetFrozenGradientBrush(s.EffectColor_Stars, s.EffectColor_Stars2, new Point(0, 0), new Point(1, 1));
-                ell.Opacity = p.Opacity;
-            }
         }
         else if (_currentEffect == "Luciérnagas")
         {
             p.Y = _random.NextDouble() * _canvasHeight;
-            p.Speed = 0.4 + _random.NextDouble() * 0.6;
-            p.Size = (4.0 + _random.NextDouble() * 4.5) * sizeMult;
-            p.MaxOpacity = 0.3 + _random.NextDouble() * 0.6;
+            p.Speed = 0.5 + _random.NextDouble() * 1.0;
+            p.Size = (3.0 + _random.NextDouble() * 3.0) * sizeMult;
+            p.MaxOpacity = 0.4 + _random.NextDouble() * 0.5;
             p.Opacity = _random.NextDouble() * p.MaxOpacity;
-            p.TwinkleSpeed = 0.005 + _random.NextDouble() * 0.01;
+            p.TwinkleSpeed = 0.01 + _random.NextDouble() * 0.02;
             p.TwinkleDirection = _random.Next(2) == 0;
+            p.SpeedX = 0.02 + _random.NextDouble() * 0.04;
             p.DirectionAngle = _random.NextDouble() * Math.PI * 2;
-            p.SpeedX = 0.02 + _random.NextDouble() * 0.05;
-
-            if (p.Visual is Ellipse ell)
-            {
-                ell.Width = p.Size;
-                ell.Height = p.Size;
-                ell.Fill = GetFrozenGradientBrush(s.EffectColor_Fireflies, s.EffectColor_Fireflies2, new Point(0, 0), new Point(1, 1));
-                ell.Opacity = p.Opacity;
-            }
         }
         else if (_currentEffect == "Aurora Boreal")
         {
-            p.Y = -50;
-            p.Speed = 0.01 + _random.NextDouble() * 0.02;
-            p.Size = (2.0 + _random.NextDouble() * 3.0) * sizeMult; 
+            p.Y = 0;
+            p.Size = (10.0 + _random.NextDouble() * 20.0) * sizeMult;
+            p.MaxOpacity = 0.15 + _random.NextDouble() * 0.25;
+            p.Opacity = p.MaxOpacity;
             p.BaseX = p.X;
             p.Amplitude = 40 + _random.NextDouble() * 80;
-            p.SpeedX = 0.001 + _random.NextDouble() * 0.003;
+            p.SpeedX = 0.005 + _random.NextDouble() * 0.01;
             p.TargetAngle = _random.NextDouble() * Math.PI * 2;
-            p.MaxOpacity = 0.05 + _random.NextDouble() * 0.15;
-            p.Opacity = p.MaxOpacity;
-
-            if (p.Visual is Rectangle rect)
-            {
-                rect.Width = p.Size * 150;
-                rect.Height = _canvasHeight * 1.3;
-                
-                var color1 = (Color)ColorConverter.ConvertFromString(s.EffectColor_Aurora);
-                var color2 = (Color)ColorConverter.ConvertFromString(s.EffectColor_Aurora2 ?? "#660000FF");
-                var grad = new LinearGradientBrush
-                {
-                    StartPoint = new Point(0, 0),
-                    EndPoint = new Point(1, 0)
-                };
-                grad.GradientStops.Add(new GradientStop(Color.FromArgb(0, color1.R, color1.G, color1.B), 0));
-                grad.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(255 * 0.45), color1.R, color1.G, color1.B), 0.35));
-                grad.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(255 * 0.45), color2.R, color2.G, color2.B), 0.65));
-                grad.GradientStops.Add(new GradientStop(Color.FromArgb(0, color2.R, color2.G, color2.B), 1));
-                grad.Freeze();
-
-                rect.Fill = grad;
-                rect.Opacity = p.Opacity;
-            }
         }
         else if (_currentEffect == "Partículas de Energía")
         {
@@ -509,18 +417,7 @@ public partial class WallpaperEffectsWindow : Window
             p.Opacity = _random.NextDouble() * p.MaxOpacity;
             p.TwinkleSpeed = 0.01 + _random.NextDouble() * 0.02;
             p.TwinkleDirection = _random.Next(2) == 0;
-
-            if (p.Visual is Ellipse ell)
-            {
-                ell.Width = p.Size;
-                ell.Height = p.Size;
-                ell.Fill = GetFrozenGradientBrush(s.EffectColor_Energy, s.EffectColor_Energy2, new Point(0, 0), new Point(1, 1));
-                ell.Opacity = p.Opacity;
-            }
         }
-
-        Canvas.SetLeft(p.Visual, p.X);
-        Canvas.SetTop(p.Visual, p.Y);
     }
 
     private void OnRendering(object? sender, EventArgs e)
@@ -553,7 +450,7 @@ public partial class WallpaperEffectsWindow : Window
             {
                 bool isStorm = _currentEffect == "Tormenta Eléctrica";
                 p.Y += p.Speed * speedMult;
-                p.X -= (isStorm ? 2.2 : 1.8) * speedMult; // wind
+                p.X -= (isStorm ? 2.2 : 1.8) * speedMult;
 
                 if (interactMouse)
                 {
@@ -571,11 +468,6 @@ public partial class WallpaperEffectsWindow : Window
                 if (p.Y > _canvasHeight || p.X < -20)
                 {
                     ResetParticle(p, true);
-                }
-                else
-                {
-                    Canvas.SetLeft(p.Visual, p.X);
-                    Canvas.SetTop(p.Visual, p.Y);
                 }
             }
             else if (_currentEffect == "Nieve")
@@ -601,23 +493,13 @@ public partial class WallpaperEffectsWindow : Window
                 {
                     ResetParticle(p, true);
                 }
-                else
-                {
-                    Canvas.SetLeft(p.Visual, p.X);
-                    Canvas.SetTop(p.Visual, p.Y);
-                }
             }
             else if (_currentEffect == "Hojas de Cerezo" || _currentEffect == "Hojas de Otoño")
             {
                 p.Y += p.Speed * speedMult;
                 p.TargetAngle += p.SpeedX * speedMult;
                 p.X = p.BaseX + Math.Sin(p.TargetAngle) * p.Amplitude;
-
                 p.Rotation += p.RotationSpeed * speedMult;
-                if (p.Visual.RenderTransform is RotateTransform rot)
-                {
-                    rot.Angle = p.Rotation;
-                }
 
                 if (interactMouse)
                 {
@@ -636,54 +518,33 @@ public partial class WallpaperEffectsWindow : Window
                 {
                     ResetParticle(p, true);
                 }
-                else
-                {
-                    Canvas.SetLeft(p.Visual, p.X);
-                    Canvas.SetTop(p.Visual, p.Y);
-                }
             }
             else if (_currentEffect == "Burbujas")
             {
-                p.Y -= p.Speed * speedMult; // rise up
+                p.Y -= p.Speed * speedMult;
                 p.TargetAngle += p.SpeedX * speedMult;
                 p.X = p.BaseX + Math.Sin(p.TargetAngle) * p.Amplitude;
 
-                bool popped = false;
                 if (interactMouse)
                 {
                     double dx = p.X - mouseX;
                     double dy = p.Y - mouseY;
                     double dist = Math.Sqrt(dx * dx + dy * dy);
-                    if (dist < 20)
+                    if (dist < 100 && dist > 0)
                     {
-                        // Pop bubble! Reset to bottom
-                        ResetParticle(p, true);
-                        popped = true;
-                    }
-                    else if (dist < 90 && dist > 0)
-                    {
-                        double force = (90 - dist) / 90;
-                        p.X += (dx / dist) * force * 8;
-                        p.Y += (dy / dist) * force * 8;
+                        double force = (100 - dist) / 100;
+                        p.X += (dx / dist) * force * 14;
+                        p.Y += (dy / dist) * force * 14;
                     }
                 }
 
-                if (!popped)
+                if (p.Y < -30)
                 {
-                    if (p.Y < -50)
-                    {
-                        ResetParticle(p, true);
-                    }
-                    else
-                    {
-                        Canvas.SetLeft(p.Visual, p.X);
-                        Canvas.SetTop(p.Visual, p.Y);
-                    }
+                    ResetParticle(p, true);
                 }
             }
             else if (_currentEffect == "Estrellas")
             {
-                // Twinkle
                 if (p.TwinkleDirection)
                 {
                     p.Opacity += p.TwinkleSpeed * speedMult;
@@ -702,11 +563,9 @@ public partial class WallpaperEffectsWindow : Window
                         p.TwinkleDirection = true;
                     }
                 }
-                p.Visual.Opacity = p.Opacity;
             }
             else if (_currentEffect == "Luciérnagas")
             {
-                // Drift randomly
                 p.DirectionAngle += (_random.NextDouble() - 0.5) * p.SpeedX * speedMult;
 
                 if (interactMouse)
@@ -716,7 +575,6 @@ public partial class WallpaperEffectsWindow : Window
                     double dist = Math.Sqrt(dx * dx + dy * dy);
                     if (dist < 280 && dist > 0)
                     {
-                        // Attract to mouse
                         double targetAngle = Math.Atan2(dy, dx);
                         p.DirectionAngle += (targetAngle - p.DirectionAngle) * 0.05 * speedMult;
                     }
@@ -725,7 +583,6 @@ public partial class WallpaperEffectsWindow : Window
                 p.X += Math.Cos(p.DirectionAngle) * p.Speed * speedMult;
                 p.Y += Math.Sin(p.DirectionAngle) * p.Speed * speedMult;
 
-                // Twinkle
                 if (p.TwinkleDirection)
                 {
                     p.Opacity += p.TwinkleSpeed * speedMult;
@@ -744,18 +601,11 @@ public partial class WallpaperEffectsWindow : Window
                         p.TwinkleDirection = true;
                     }
                 }
-                p.Visual.Opacity = p.Opacity;
 
-                // Reset if floats off screen
                 if (p.X < -50 || p.X > _canvasWidth + 50 || p.Y < -50 || p.Y > _canvasHeight + 50)
                 {
                     ResetParticle(p, false);
                     p.DirectionAngle = _random.NextDouble() * Math.PI * 2;
-                }
-                else
-                {
-                    Canvas.SetLeft(p.Visual, p.X);
-                    Canvas.SetTop(p.Visual, p.Y);
                 }
             }
             else if (_currentEffect == "Aurora Boreal")
@@ -763,10 +613,6 @@ public partial class WallpaperEffectsWindow : Window
                 p.TargetAngle += p.SpeedX * speedMult;
                 p.X = p.BaseX + Math.Sin(p.TargetAngle) * p.Amplitude;
                 p.Opacity = (Math.Sin(p.TargetAngle * 0.5) + 1.0) * 0.5 * p.MaxOpacity;
-                p.Visual.Opacity = p.Opacity;
-
-                Canvas.SetLeft(p.Visual, p.X);
-                Canvas.SetTop(p.Visual, p.Y);
             }
             else if (_currentEffect == "Partículas de Energía")
             {
@@ -792,7 +638,6 @@ public partial class WallpaperEffectsWindow : Window
                     p.SpeedYVelocity += (_random.NextDouble() - 0.5) * 0.2 * speedMult;
                 }
 
-                // Limit speed
                 double speed = Math.Sqrt(p.SpeedXVelocity * p.SpeedXVelocity + p.SpeedYVelocity * p.SpeedYVelocity);
                 if (speed > 5)
                 {
@@ -803,7 +648,6 @@ public partial class WallpaperEffectsWindow : Window
                 p.X += p.SpeedXVelocity * speedMult;
                 p.Y += p.SpeedYVelocity * speedMult;
 
-                // Twinkle
                 if (p.TwinkleDirection)
                 {
                     p.Opacity += p.TwinkleSpeed * speedMult;
@@ -822,31 +666,131 @@ public partial class WallpaperEffectsWindow : Window
                         p.TwinkleDirection = true;
                     }
                 }
-                p.Visual.Opacity = p.Opacity;
 
-                // Wrap around edges
                 if (p.X < -20) p.X = _canvasWidth + 20;
                 else if (p.X > _canvasWidth + 20) p.X = -20;
-                
+
                 if (p.Y < -20) p.Y = _canvasHeight + 20;
                 else if (p.Y > _canvasHeight + 20) p.Y = -20;
-
-                Canvas.SetLeft(p.Visual, p.X);
-                Canvas.SetTop(p.Visual, p.Y);
             }
         }
 
-        if (_currentEffect == "Tormenta Eléctrica" && _lightningOverlay != null)
+        if (_currentEffect == "Tormenta Eléctrica")
         {
             if (_random.NextDouble() < 0.005)
             {
-                _lightningOverlay.Opacity = 0.2 + _random.NextDouble() * 0.4;
+                _lightningAlpha = 0.2 + _random.NextDouble() * 0.4;
             }
-            else if (_lightningOverlay.Opacity > 0)
+            else if (_lightningAlpha > 0)
             {
-                _lightningOverlay.Opacity -= 0.05 * speedMult;
-                if (_lightningOverlay.Opacity < 0) _lightningOverlay.Opacity = 0;
+                _lightningAlpha -= 0.05 * speedMult;
+                if (_lightningAlpha < 0) _lightningAlpha = 0;
             }
+        }
+
+        _surface?.InvalidateVisual();
+    }
+
+    private void RenderParticles(DrawingContext dc)
+    {
+        if (_particles.Count == 0 && _lightningAlpha <= 0) return;
+
+        double sizeMult = Services.SettingsService.Instance.WeatherEffectSize;
+
+        for (int i = 0; i < _particles.Count; i++)
+        {
+            var p = _particles[i];
+
+            switch (_currentEffect)
+            {
+                case "Lluvia":
+                case "Tormenta Eléctrica":
+                    if (_cachedPen != null)
+                    {
+                        double lineLen = (_currentEffect == "Tormenta Eléctrica" ? 28 : 20) * sizeMult;
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawLine(_cachedPen, new Point(p.X, p.Y), new Point(p.X - 2, p.Y + lineLen));
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Nieve":
+                    if (_cachedBrush1 != null)
+                    {
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawEllipse(_cachedBrush1, null, new Point(p.X, p.Y), p.Size * 0.5, p.Size * 0.5);
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Hojas de Cerezo":
+                case "Hojas de Otoño":
+                    if (_cachedBrush1 != null)
+                    {
+                        dc.PushOpacity(p.Opacity);
+                        dc.PushTransform(new RotateTransform(p.Rotation, p.X, p.Y));
+                        dc.DrawEllipse(_cachedBrush1, null, new Point(p.X, p.Y), p.Size * 0.5, p.Size * 0.28);
+                        dc.Pop();
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Burbujas":
+                    if (_cachedBrush1 != null && _cachedPen != null)
+                    {
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawEllipse(_cachedBrush1, _cachedPen, new Point(p.X, p.Y), p.Size * 0.5, p.Size * 0.5);
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Estrellas":
+                    if (_cachedBrush1 != null)
+                    {
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawEllipse(_cachedBrush1, null, new Point(p.X, p.Y), p.Size * 0.5, p.Size * 0.5);
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Luciérnagas":
+                    if (_cachedBrush1 != null && _cachedBrush2 != null)
+                    {
+                        dc.PushOpacity(p.Opacity * 0.4);
+                        dc.DrawEllipse(_cachedBrush2, null, new Point(p.X, p.Y), p.Size * 1.6, p.Size * 1.6);
+                        dc.Pop();
+
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawEllipse(_cachedBrush1, null, new Point(p.X, p.Y), p.Size * 0.5, p.Size * 0.5);
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Aurora Boreal":
+                    if (_cachedBrush1 != null)
+                    {
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawRectangle(_cachedBrush1, null, new Rect(p.X, 0, p.Size * 15, _canvasHeight));
+                        dc.Pop();
+                    }
+                    break;
+
+                case "Partículas de Energía":
+                    if (_cachedBrush1 != null)
+                    {
+                        dc.PushOpacity(p.Opacity);
+                        dc.DrawEllipse(_cachedBrush1, null, new Point(p.X, p.Y), p.Size * 0.5, p.Size * 0.5);
+                        dc.Pop();
+                    }
+                    break;
+            }
+        }
+
+        if (_lightningAlpha > 0)
+        {
+            var flashBrush = new SolidColorBrush(Color.FromArgb((byte)(_lightningAlpha * 255), 255, 255, 255));
+            flashBrush.Freeze();
+            dc.DrawRectangle(flashBrush, null, new Rect(0, 0, _canvasWidth, _canvasHeight));
         }
     }
 }

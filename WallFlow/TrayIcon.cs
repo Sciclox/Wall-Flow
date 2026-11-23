@@ -2,14 +2,13 @@ using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using WallFlow.Native;
+using static WallFlow.Native.NativeMethods;
 
 namespace WallFlow;
 
 internal class TrayIcon : IDisposable
 {
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool Shell_NotifyIcon(uint cmd, ref NOTIFYICONDATA data);
-
     private const uint NIM_ADD = 0;
     private const uint NIM_MODIFY = 1;
     private const uint NIM_DELETE = 2;
@@ -21,29 +20,6 @@ internal class TrayIcon : IDisposable
     private const uint WM_NOTIFYICON = 0x8000;
     private const uint WM_LBUTTONUP = 0x0202;
     private const uint WM_RBUTTONUP = 0x0205;
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct NOTIFYICONDATA
-    {
-        public uint cbSize;
-        public IntPtr hWnd;
-        public uint uID;
-        public uint uFlags;
-        public uint uCallbackMessage;
-        public IntPtr hIcon;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        public string szTip;
-        public uint dwState;
-        public uint dwStateMask;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-        public string szInfo;
-        public uint uVersion;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
-        public string szInfoTitle;
-        public uint dwInfoFlags;
-        public Guid guidItem;
-        public IntPtr hBalloonIcon;
-    }
 
     private NOTIFYICONDATA _nid;
     private HwndSource? _source;

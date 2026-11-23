@@ -66,6 +66,11 @@ public class WidgetManager
             return;
         }
 
+        if (type.Equals("PinnedApps", StringComparison.OrdinalIgnoreCase) && !SettingsService.Instance.EnableSpotlight)
+        {
+            return;
+        }
+
         if (type.Equals("LocalGallery", StringComparison.OrdinalIgnoreCase))
         {
             ToggleLocalGallery();
@@ -419,8 +424,14 @@ public class WidgetManager
         return _activeWidget != null && _activeWidget.IsOpen;
     }
 
-    public void CloseAllWidgets()
+    public void CloseAllWidgets(bool excludeSpotlight = false)
     {
+        if (excludeSpotlight && _activeWidgetType != null && 
+            (_activeWidgetType.Equals("PinnedApps", StringComparison.OrdinalIgnoreCase) || 
+             _activeWidgetType.Equals("Clipboard", StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
         CloseActiveWidget();
     }
 }

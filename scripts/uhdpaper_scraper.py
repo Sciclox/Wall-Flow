@@ -126,10 +126,9 @@ class Scraper:
         while next_url and page < max_pages:
             page += 1
             self._logger.info("Listing page %d: %s", page, next_url)
-            page_urls = self._extract_post_urls(next_url)
+            page_urls, next_url = self._parse_listing_page(next_url)
             urls.extend(page_urls)
-            next_url = self._next_page_url(next_url)
-            if next_url:
+            if next_url and page < max_pages:
                 time.sleep(self._delay)
 
         return self._dedup(urls)
@@ -160,7 +159,7 @@ class Scraper:
 
     # ---- Internal helpers ------------------------------------------------
 
-    def _extract_post_urls(self, url: str) -> list[str]:
+    def _parse_listing_page(self, url: str) -> tuple[list[str], Optional[str]]:
         resp = self._client.get(url)
         soup = BeautifulSoup(resp.text, "html.parser")
         found: set[str] = set()
@@ -170,17 +169,24 @@ class Scraper:
                 clean = href.split("?")[0]
                 found.add(urljoin(url, clean))
         self._logger.debug("  → %d post links found", len(found))
-        return sorted(found)
 
-    def _next_page_url(self, current_url: str) -> Optional[str]:
-        resp = self._client.get(current_url)
-        soup = BeautifulSoup(resp.text, "html.parser")
+        next_page: Optional[str] = None
         for a in soup.find_all("a"):
             text = (a.get_text(strip=True) or "").lower()
             href = a.get("href")
             if href and "next" in text:
-                return urljoin(current_url, href)
-        return None
+                next_page = urljoin(url, href)
+                break
+
+        return sorted(found), next_page
+
+    def _extract_post_urls(self, url: str) -> list[str]:
+        urls, _ = self._parse_listing_page(url)
+        return urls
+
+    def _next_page_url(self, current_url: str) -> Optional[str]:
+        _, next_url = self._parse_listing_page(current_url)
+        return next_url
 
     @staticmethod
     def _slug_from_url(post_url: str) -> str:

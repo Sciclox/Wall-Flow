@@ -1,0 +1,506 @@
+<Window x:Class="WallFlow.Windows.FloatingMediaOrbWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WallFlow Floating Squircle Media"
+        Width="96"
+        Height="96"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="{x:Null}"
+        Topmost="True"
+        ShowActivated="False"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        Loaded="Window_Loaded"
+        Deactivated="Window_Deactivated"
+        Closing="Window_Closing">
+
+    <Window.Resources>
+        <!-- Neutral Specular Glass Border Gradient (Subtle and minimal) -->
+        <LinearGradientBrush x:Key="NeutralGlassBorderBrush" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#25FFFFFF" Offset="0.0" />
+            <GradientStop Color="#10FFFFFF" Offset="1.0" />
+        </LinearGradientBrush>
+
+        <!-- Neutral Frosted Glass Background (Deep Smoky Obsidian Acrylic) -->
+        <LinearGradientBrush x:Key="NeutralGlassBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#EB18202E" Offset="0.0" />
+            <GradientStop Color="#DF121722" Offset="0.5" />
+            <GradientStop Color="#D50C1018" Offset="1.0" />
+        </LinearGradientBrush>
+
+        <!-- Icon button style with neutral glass hover -->
+        <Style x:Key="LiquidControlBtnStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" CornerRadius="12" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#25FFFFFF" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#35EA580C" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Search result item button style -->
+        <Style x:Key="LiquidSearchResultItemStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,1.5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="10" SnapsToDevicePixels="True">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Clean centered search textbox style: exact vertical center for caret and text -->
+        <Style x:Key="CenteredSearchTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="CaretBrush" Value="#EA580C" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontFamily" Value="Cascadia Code, Consolas, JetBrains Mono, monospace" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Focusable="False"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Slim ScrollViewer Style -->
+        <Style x:Key="LiquidScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                            <ScrollContentPresenter />
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       HorizontalAlignment="Right"
+                                       Orientation="Vertical"
+                                       Width="4"
+                                       Opacity="0.3"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Transparent Root Grid: clicks outside borders pass through -->
+    <Grid x:Name="RootLayout" Background="{x:Null}" RequestBringIntoView="RootLayout_RequestBringIntoView">
+        <StackPanel x:Name="MainStack"
+                    Orientation="Vertical"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Background="Transparent"
+                    RequestBringIntoView="RootLayout_RequestBringIntoView"
+                    MouseEnter="MainStack_MouseEnter"
+                    MouseLeave="MainStack_MouseLeave">
+
+            <!-- Main Floating Liquid Capsule Container: Size 76x76 Squircle (Tactile, Crisp, Modern) -->
+            <Border x:Name="PillBorder"
+                    Height="76"
+                    Width="76"
+                    CornerRadius="20"
+                    Margin="10"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Background="{StaticResource NeutralGlassBackgroundBrush}"
+                    BorderBrush="{StaticResource NeutralGlassBorderBrush}"
+                    BorderThickness="1.2"
+                    Cursor="Hand"
+                    MouseLeftButtonDown="PillBorder_MouseLeftButtonDown"
+                    MouseMove="PillBorder_MouseMove"
+                    MouseLeftButtonUp="PillBorder_MouseLeftButtonUp">
+
+                <!-- Soft drop shadow for airy floating feel -->
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.35" Color="#000000" />
+                </Border.Effect>
+
+                <Grid x:Name="PillGrid">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="PillCol0" Width="76" />
+                        <ColumnDefinition x:Name="PillCol1" Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Squircle Artwork & Glowing Perimeter Progress Core (74x74) -->
+                    <Grid x:Name="VinylColumnGrid" Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <!-- Perimeter Clockwise Progress Path (Solid Fluorescent Glowing Neon Arc) -->
+                        <Canvas Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False">
+                            <Path x:Name="SquircleProgressArc"
+                                  StrokeThickness="3.2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round">
+                                <Path.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Color="#FF6A00" Opacity="0.95" />
+                                </Path.Effect>
+                            </Path>
+                        </Canvas>
+
+                        <!-- Square Video Artwork Thumbnail (Frameless, clean, non-rotating) -->
+                        <Border x:Name="VinylContainer"
+                                Width="56"
+                                Height="56"
+                                CornerRadius="14"
+                                Background="#0F172A"
+                                Cursor="Hand"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                ClipToBounds="True">
+
+                            <Grid>
+                                <!-- Album / Video Artwork (Fills cleanly, frameless) -->
+                                <Border x:Name="VinylCenterArtwork" CornerRadius="14">
+                                    <Border.Background>
+                                        <ImageBrush x:Name="ImgArtworkBrush" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+
+                                <!-- Fallback Musical Note / Equalizer Icon if no artwork -->
+                                <Grid x:Name="FallbackIconGrid" Visibility="Collapsed">
+                                    <Border Background="#161E2E" CornerRadius="14" />
+                                    <TextBlock Text="&#xE8D6;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="18"
+                                               Foreground="#EA580C"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Expanded Pill Content: Italic Title, Circular Play & Chevron -->
+                    <Grid x:Name="PillExpandedContent"
+                          Grid.Column="1"
+                          Opacity="0"
+                          Visibility="Collapsed"
+                          Margin="6,0,10,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="PillTextCol" Width="*" />
+                            <ColumnDefinition x:Name="PillControlsCol" Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Track Title and Artist below -->
+                        <StackPanel x:Name="TrackTitleGrid"
+                                    Grid.Column="0"
+                                    VerticalAlignment="Center"
+                                    Cursor="Hand"
+                                    Margin="8,0,8,0">
+                            <!-- Track Title in elegant Italic font -->
+                            <TextBlock x:Name="TxtTrackTitle"
+                                       Text="Reproductor"
+                                       FontSize="13"
+                                       FontStyle="Italic"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F8FAFC"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="280"
+                                       VerticalAlignment="Center"
+                                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                            <!-- Author / Singer beneath title -->
+                            <TextBlock x:Name="TxtTrackArtist"
+                                       Text="YouTube Music"
+                                       FontSize="10.5"
+                                       FontWeight="Normal"
+                                       Foreground="#94A3B8"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="280"
+                                       Margin="0,1.5,0,0"
+                                       VerticalAlignment="Center"
+                                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                        </StackPanel>
+
+                        <!-- Controls Area: Repeat, Prev, Play Button, Next, Chevron Dropdown -->
+                        <StackPanel x:Name="PillControlsStack"
+                                    Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+
+                            <!-- Repeat Track Button -->
+                            <Button x:Name="BtnRepeat"
+                                    Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="26"
+                                    Height="26"
+                                    Click="BtnRepeat_Click"
+                                    ToolTip="Repetir canción"
+                                    Opacity="0.5"
+                                    Margin="0,0,2,0">
+                                <TextBlock x:Name="TxtRepeatGlyph"
+                                           Text="&#xE8EE;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="12"
+                                           Foreground="#CBD5E1"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Button>
+
+                            <!-- Previous Track -->
+                            <Button x:Name="BtnPrev"
+                                    Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="26"
+                                    Height="26"
+                                    Click="BtnPrev_Click"
+                                    ToolTip="Anterior">
+                                <TextBlock Text="&#xE892;" FontFamily="Segoe MDL2 Assets" FontSize="11" />
+                            </Button>
+
+                            <!-- Prominent Circular Accent Play/Pause Button -->
+                            <Button x:Name="BtnPlayPause"
+                                    Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="36"
+                                    Height="36"
+                                    Click="BtnPlayPause_Click"
+                                    ToolTip="Reproducir / Pausar"
+                                    Margin="2,0">
+                                <Border Width="34" Height="34" CornerRadius="17" Background="#EA580C">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.4" Color="#EA580C" />
+                                    </Border.Effect>
+                                    <TextBlock x:Name="TxtPlayPauseGlyph"
+                                               Text="&#xE769;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="14"
+                                               Foreground="#FFFFFF"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </Button>
+
+                            <!-- Next Track -->
+                            <Button x:Name="BtnNext"
+                                    Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="26"
+                                    Height="26"
+                                    Click="BtnNext_Click"
+                                    ToolTip="Siguiente">
+                                <TextBlock Text="&#xE893;" FontFamily="Segoe MDL2 Assets" FontSize="11" />
+                            </Button>
+
+                            <!-- Chevron Arrow Button to toggle Playlist & Search Popover -->
+                            <Button x:Name="BtnTogglePlaylist"
+                                    Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="28"
+                                    Height="28"
+                                    Click="BtnTogglePlaylist_Click"
+                                    ToolTip="Lista de reproducción y búsqueda"
+                                    Margin="2,0,0,0">
+                                <TextBlock x:Name="TxtChevronGlyph"
+                                           Text="&#xE70D;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="11"
+                                           Foreground="#CBD5E1"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- Inline Popover Card: Neutral Frosted Glass Playlist & Search -->
+            <Border x:Name="PopoverCard"
+                    Width="430"
+                    MaxHeight="500"
+                    CornerRadius="22"
+                    TextElement.FontFamily="Cascadia Code, Consolas, JetBrains Mono, monospace"
+                    Margin="10,0,10,10"
+                    Background="{StaticResource NeutralGlassBackgroundBrush}"
+                    BorderBrush="{StaticResource NeutralGlassBorderBrush}"
+                    BorderThickness="1.2"
+                    Padding="14"
+                    Visibility="Collapsed"
+                    Opacity="0">
+
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="26" ShadowDepth="4" Opacity="0.35" Color="#000000" />
+                </Border.Effect>
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Row 0: Top Header with Track Count Pill & Close Button -->
+                    <Grid Grid.Row="0" Margin="2,0,2,10">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="8" Height="8" CornerRadius="4" Background="#EA580C" Margin="0,0,8,0">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="6" ShadowDepth="0" Color="#EA580C" Opacity="0.8" />
+                                </Border.Effect>
+                            </Border>
+                            <TextBlock x:Name="TxtPlaylistTitle"
+                                       Text="COLA DE REPRODUCCIÓN"
+                                       FontSize="12.5"
+                                       FontWeight="Bold"
+                                       Foreground="#F8FAFC"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Border Background="#20EA580C" BorderBrush="#50EA580C" BorderThickness="1" CornerRadius="9" Padding="8,3" Margin="0,0,8,0">
+                                <TextBlock x:Name="TxtPlaylistCount" Text="0 canciones" FontSize="11" FontWeight="SemiBold" Foreground="#EA580C" />
+                            </Border>
+                            <Button Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="22"
+                                    Height="22"
+                                    Click="BtnClosePopup_Click"
+                                    ToolTip="Cerrar lista">
+                                <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="9" Foreground="#94A3B8" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Row 1: Pill-Shaped Search Input Box -->
+                    <Border Grid.Row="1"
+                            Height="38"
+                            CornerRadius="19"
+                            Background="#20000000"
+                            BorderBrush="#25FFFFFF"
+                            BorderThickness="1"
+                            Margin="0,0,0,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="36" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="&#xE721;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12.5"
+                                       Foreground="#EA580C"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+
+                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                <TextBox x:Name="TxtSearchBox"
+                                         Style="{StaticResource CenteredSearchTextBoxStyle}"
+                                         PreviewMouseLeftButtonDown="TxtSearchBox_PreviewMouseLeftButtonDown"
+                                         TextChanged="TxtSearchBox_TextChanged"
+                                         KeyDown="TxtSearchBox_KeyDown" />
+
+                                <!-- Placeholder text -->
+                                <TextBlock Text="Buscar en YouTube Music..."
+                                           FontFamily="Cascadia Code, Consolas, JetBrains Mono, monospace"
+                                           FontSize="12.5"
+                                           Foreground="#94A3B8"
+                                           VerticalAlignment="Center"
+                                           Margin="1,0,0,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                             <Setter Property="Visibility" Value="Collapsed" />
+                                             <Style.Triggers>
+                                                 <DataTrigger Binding="{Binding Text, ElementName=TxtSearchBox}" Value="">
+                                                     <Setter Property="Visibility" Value="Visible" />
+                                                 </DataTrigger>
+                                             </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <!-- Search Action Button -->
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource LiquidControlBtnStyle}"
+                                    Width="30"
+                                    Height="30"
+                                    Margin="0,0,3,0"
+                                    Click="BtnExecuteSearch_Click"
+                                    ToolTip="Buscar">
+                                <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="#EA580C" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Row 2: Scrollable Playlist Container -->
+                    <Grid Grid.Row="2" MinHeight="180">
+                        <ScrollViewer x:Name="SearchResultsScroll"
+                                      Style="{StaticResource LiquidScrollViewer}"
+                                      MaxHeight="290"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="SearchResultsContainer" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- Row 3: Popover Footer Quick Buttons -->
+                    <Grid Grid.Row="3" Margin="0,10,0,0">
+                        <Button Style="{StaticResource LiquidControlBtnStyle}"
+                                HorizontalAlignment="Left"
+                                Height="28"
+                                Padding="8,0"
+                                Click="BtnOpenYouTubeMusic_Click"
+                                ToolTip="Abrir reproductor completo">
+                            <Border CornerRadius="8" Background="#18FFFFFF" Padding="10,4">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#EA580C" />
+                                    <TextBlock Text="YouTube Music" FontFamily="Cascadia Code, Consolas, JetBrains Mono, monospace" FontSize="11.5" Foreground="#CBD5E1" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+
+                        <Button Style="{StaticResource LiquidControlBtnStyle}"
+                                HorizontalAlignment="Right"
+                                Height="28"
+                                Padding="8,0"
+                                Click="BtnOpenSpotlight_Click"
+                                ToolTip="Volver a Spotlight">
+                            <Border CornerRadius="8" Background="#18FFFFFF" Padding="10,4">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#CBD5E1" />
+                                    <TextBlock Text="Spotlight" FontFamily="Cascadia Code, Consolas, JetBrains Mono, monospace" FontSize="11.5" Foreground="#CBD5E1" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </Grid>
+</Window>

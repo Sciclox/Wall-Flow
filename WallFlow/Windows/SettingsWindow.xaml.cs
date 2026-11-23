@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -173,6 +174,19 @@ public partial class SettingsWindow : Window, IWidget
         _loading = true;
         var s = SettingsService.Instance;
 
+        if (EnableDockCheck != null) EnableDockCheck.IsChecked = s.EnableDock;
+        if (EnableDockInTabCheck != null) EnableDockInTabCheck.IsChecked = s.EnableDock;
+        if (EnableSpotlightCheck != null) EnableSpotlightCheck.IsChecked = s.EnableSpotlight;
+        if (EnableSpotlightInTabCheck != null) EnableSpotlightInTabCheck.IsChecked = s.EnableSpotlight;
+        if (HideWindowsTaskbarGlobalCheck != null) HideWindowsTaskbarGlobalCheck.IsChecked = s.HideWindowsTaskbar;
+        if (EnableWallpaperEffectsGlobalCheck != null) EnableWallpaperEffectsGlobalCheck.IsChecked = s.SelectedWallpaperEffect != "Ninguno";
+        if (EnableAutoChangeGlobalCheck != null) EnableAutoChangeGlobalCheck.IsChecked = LocalGalleryWindow.IsAutoChangeEnabled();
+        if (EnableSoundsGlobalCheck != null) EnableSoundsGlobalCheck.IsChecked = s.SoundEnabled;
+        if (EnableClipboardGlobalCheck != null) EnableClipboardGlobalCheck.IsChecked = !string.IsNullOrEmpty(s.Hotkey_Clipboard);
+
+        UpdateDockEnabledState(s.EnableDock);
+        UpdateSpotlightEnabledState(s.EnableSpotlight);
+
         UseWallpaperHoverCheck.IsChecked = string.IsNullOrEmpty(s.UserAccentColor);
         AccentHexBox.Text = s.UserAccentColor ?? "#AF52DE";
         UpdateAccentPreview();
@@ -250,10 +264,7 @@ public partial class SettingsWindow : Window, IWidget
         WeatherCityBox.Text = s.WeatherCity ?? "";
 
         // Load hotkeys settings
-        Hotkey_PinnedApps_Text.Text = s.Hotkey_PinnedApps;
-        Hotkey_Weather_Text.Text = s.Hotkey_Weather;
-        Hotkey_Calendar_Text.Text = s.Hotkey_Calendar;
-        Hotkey_Media_Text.Text = s.Hotkey_Media;
+        Hotkey_PinnedApps_Spotlight_Text.Text = s.Hotkey_PinnedApps;
         Hotkey_Power_Text.Text = s.Hotkey_Power;
         Hotkey_Settings_Text.Text = s.Hotkey_Settings;
         Hotkey_LocalGallery_Text.Text = s.Hotkey_LocalGallery;
@@ -264,7 +275,9 @@ public partial class SettingsWindow : Window, IWidget
         Hotkey_Clipboard_Text.Text = s.Hotkey_Clipboard;
         Hotkey_YouTube_Text.Text = s.Hotkey_YouTube;
         Hotkey_WebBrowser_Text.Text = s.Hotkey_WebBrowser;
-        Hotkey_TogglePinApp_Text.Text = s.Hotkey_TogglePinApp;
+        Hotkey_RunAsAdmin_Spotlight_Text.Text = s.Hotkey_RunAsAdmin;
+        if (Hotkey_PinnedApps_Spotlight_Text != null) Hotkey_PinnedApps_Spotlight_Text.Text = s.Hotkey_PinnedApps;
+        if (Hotkey_RunAsAdmin_Spotlight_Text != null) Hotkey_RunAsAdmin_Spotlight_Text.Text = s.Hotkey_RunAsAdmin;
 
         // Load effect color settings
         EffectColor_Rain_Hex.Text = s.EffectColor_Rain;
@@ -479,11 +492,12 @@ public partial class SettingsWindow : Window, IWidget
 
             var preferred = new System.Collections.Generic.List<string> 
             { 
-                "gemini-2.5-flash", 
-                "gemini-2.5-flash-lite", 
-                "gemini-2.0-flash", 
-                "gemini-1.5-flash", 
-                "gemini-1.5-flash-latest" 
+                "gemini-3.6-flash", 
+                "gemini-3-flash-preview", 
+                "gemini-3.5-flash-lite", 
+                "gemini-flash-lite-latest", 
+                "gemini-3.7-flash",
+                "gemini-3.8-flash"
             };
 
             var reordered = new System.Collections.Generic.List<string>();
@@ -641,6 +655,153 @@ public partial class SettingsWindow : Window, IWidget
         }
     }
 
+    private void UpdateDockEnabledState(bool enabled)
+    {
+        if (DockSettingsContainer != null)
+        {
+            DockSettingsContainer.IsEnabled = enabled;
+            DockSettingsContainer.Opacity = enabled ? 1.0 : 0.35;
+        }
+        if (DockDisabledWarningBorder != null)
+        {
+            DockDisabledWarningBorder.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
+    private void UpdateSpotlightEnabledState(bool enabled)
+    {
+        if (SpotlightSettingsContainer != null)
+        {
+            SpotlightSettingsContainer.IsEnabled = enabled;
+            SpotlightSettingsContainer.Opacity = enabled ? 1.0 : 0.35;
+        }
+        if (SpotlightDisabledWarningBorder != null)
+        {
+            SpotlightDisabledWarningBorder.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
+    private void EnableDockCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableDockCheck.IsChecked == true;
+        if (EnableDockInTabCheck != null && EnableDockInTabCheck.IsChecked != isChecked)
+        {
+            EnableDockInTabCheck.IsChecked = isChecked;
+        }
+        UpdateDockEnabledState(isChecked);
+    }
+
+    private void EnableDockInTabCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableDockInTabCheck.IsChecked == true;
+        if (EnableDockCheck != null && EnableDockCheck.IsChecked != isChecked)
+        {
+            EnableDockCheck.IsChecked = isChecked;
+        }
+        UpdateDockEnabledState(isChecked);
+    }
+
+    private void EnableSpotlightCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableSpotlightCheck.IsChecked == true;
+        if (EnableSpotlightInTabCheck != null && EnableSpotlightInTabCheck.IsChecked != isChecked)
+        {
+            EnableSpotlightInTabCheck.IsChecked = isChecked;
+        }
+        UpdateSpotlightEnabledState(isChecked);
+    }
+
+    private void EnableSpotlightInTabCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableSpotlightInTabCheck.IsChecked == true;
+        if (EnableSpotlightCheck != null && EnableSpotlightCheck.IsChecked != isChecked)
+        {
+            EnableSpotlightCheck.IsChecked = isChecked;
+        }
+        UpdateSpotlightEnabledState(isChecked);
+    }
+
+    private void HideWindowsTaskbarGlobalCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = HideWindowsTaskbarGlobalCheck.IsChecked == true;
+        if (HideTaskbarCheck != null && HideTaskbarCheck.IsChecked != isChecked)
+        {
+            HideTaskbarCheck.IsChecked = isChecked;
+        }
+    }
+
+    private void HideTaskbarCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = HideTaskbarCheck.IsChecked == true;
+        if (HideWindowsTaskbarGlobalCheck != null && HideWindowsTaskbarGlobalCheck.IsChecked != isChecked)
+        {
+            HideWindowsTaskbarGlobalCheck.IsChecked = isChecked;
+        }
+    }
+
+    private void EnableWallpaperEffectsGlobalCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableWallpaperEffectsGlobalCheck.IsChecked == true;
+        if (WeatherEffectCombo != null)
+        {
+            if (isChecked)
+            {
+                if (WeatherEffectCombo.SelectedIndex <= 0 && WeatherEffectCombo.Items.Count > 1)
+                {
+                    WeatherEffectCombo.SelectedIndex = 1; // Primer efecto disponible
+                }
+            }
+            else
+            {
+                WeatherEffectCombo.SelectedIndex = 0; // Ninguno
+            }
+        }
+    }
+
+    private void EnableAutoChangeGlobalCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableAutoChangeGlobalCheck.IsChecked == true;
+        if (AutoChangeCheck != null && AutoChangeCheck.IsChecked != isChecked)
+        {
+            AutoChangeCheck.IsChecked = isChecked;
+        }
+    }
+
+    private void EnableSoundsGlobalCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableSoundsGlobalCheck.IsChecked == true;
+        if (SoundEnabledCheck != null && SoundEnabledCheck.IsChecked != isChecked)
+        {
+            SoundEnabledCheck.IsChecked = isChecked;
+        }
+    }
+
+    private void EnableClipboardGlobalCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool isChecked = EnableClipboardGlobalCheck.IsChecked == true;
+        if (Hotkey_Clipboard_Text != null)
+        {
+            if (isChecked && string.IsNullOrWhiteSpace(Hotkey_Clipboard_Text.Text))
+            {
+                Hotkey_Clipboard_Text.Text = "Alt+C";
+            }
+            else if (!isChecked)
+            {
+                Hotkey_Clipboard_Text.Text = "";
+            }
+        }
+    }
+
     private void UseWallpaperHover_Changed(object sender, RoutedEventArgs e)
     {
         UpdateEnabledStates();
@@ -754,16 +915,31 @@ public partial class SettingsWindow : Window, IWidget
 
     // ─── Swatches Palette & Presets Handlers ───
 
+    private static readonly Dictionary<string, string[]> GradientPresets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["neon"] = new[] { "#00F5FF", "#BF00FF", "#FF006E" },
+        ["sunset"] = new[] { "#FF6B35", "#FF2D87", "#D946EF" },
+        ["ocean"] = new[] { "#007AFF", "#5856D6", "#AF52DE" },
+        ["forest"] = new[] { "#059669", "#10B981", "#34D399" },
+        ["fire"] = new[] { "#FF4500", "#FF0080", "#7B00FF" },
+        ["solarized"] = new[] { "#859900", "#268BD2", "#2AA198" },
+        ["aurora"] = new[] { "#06D6A0", "#118AB2", "#7B2FF7" },
+        ["lava"] = new[] { "#FF4500", "#FF0080", "#7B00FF" },
+        ["pastel"] = new[] { "#A78BFA", "#F472B6", "#FB923C" }
+    };
+
     private void PaletteColor_Click(object sender, MouseButtonEventArgs e)
     {
-        if (UseWallpaperHoverCheck.IsChecked == true)
-        {
-            UseWallpaperHoverCheck.IsChecked = false;
-        }
-
         if (sender is Border border && border.Background is SolidColorBrush brush)
         {
+            UseWallpaperHoverCheck.IsChecked = false;
             AccentHexBox.Text = brush.Color.ToString();
+            UpdateAccentPreview();
+            UpdateEnabledStates();
+
+            var s = SettingsService.Instance;
+            s.UserAccentColor = AccentHexBox.Text.Trim();
+            SettingsService.NotifyPreviewColorsRequested();
         }
     }
 
@@ -783,22 +959,44 @@ public partial class SettingsWindow : Window, IWidget
         }
     }
 
-    private void GradientPreset_Click(object sender, MouseButtonEventArgs e)
+    private void GradientPreset_Click(object sender, RoutedEventArgs e)
     {
-        if (UseWallpaperBorderCheck.IsChecked == true)
+        string[]? colors = null;
+
+        if (sender is FrameworkElement fe && fe.Tag is string tagStr)
         {
-            UseWallpaperBorderCheck.IsChecked = false;
+            if (GradientPresets.TryGetValue(tagStr, out var presetColors))
+            {
+                colors = presetColors;
+            }
+            else if (tagStr.Contains(','))
+            {
+                var parts = tagStr.Split(',');
+                if (parts.Length == 3)
+                {
+                    colors = parts;
+                }
+            }
         }
 
-        if (sender is Border border && border.Tag is string colorsCsv)
+        if (colors != null && colors.Length == 3)
         {
-            var parts = colorsCsv.Split(',');
-            if (parts.Length == 3)
-            {
-                BorderHex1.Text = parts[0];
-                BorderHex2.Text = parts[1];
-                BorderHex3.Text = parts[2];
-            }
+            _loading = true;
+            UseWallpaperBorderCheck.IsChecked = false;
+            BorderHex1.Text = colors[0];
+            BorderHex2.Text = colors[1];
+            BorderHex3.Text = colors[2];
+            _loading = false;
+
+            UpdateBorderPreviews();
+            UpdateEnabledStates();
+
+            // Real-time live preview on Dock
+            var s = SettingsService.Instance;
+            s.UserBorderColor1 = BorderHex1.Text.Trim();
+            s.UserBorderColor2 = BorderHex2.Text.Trim();
+            s.UserBorderColor3 = BorderHex3.Text.Trim();
+            SettingsService.NotifyPreviewColorsRequested();
         }
     }
 
@@ -890,9 +1088,9 @@ public partial class SettingsWindow : Window, IWidget
 
             // Save Spotlight settings
             s.SpotlightShowFavorites = SpotlightShowFavoritesCheck.IsChecked == true;
-            if (SpotlightThemeModeCombo.SelectedItem is ComboBoxItem selectedThemeItem && selectedThemeItem.Tag != null)
+            if (SpotlightThemeModeCombo?.SelectedItem is ComboBoxItem selectedThemeItem && selectedThemeItem.Tag != null)
             {
-                s.SpotlightThemeMode = selectedThemeItem.Tag.ToString();
+                s.SpotlightThemeMode = selectedThemeItem.Tag.ToString() ?? "Dock";
                 s.SpotlightUseDockColors = (s.SpotlightThemeMode == "Dock");
             }
             else
@@ -933,6 +1131,13 @@ public partial class SettingsWindow : Window, IWidget
 
 
 
+            s.EnableDock = EnableDockCheck != null ? (EnableDockCheck.IsChecked == true) : (EnableDockInTabCheck?.IsChecked == true);
+            s.EnableSpotlight = EnableSpotlightCheck != null ? (EnableSpotlightCheck.IsChecked == true) : (EnableSpotlightInTabCheck?.IsChecked == true);
+            if (s.EnableSpotlight && string.IsNullOrWhiteSpace(Hotkey_PinnedApps_Spotlight_Text.Text))
+            {
+                Hotkey_PinnedApps_Spotlight_Text.Text = "Alt+Space";
+            }
+
             s.AutoHide = AutoHideCheck.IsChecked == true;
             s.HideWindowsTaskbar = HideTaskbarCheck.IsChecked == true;
             s.DockPosition = DockPositionCombo.SelectedIndex == 1 ? "Bottom" : "Top";
@@ -947,10 +1152,7 @@ public partial class SettingsWindow : Window, IWidget
             s.ShowWeather = ShowWeatherCheck.IsChecked == true;
             s.ShowMediaPlayer = ShowMediaCheck.IsChecked == true;
 
-            s.Hotkey_PinnedApps = Hotkey_PinnedApps_Text.Text;
-            s.Hotkey_Weather = Hotkey_Weather_Text.Text;
-            s.Hotkey_Calendar = Hotkey_Calendar_Text.Text;
-            s.Hotkey_Media = Hotkey_Media_Text.Text;
+            s.Hotkey_PinnedApps = Hotkey_PinnedApps_Spotlight_Text.Text;
             s.Hotkey_Power = Hotkey_Power_Text.Text;
             s.Hotkey_Settings = Hotkey_Settings_Text.Text;
             s.Hotkey_LocalGallery = Hotkey_LocalGallery_Text.Text;
@@ -960,7 +1162,7 @@ public partial class SettingsWindow : Window, IWidget
             s.Hotkey_ToggleDock = Hotkey_ToggleDock_Text.Text;
             s.Hotkey_Clipboard = Hotkey_Clipboard_Text.Text;
             s.Hotkey_YouTube = Hotkey_YouTube_Text.Text;
-            s.Hotkey_TogglePinApp = Hotkey_TogglePinApp_Text.Text;
+            s.Hotkey_RunAsAdmin = Hotkey_RunAsAdmin_Spotlight_Text.Text;
 
             s.EffectColor_Rain = EffectColor_Rain_Hex.Text;
             s.EffectColor_Rain2 = EffectColor_Rain2_Hex.Text;
@@ -1030,6 +1232,22 @@ public partial class SettingsWindow : Window, IWidget
             // Save Auto-Change Settings
             LocalGalleryWindow.SetAutoChangeEnabled(AutoChangeCheck.IsChecked == true);
             LocalGalleryWindow.SetCurrentSpeedIndex(AutoIntervalCombo.SelectedIndex);
+            s.Hotkey_RunAsAdmin = Hotkey_RunAsAdmin_Spotlight_Text.Text;
+
+            // Save custom dock icons and commands settings
+            s.ShowIconPinnedApps = ShowIconPinnedAppsCheck.IsChecked == true;
+            s.ShowIconLocalGallery = ShowIconLocalGalleryCheck.IsChecked == true;
+            s.ShowIconOnlineGallery = ShowIconOnlineGalleryCheck.IsChecked == true;
+            s.ShowIconYouTubeMusic = ShowIconYouTubeMusicCheck.IsChecked == true;
+            s.ShowIconSettings = ShowIconSettingsCheck.IsChecked == true;
+            s.ShowIconVolume = ShowIconVolumeCheck.IsChecked == true;
+            s.ShowIconNotifications = ShowIconNotificationsCheck.IsChecked == true;
+            s.ShowIconShowDesktop = ShowIconShowDesktopCheck.IsChecked == true;
+            s.ShowIconPower = ShowIconPowerCheck.IsChecked == true;
+
+            // Save Auto-Change Settings
+            LocalGalleryWindow.SetAutoChangeEnabled(AutoChangeCheck.IsChecked == true);
+            LocalGalleryWindow.SetCurrentSpeedIndex(AutoIntervalCombo.SelectedIndex);
             if (AutoModeCombo.SelectedIndex == 1)
                 LocalGalleryWindow.SelectRandomMode();
             else
@@ -1056,7 +1274,14 @@ public partial class SettingsWindow : Window, IWidget
     {
         try
         {
-            _loading = true;
+            if (EnableDockCheck != null) EnableDockCheck.IsChecked = true;
+            if (EnableDockInTabCheck != null) EnableDockInTabCheck.IsChecked = true;
+            if (EnableSpotlightCheck != null) EnableSpotlightCheck.IsChecked = true;
+            if (EnableSpotlightInTabCheck != null) EnableSpotlightInTabCheck.IsChecked = true;
+            if (HideWindowsTaskbarGlobalCheck != null) HideWindowsTaskbarGlobalCheck.IsChecked = false;
+            UpdateDockEnabledState(true);
+            UpdateSpotlightEnabledState(true);
+
             UseWallpaperHoverCheck.IsChecked = true;
             UseWallpaperBorderCheck.IsChecked = true;
             UseDefaultDockBgCheck.IsChecked = true;
@@ -1088,10 +1313,8 @@ public partial class SettingsWindow : Window, IWidget
             WeatherCityBox.Text = "";
 
             // Reset hotkeys
-            Hotkey_PinnedApps_Text.Text = "";
-            Hotkey_Weather_Text.Text = "";
-            Hotkey_Calendar_Text.Text = "";
-            Hotkey_Media_Text.Text = "";
+            Hotkey_PinnedApps_Spotlight_Text.Text = "";
+            Hotkey_RunAsAdmin_Spotlight_Text.Text = "";
             Hotkey_Power_Text.Text = "";
             Hotkey_Settings_Text.Text = "";
             Hotkey_LocalGallery_Text.Text = "";
@@ -1101,10 +1324,6 @@ public partial class SettingsWindow : Window, IWidget
             Hotkey_ToggleDock_Text.Text = "";
             Hotkey_Clipboard_Text.Text = "";
             Hotkey_WebBrowser_Text.Text = "";
-            Hotkey_TogglePinApp_Text.Text = "Ctrl+P";
-
-            // Reset effect colors
-            EffectColor_Rain_Hex.Text = "#B4ADD8E6";
             EffectColor_Rain2_Hex.Text = "#80007AFF";
             EffectColor_Snow_Hex.Text = "#FFFFFF";
             EffectColor_Snow2_Hex.Text = "#80B0E0FF";
@@ -1332,78 +1551,13 @@ public partial class SettingsWindow : Window, IWidget
             UseWallpaperBorderCheck.IsChecked = false;
             UseDefaultDockBgCheck.IsChecked = false;
 
-            switch (theme)
+            if (ThemePresets.TryGetDockTheme(theme, out var preset) && preset != null)
             {
-                case "cyberpunk":
-                    AccentHexBox.Text = "#FF0055";
-                    BorderHex1.Text = "#FF0055";
-                    BorderHex2.Text = "#00F0FF";
-                    BorderHex3.Text = "#FF0055";
-                    DockBgHexBox.Text = "#E60B0B0F";
-                    break;
-                case "dracula":
-                    AccentHexBox.Text = "#BD93F9";
-                    BorderHex1.Text = "#BD93F9";
-                    BorderHex2.Text = "#FF79C6";
-                    BorderHex3.Text = "#8BE9FD";
-                    DockBgHexBox.Text = "#F0282A36";
-                    break;
-                case "tokyo_night":
-                    AccentHexBox.Text = "#7AA2F7";
-                    BorderHex1.Text = "#BB9AF7";
-                    BorderHex2.Text = "#7AA2F7";
-                    BorderHex3.Text = "#2AC3DE";
-                    DockBgHexBox.Text = "#F01A1B26";
-                    break;
-                case "nord_frost":
-                    AccentHexBox.Text = "#88C0D0";
-                    BorderHex1.Text = "#81A1C1";
-                    BorderHex2.Text = "#88C0D0";
-                    BorderHex3.Text = "#8FBCBB";
-                    DockBgHexBox.Text = "#F02E3440";
-                    break;
-                case "rose_pine":
-                    AccentHexBox.Text = "#EBBCBA";
-                    BorderHex1.Text = "#9CCFD8";
-                    BorderHex2.Text = "#EBBCBA";
-                    BorderHex3.Text = "#F6C177";
-                    DockBgHexBox.Text = "#F5191724";
-                    break;
-                case "vaporwave":
-                    AccentHexBox.Text = "#FF007F";
-                    BorderHex1.Text = "#FF007F";
-                    BorderHex2.Text = "#7B00FF";
-                    BorderHex3.Text = "#00F5FF";
-                    DockBgHexBox.Text = "#E812001A";
-                    break;
-                case "glass_light":
-                    AccentHexBox.Text = "#007AFF";
-                    BorderHex1.Text = "#80FFFFFF";
-                    BorderHex2.Text = "#40FFFFFF";
-                    BorderHex3.Text = "#80FFFFFF";
-                    DockBgHexBox.Text = "#20FFFFFF";
-                    break;
-                case "emerald":
-                    AccentHexBox.Text = "#10B981";
-                    BorderHex1.Text = "#059669";
-                    BorderHex2.Text = "#34D399";
-                    BorderHex3.Text = "#10B981";
-                    DockBgHexBox.Text = "#E0061E14";
-                    break;
-                case "sunset":
-                    AccentHexBox.Text = "#FF5E3A";
-                    BorderHex1.Text = "#FF5E3A";
-                    BorderHex2.Text = "#FF2A68";
-                    BorderHex3.Text = "#FF5E3A";
-                    DockBgHexBox.Text = "#D90F0B1E";
-                    break;
-                case "solarized":
-                    AccentHexBox.Text = "#268BD2";
-                    BorderHex1.Text = "#859900";
-                    BorderHex2.Text = "#268BD2";
-                    BorderHex3.Text = "#2AA198";
-                    DockBgHexBox.Text = "#F0002B36";
-                    break;
+                AccentHexBox.Text = preset.Accent;
+                BorderHex1.Text = preset.Border1;
+                BorderHex2.Text = preset.Border2;
+                BorderHex3.Text = preset.Border3;
+                DockBgHexBox.Text = preset.DockBg;
             }
 
             _loading = false;
@@ -1412,29 +1566,17 @@ public partial class SettingsWindow : Window, IWidget
             UpdateDockBgPreview();
             UpdateEnabledStates();
 
-            // Apply theme colors in real-time (live preview)
+            // Apply theme colors directly to SettingsService and notify Dock in real-time
             try
             {
                 var s = SettingsService.Instance;
-                string? prevAccent = s.UserAccentColor;
-                string? prevBorder1 = s.UserBorderColor1;
-                string? prevBorder2 = s.UserBorderColor2;
-                string? prevBorder3 = s.UserBorderColor3;
-                string? prevDockBg = s.UserDockBackgroundColor;
-
-                s.UserAccentColor = UseWallpaperHoverCheck.IsChecked == true ? null : AccentHexBox.Text.Trim();
-                s.UserBorderColor1 = UseWallpaperBorderCheck.IsChecked == true ? null : BorderHex1.Text.Trim();
-                s.UserBorderColor2 = UseWallpaperBorderCheck.IsChecked == true ? null : BorderHex2.Text.Trim();
-                s.UserBorderColor3 = UseWallpaperBorderCheck.IsChecked == true ? null : BorderHex3.Text.Trim();
-                s.UserDockBackgroundColor = UseDefaultDockBgCheck.IsChecked == true ? null : DockBgHexBox.Text.Trim();
+                s.UserAccentColor = AccentHexBox.Text.Trim();
+                s.UserBorderColor1 = BorderHex1.Text.Trim();
+                s.UserBorderColor2 = BorderHex2.Text.Trim();
+                s.UserBorderColor3 = BorderHex3.Text.Trim();
+                s.UserDockBackgroundColor = DockBgHexBox.Text.Trim();
 
                 SettingsService.NotifyPreviewColorsRequested();
-
-                s.UserAccentColor = prevAccent;
-                s.UserBorderColor1 = prevBorder1;
-                s.UserBorderColor2 = prevBorder2;
-                s.UserBorderColor3 = prevBorder3;
-                s.UserDockBackgroundColor = prevDockBg;
             }
             catch (Exception ex)
             {
@@ -1452,7 +1594,7 @@ public partial class SettingsWindow : Window, IWidget
             else if (btn == TabBtn2) index = 2;
             else if (btn == TabBtn3) index = 3;
             else if (btn == TabBtn4) index = 4;
-            else if (btn == TabBtn6) index = 5;
+            
             
             UpdateTabSelection(index);
         }
@@ -1463,7 +1605,7 @@ public partial class SettingsWindow : Window, IWidget
         if (SettingsTabControl == null) return;
         SettingsTabControl.SelectedIndex = index;
 
-        var buttons = new[] { TabBtn0, TabBtn1, TabBtn2, TabBtn3, TabBtn4, TabBtn6 };
+        var buttons = new[] { TabBtn0, TabBtn1, TabBtn2, TabBtn3, TabBtn4 };
         for (int i = 0; i < buttons.Length; i++)
         {
             if (buttons[i] == null) continue;
@@ -1484,7 +1626,9 @@ public partial class SettingsWindow : Window, IWidget
     {
         if (sender is Button btn && btn.Tag is string tag)
         {
-            var textBox = FindName($"Hotkey_{tag}_Text") as TextBox;
+            string searchTag = tag.Replace("_Spotlight", "");
+            var textBox = (FindName($"Hotkey_{tag}_Text") as TextBox)
+                       ?? (FindName($"Hotkey_{searchTag}_Text") as TextBox);
             if (textBox != null)
             {
                 if (_isCapturingHotkey && _activeCaptureTextBox != null)
@@ -1506,12 +1650,20 @@ public partial class SettingsWindow : Window, IWidget
     {
         if (sender is Button btn && btn.Tag is string tag)
         {
-            var textBox = FindName($"Hotkey_{tag}_Text") as TextBox;
-            if (textBox != null)
-            {
-                textBox.Text = "";
-            }
+            string searchTag = tag.Replace("_Spotlight", "");
+            var tb1 = FindName($"Hotkey_{searchTag}_Text") as TextBox;
+            if (tb1 != null) tb1.Text = "";
+            var tb2 = FindName($"Hotkey_{searchTag}_Spotlight_Text") as TextBox;
+            if (tb2 != null) tb2.Text = "";
         }
+    }
+
+    private void Hotkey_PinnedApps_Spotlight_TextChanged(object sender, TextChangedEventArgs e)
+    {
+    }
+
+    private void Hotkey_RunAsAdmin_Spotlight_TextChanged(object sender, TextChangedEventArgs e)
+    {
     }
 
     private void EffectColor_TextChanged(object sender, TextChangedEventArgs e)
@@ -2038,5 +2190,9 @@ public partial class SettingsWindow : Window, IWidget
             }
         }
         if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+    }
+
+    private void MouseInteractionCheck_Changed(object sender, RoutedEventArgs e)
+    {
     }
 }

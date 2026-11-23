@@ -27,56 +27,8 @@ public partial class CalendarWindow : Window, IWidget
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // Apply acrylic blur
-        BackdropHelper.ApplyAcrylic(this);
-        BackdropHelper.UpdateWindowRegion(this, 0);
-
-        // Position window directly below the Clock section of the dock
-        if (DockWindow.Instance != null)
-        {
-            var screens = System.Windows.Forms.Screen.AllScreens;
-            var screenIndex = Math.Clamp(SettingsService.Instance.DockMonitorIndex, 0, screens.Length - 1);
-            var screen = screens[screenIndex];
-            var dpi = VisualTreeHelper.GetDpi(this);
-
-            double screenLeft = screen.Bounds.X / dpi.DpiScaleX;
-            double screenRight = (screen.Bounds.X + screen.Bounds.Width) / dpi.DpiScaleX;
-
-            Left = _targetLeft;
-
-            // Ensure window does not go off-screen on the target monitor
-            if (Left < screenLeft) Left = screenLeft + 10;
-            if (Left + Width > screenRight)
-            {
-                Left = screenRight - Width - 10;
-            }
-
-            bool isBottom = SettingsService.Instance.DockPosition == "Bottom";
-            double finalTop = isBottom 
-                ? DockWindow.Instance.Top - Height 
-                : DockWindow.Instance.Top + DockWindow.Instance.ActualHeight;
-            
-            Top = isBottom ? finalTop + 15 : finalTop - 15;
-            Opacity = 0;
-
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-            var slide = new System.Windows.Media.Animation.DoubleAnimation(isBottom ? finalTop + 15 : finalTop - 15, finalTop, TimeSpan.FromMilliseconds(250)) 
-            { 
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } 
-            };
-
-            BeginAnimation(OpacityProperty, fadeIn);
-            BeginAnimation(TopProperty, slide);
-        }
-        else
-        {
-            Left = _targetLeft;
-            bool isBottom = SettingsService.Instance.DockPosition == "Bottom";
-            Top = isBottom ? SystemParameters.PrimaryScreenHeight - Height - 56 : 56;
-        }
+        FlyoutWindowHelper.ApplyFlyoutStyle(this, RootBorder, 8);
+        FlyoutWindowHelper.PositionAndAnimateFlyout(this, _targetLeft);
 
         // Set today's date info on the left pane
         var today = DateTime.Today;

@@ -123,6 +123,9 @@ public partial class App : Application
             InitialUrl = targetUrl;
         }
 
+        // Ensure settings are loaded first thing on startup
+        try { Services.SettingsService.Load(); } catch { }
+
         // Apply saved font family
         try { ApplyFont(Services.SettingsService.Instance.AppFontFamily); } catch { }
 
@@ -178,7 +181,17 @@ public partial class App : Application
         SystemCoordinator.Instance.Initialize(mainHwnd);
 
         _dockWindow = ServiceProvider.GetRequiredService<DockWindow>();
-        _dockWindow.Show();
+        if (Services.SettingsService.Instance.EnableDock)
+        {
+            _dockWindow.Show();
+        }
+        else
+        {
+            _dockWindow.Hide();
+        }
+
+        // Preload and initialize Floating Media Orb in background
+        try { WallFlow.Windows.FloatingMediaOrbWindow.EnsureInitialized(); } catch { }
 
         // Initialize dynamic colors from wallpaper (Auto-Theming)
         WallpaperThemeService.Instance.UpdateThemeFromWallpaper();
@@ -208,7 +221,20 @@ public partial class App : Application
         _trayIcon.Text = "WallFlow";
         _trayIcon.LeftClick += () =>
         {
-            _dockWindow?.ToggleDockVisibility();
+            if (Services.SettingsService.Instance.EnableDock)
+            {
+                _dockWindow?.ToggleDockVisibility();
+            }
+            else if (Services.SettingsService.Instance.EnableSpotlight)
+            {
+                WidgetManager.Instance.ToggleWidget("PinnedApps");
+            }
+            else
+            {
+                var win = WallFlow.Windows.SettingsWindow.Instance ?? ServiceProvider.GetRequiredService<WallFlow.Windows.SettingsWindow>();
+                win.Show();
+                try { win.Activate(); } catch { }
+            }
         };
         _trayIcon.RightClick += ShowContextMenu;
         _trayIcon.Show();
@@ -303,6 +329,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemCoordinator.Instance.Shutdown();
+        SoundService.Shutdown();
         _trayIcon?.Dispose();
         if (_appMutex != null)
         {
@@ -323,7 +350,8 @@ public partial class App : Application
         {
             var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow");
             Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, "crash.txt"), ex.ToString());
+            string entry = $"[{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}] CRASH:{Environment.NewLine}{ex}{Environment.NewLine}{new string('-', 50)}{Environment.NewLine}";
+            File.AppendAllText(Path.Combine(folder, "crash.log"), entry);
         }
         catch { }
     }

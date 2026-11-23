@@ -102,31 +102,9 @@ namespace WallFlow.Services
                                 city = cityProp.GetString() ?? "Lima";
                             }
 
-                            // Smart Redirect: If IP geolocation points anywhere in Lima or Villa Poeta,
-                            // force it to their actual location in Carabayllo Torre Blanca!
-                            bool isLima = city.IndexOf("Lima", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                         city.IndexOf("Villa", StringComparison.OrdinalIgnoreCase) >= 0;
-                            if (root.TryGetProperty("region", out var regProp) && 
-                                (regProp.GetString() ?? "").IndexOf("Lima", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                isLima = true;
-                            }
-
-                            if (isLima)
-                            {
-                                lat = -11.8489;
-                                lon = -77.0060;
-                                city = "Carabayllo Torre Blanca";
-                            }
                         }
                     }
-                    catch { city = "Carabayllo Torre Blanca"; }
-                }
-
-                // Check if coordinates are near Carabayllo Torre Blanca
-                if (Math.Abs(lat - (-11.8489)) < 0.05 && Math.Abs(lon - (-77.0060)) < 0.05)
-                {
-                    city = "Carabayllo Torre Blanca";
+                    catch { /* Fallback to default city */ }
                 }
 
                 // 2. Fetch weather forecast

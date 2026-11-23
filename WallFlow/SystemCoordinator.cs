@@ -7,6 +7,8 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using WallFlow.Services;
+using WallFlow.Native;
+using static WallFlow.Native.NativeMethods;
 
 namespace WallFlow;
 
@@ -28,38 +30,6 @@ public class SystemCoordinator
     private IntPtr _lifecycleHook = IntPtr.Zero;
     private IntPtr _stateHook = IntPtr.Zero;
 
-    // Win32 APIs
-    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
-    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr hObject);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool QueryFullProcessImageNameW(IntPtr hProcess, int dwFlags, StringBuilder lpExeName, ref int lpdwSize);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
-    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventProc lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
-    [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
-    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassNameW(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
-    [DllImport("user32.dll", SetLastError = true)] private static extern bool AddClipboardFormatListener(IntPtr hwnd);
-    [DllImport("user32.dll", SetLastError = true)] private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
-    [DllImport("shell32.dll")] private static extern int SHQueryUserNotificationState(out int pquns);
-
-    private delegate void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
     private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     private const uint EVENT_OBJECT_CREATE = 0x8000;
     private const uint EVENT_OBJECT_DESTROY = 0x8001;
@@ -80,8 +50,11 @@ public class SystemCoordinator
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const int WM_CLIPBOARDUPDATE = 0x031D;
 
-    private static int GetWindowLong(IntPtr hWnd, int nIndex) =>
-        IntPtr.Size == 8 ? (int)GetWindowLongPtr64(hWnd, nIndex) : GetWindowLong32(hWnd, nIndex);
+    private static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex) =>
+        IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, nIndex) : new IntPtr(GetWindowLong32(hWnd, nIndex));
+
+    private static long GetWindowLong(IntPtr hWnd, int nIndex) =>
+        GetWindowLongPtr(hWnd, nIndex).ToInt64();
 
     public void Initialize(IntPtr mainHwnd)
     {
@@ -178,7 +151,7 @@ public class SystemCoordinator
                 CheckGameMode();
             }
 
-            if (eventType == EVENT_SYSTEM_FOREGROUND || (now - _lastWindowRefreshTime).TotalMilliseconds >= 50)
+            if (Services.SettingsService.Instance.EnableDock && (eventType == EVENT_SYSTEM_FOREGROUND || (now - _lastWindowRefreshTime).TotalMilliseconds >= 50))
             {
                 _lastWindowRefreshTime = now;
                 DockWindow.Instance?.Dispatcher.BeginInvoke(new Action(() => DockWindow.Instance.RefreshWindows()));
@@ -206,6 +179,18 @@ public class SystemCoordinator
     {
         try
         {
+            // Do not toggle or disrupt game mode if the active foreground window belongs to WallFlow itself
+            // (e.g. Spotlight canvas, Settings window, or widgets).
+            IntPtr fgHwnd = GetForegroundWindow();
+            if (fgHwnd != IntPtr.Zero)
+            {
+                GetWindowThreadProcessId(fgHwnd, out uint windowProcessId);
+                if (windowProcessId == (uint)Environment.ProcessId)
+                {
+                    return;
+                }
+            }
+
             bool isGameActive = IsForegroundWindowFullScreen();
             bool isMaximized = !isGameActive && IsForegroundWindowMaximized();
 
@@ -213,22 +198,11 @@ public class SystemCoordinator
             if (isGameActive && !_isSuspendedForGameMode)
             {
                 _isSuspendedForGameMode = true;
+                ApplicationHost.IsGameModeActive = true;
                 _isSuspendedForMaximized = false; // Game Mode override
 
-                // Log the event
-                try
-                {
-                    IntPtr hwnd = GetForegroundWindow();
-                    var cls = new StringBuilder(256);
-                    GetClassNameW(hwnd, cls, 256);
-                    var title = new StringBuilder(256);
-                    GetWindowTextW(hwnd, title, 256);
-                    string logMsg = $"[{DateTime.Now:HH:mm:ss}] SUSPENDED FOR GAME: HWND={hwnd}, Class={cls}, Title={title}\n";
-                    string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow");
-                    Directory.CreateDirectory(folder);
-                    File.AppendAllText(Path.Combine(folder, "gamemode_log.txt"), logMsg);
-                }
-                catch { }
+                // Debug log
+                Debug.WriteLine($"[SystemCoordinator] SUSPENDED FOR GAME: HWND={GetForegroundWindow()}");
 
                 // Pause hotkeys so they don't trigger by accident during games
                 HotkeyService.Instance.IsPaused = true;
@@ -248,16 +222,11 @@ public class SystemCoordinator
             else if (!isGameActive && _isSuspendedForGameMode)
             {
                 _isSuspendedForGameMode = false;
+                ApplicationHost.IsGameModeActive = false;
                 _isSuspendedForMaximized = isMaximized;
 
-                // Log the event
-                try
-                {
-                    string logMsg = $"[{DateTime.Now:HH:mm:ss}] RESUMED FROM GAME (Maximized={isMaximized})\n";
-                    string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow");
-                    File.AppendAllText(Path.Combine(folder, "gamemode_log.txt"), logMsg);
-                }
-                catch { }
+                // Debug log
+                Debug.WriteLine($"[SystemCoordinator] RESUMED FROM GAME (Maximized={isMaximized})");
 
                 // Resume hotkeys processing
                 HotkeyService.Instance.IsPaused = false;
@@ -282,37 +251,21 @@ public class SystemCoordinator
                 {
                     _isSuspendedForMaximized = true;
 
-                    try
-                    {
-                        string logMsg = $"[{DateTime.Now:HH:mm:ss}] PAUSED EFFECTS (Window Maximized)\n";
-                        string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow");
-                        File.AppendAllText(Path.Combine(folder, "gamemode_log.txt"), logMsg);
-                    }
-                    catch { }
-
-                    Application.Current.Dispatcher.Invoke(() => WidgetManager.Instance.StopWallpaperEffectsRendering());
+                    Debug.WriteLine("[SystemCoordinator] PAUSED EFFECTS (Window Maximized)");
+                    Application.Current.Dispatcher.BeginInvoke(new Action(() => WidgetManager.Instance.StopWallpaperEffectsRendering()));
                 }
                 else if (!isMaximized && _isSuspendedForMaximized)
                 {
                     _isSuspendedForMaximized = false;
-
-                    try
-                    {
-                        string logMsg = $"[{DateTime.Now:HH:mm:ss}] RESUMED EFFECTS (Window Restored)\n";
-                        string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WallFlow");
-                        File.AppendAllText(Path.Combine(folder, "gamemode_log.txt"), logMsg);
-                    }
-                    catch { }
-
-                    Application.Current.Dispatcher.Invoke(() => WidgetManager.Instance.StartWallpaperEffectsRendering());
+                    Debug.WriteLine("[SystemCoordinator] RESUMED EFFECTS (Window Restored)");
+                    Application.Current.Dispatcher.BeginInvoke(new Action(() => WidgetManager.Instance.StartWallpaperEffectsRendering()));
                 }
             }
         }
         catch { /* ignored */ }
     }
 
-    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
-    private const uint GA_ROOTOWNER = 3;
+
 
     private bool IsForegroundWindowMaximized()
     {
@@ -344,7 +297,7 @@ public class SystemCoordinator
 
             // Check if maximized style is set (WS_MAXIMIZE = 0x01000000)
             // Also verify the window is NOT minimized (IsIconic)
-            int style = GetWindowLong(hWnd, GWL_STYLE);
+            long style = GetWindowLong(hWnd, GWL_STYLE);
             return (style & WS_MAXIMIZE) == WS_MAXIMIZE && !IsIconic(hWnd);
         }
         catch { return false; }
@@ -477,7 +430,7 @@ public class SystemCoordinator
                     return true;
                 }
 
-                int style = GetWindowLong(hWnd, GWL_STYLE);
+                long style = GetWindowLong(hWnd, GWL_STYLE);
                 // Standard maximized windows (WS_MAXIMIZE = 0x01000000) are NOT fullscreen games/videos
                 if ((style & WS_MAXIMIZE) == WS_MAXIMIZE)
                 {
@@ -532,8 +485,8 @@ public class SystemCoordinator
 
         var s = Services.SettingsService.Instance;
 
-        if (!string.IsNullOrEmpty(s.Hotkey_PinnedApps))
-            h.Register(s.Hotkey_PinnedApps, () => HandleHotkey("PinnedApps"));
+        if (s.EnableSpotlight && !string.IsNullOrEmpty(s.Hotkey_PinnedApps))
+            h.Register(s.Hotkey_PinnedApps, () => HandleHotkey("PinnedApps"), allowDuringPause: true);
 
         if (!string.IsNullOrEmpty(s.Hotkey_Weather))
             h.Register(s.Hotkey_Weather, () => HandleHotkey("Weather"));
@@ -562,11 +515,11 @@ public class SystemCoordinator
         if (!string.IsNullOrEmpty(s.Hotkey_PrevWallpaper))
             h.Register(s.Hotkey_PrevWallpaper, () => HandleHotkey("PrevWallpaper"));
 
-        if (!string.IsNullOrEmpty(s.Hotkey_ToggleDock))
+        if (s.EnableDock && !string.IsNullOrEmpty(s.Hotkey_ToggleDock))
             h.Register(s.Hotkey_ToggleDock, () => HandleHotkey("ToggleDock"));
 
         if (!string.IsNullOrEmpty(s.Hotkey_Clipboard))
-            h.Register(s.Hotkey_Clipboard, () => HandleHotkey("Clipboard"));
+            h.Register(s.Hotkey_Clipboard, () => HandleHotkey("Clipboard"), allowDuringPause: true);
 
         if (!string.IsNullOrEmpty(s.Hotkey_YouTube))
             h.Register(s.Hotkey_YouTube, () => HandleHotkey("YouTube"));
@@ -574,7 +527,7 @@ public class SystemCoordinator
 
     private void HandleHotkey(string actionType)
     {
-        if (HotkeyService.Instance.IsPaused) return;
+        if (HotkeyService.Instance.IsPaused && actionType != "PinnedApps" && actionType != "Clipboard") return;
 
         switch (actionType)
         {

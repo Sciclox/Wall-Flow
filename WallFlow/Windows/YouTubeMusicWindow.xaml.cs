@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using WallFlow.Services;
 using System.Net.Http;
 using System.Text;
@@ -29,6 +30,10 @@ public partial class YouTubeMusicWindow : Window, IWidget
     {
         Instance = this;
         InitializeComponent();
+        if (DockWindow.Instance != null)
+        {
+            DockWindow.Instance.HookYouTubeMusicWindow(this);
+        }
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -105,7 +110,11 @@ public partial class YouTubeMusicWindow : Window, IWidget
                 Directory.CreateDirectory(webViewFolder);
             }
 
-            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(userDataFolder: webViewFolder);
+            var options = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling"
+            };
+            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(userDataFolder: webViewFolder, options: options);
             _webViewEnv = env;
             await webView.EnsureCoreWebView2Async(env);
             
@@ -126,6 +135,14 @@ public partial class YouTubeMusicWindow : Window, IWidget
                                 if (obj.playerAds) obj.playerAds = [];
                             }
                         }
+
+                        // Disable beforeunload prompts
+                        try {
+                            window.addEventListener('beforeunload', function(e) {
+                                e.stopImmediatePropagation();
+                            }, true);
+                            window.onbeforeunload = null;
+                        } catch (e) { }
 
                         // Intercept initial player data
                         let initialPlayerResponse = window.ytInitialPlayerResponse;
@@ -209,42 +226,106 @@ public partial class YouTubeMusicWindow : Window, IWidget
                         
                         setInterval(skipAds, 100);
 
+                        // Auto-play trigger only once when landing on a new watch/song page
+                        let lastAutoPlayedWatchUrl = '';
+                        let autoPlayAttempts = 0;
+
+                        function autoPlayWatchPage() {
+                            try {
+                                const currentUrl = window.location.href;
+                                if (!currentUrl.includes('watch')) {
+                                    lastAutoPlayedWatchUrl = '';
+                                    autoPlayAttempts = 0;
+                                    return;
+                                }
+
+                                if (lastAutoPlayedWatchUrl !== currentUrl) {
+                                    const video = document.querySelector('video');
+                                    if (video) {
+                                        if (!video.paused && video.currentTime > 0) {
+                                            lastAutoPlayedWatchUrl = currentUrl;
+                                            autoPlayAttempts = 0;
+                                        } else if (autoPlayAttempts < 15) {
+                                            autoPlayAttempts++;
+                                            video.play().then(function() {
+                                                lastAutoPlayedWatchUrl = currentUrl;
+                                            }).catch(function() {
+                                                const playBtn = document.querySelector('ytmusic-player-bar #play-pause-button, button#play-pause-button');
+                                                if (playBtn && (playBtn.getAttribute('aria-label') === 'Play' || playBtn.getAttribute('aria-label') === 'Reproducir')) {
+                                                    playBtn.click();
+                                                }
+                                            });
+                                        } else {
+                                            lastAutoPlayedWatchUrl = currentUrl;
+                                        }
+                                    }
+                                }
+                            } catch (e) { }
+                        }
+                        setInterval(autoPlayWatchPage, 500);
+
                         // Track monitoring JS Bridge
                         (function() {
                             let lastTitle = '';
                             let lastArtist = '';
                             let lastPaused = null;
+                            let lastTime = '';
 
                             function checkTrackInfo() {
                                 try {
                                     const titleEl = document.querySelector('ytmusic-player-bar .title');
-                                    const bylineEl = document.querySelector('ytmusic-player-bar .byline');
+                                    const bylineEl = document.querySelector('ytmusic-player-bar .byline') || document.querySelector('ytmusic-player-bar [class*=\'byline\']') || document.querySelector('ytmusic-player-bar .subtitle');
                                     const videoEl = document.querySelector('video');
                                     const imgEl = document.querySelector('ytmusic-player-bar img.image');
 
                                     if (!titleEl || !videoEl) return;
 
-                                    const title = titleEl.innerText || '';
-                                    const artist = bylineEl ? bylineEl.innerText : '';
+                                    const title = (titleEl.innerText || titleEl.textContent || '').trim();
+                                    let artist = bylineEl ? (bylineEl.innerText || bylineEl.textContent || '').trim() : '';
+                                    if (artist) {
+                                        const parts = artist.split(/[•\n\r]/);
+                                        if (parts.length > 0 && parts[0].trim().length > 0) {
+                                            artist = parts[0].trim();
+                                        }
+                                    }
                                     const paused = videoEl.paused;
                                     const artwork = imgEl ? imgEl.src : '';
 
-                                    if (title !== lastTitle || artist !== lastArtist || paused !== lastPaused) {
+                                    const timeEl = document.querySelector('ytmusic-player-bar .time-info');
+                                    let timeStr = timeEl ? timeEl.innerText.trim() : '';
+                                    let progressVal = 0;
+                                    if (videoEl && videoEl.duration && !isNaN(videoEl.duration) && videoEl.duration > 0) {
+                                        progressVal = videoEl.currentTime / videoEl.duration;
+                                        if (!timeStr) {
+                                            const cur = Math.floor(videoEl.currentTime);
+                                            const curM = Math.floor(cur / 60);
+                                            const curS = cur % 60;
+                                            timeStr = (curM < 10 ? '0' : '') + curM + ':' + (curS < 10 ? '0' : '') + curS;
+                                        }
+                                    }
+
+                                    if (title !== lastTitle || artist !== lastArtist || paused !== lastPaused || timeStr !== lastTime) {
                                         lastTitle = title;
                                         lastArtist = artist;
                                         lastPaused = paused;
+                                        lastTime = timeStr;
 
                                         window.chrome.webview.postMessage(JSON.stringify({
                                             type: 'trackInfo',
                                             title: title,
                                             artist: artist,
                                             paused: paused,
-                                            artwork: artwork
+                                            artwork: artwork,
+                                            time: timeStr,
+                                            progress: progressVal
                                         }));
                                     }
                                 } catch (e) { }
                             }
-                            setInterval(checkTrackInfo, 500);
+                            setInterval(checkTrackInfo, 200);
+                            document.addEventListener('play', checkTrackInfo, true);
+                            document.addEventListener('playing', checkTrackInfo, true);
+                            document.addEventListener('loadedmetadata', checkTrackInfo, true);
                         })();
                     })();
                 ";
@@ -252,16 +333,59 @@ public partial class YouTubeMusicWindow : Window, IWidget
 
                 webView.CoreWebView2.HistoryChanged += CoreWebView2_HistoryChanged;
                 webView.CoreWebView2.WebMessageReceived += WebMessageReceived;
+                webView.CoreWebView2.ScriptDialogOpening += (sender, args) =>
+                {
+                    // Automatically accept beforeunload / alert / confirm dialogs to prevent "¿Abandonar sitio?" popups
+                    if (args.Kind == Microsoft.Web.WebView2.Core.CoreWebView2ScriptDialogKind.Beforeunload ||
+                        args.Kind == Microsoft.Web.WebView2.Core.CoreWebView2ScriptDialogKind.Confirm ||
+                        args.Kind == Microsoft.Web.WebView2.Core.CoreWebView2ScriptDialogKind.Alert)
+                    {
+                        args.Accept();
+                    }
+                };
                 UpdateNavigationButtonStates();
             }
 
-            webView.Source = new Uri("https://music.youtube.com");
+            string startUrl;
+            if (!string.IsNullOrEmpty(PendingSearchQuery))
+            {
+                if (PendingSearchQuery.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    PendingSearchQuery.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    startUrl = PendingSearchQuery;
+                }
+                else if (PendingSearchQuery.Length == 11 && !PendingSearchQuery.Contains(' ') && !PendingSearchQuery.Contains('?'))
+                {
+                    startUrl = $"https://music.youtube.com/watch?v={PendingSearchQuery}";
+                }
+                else
+                {
+                    startUrl = $"https://music.youtube.com/search?q={Uri.EscapeDataString(PendingSearchQuery)}";
+                }
+            }
+            else
+            {
+                startUrl = "https://music.youtube.com";
+            }
+            PendingSearchQuery = null;
+            webView.Source = new Uri(startUrl);
+            _ = Task.Delay(2500).ContinueWith(_ => Dispatcher.Invoke(EnsurePlaying));
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error al iniciar el reproductor de música: {ex.Message}", "Error WebView2", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
+
+    public string CurrentTitle { get; private set; } = string.Empty;
+    public string CurrentArtist { get; private set; } = string.Empty;
+    public string CurrentTimeStr { get; private set; } = string.Empty;
+    public double CurrentProgress { get; private set; }
+    public bool CurrentIsPlaying { get; private set; }
+    public string CurrentArtworkUrl { get; private set; } = string.Empty;
+    public ImageSource? CurrentArtwork { get; private set; }
+    public bool HasActiveTrack => !string.IsNullOrEmpty(CurrentTitle);
+    public event EventHandler? TrackChanged;
 
     private void WebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
     {
@@ -277,24 +401,225 @@ public partial class YouTubeMusicWindow : Window, IWidget
                     string artist = root.GetProperty("artist").GetString() ?? "";
                     bool paused = root.GetProperty("paused").GetBoolean();
                     string artwork = root.GetProperty("artwork").GetString() ?? "";
+                    string time = root.TryGetProperty("time", out var tProp) ? (tProp.GetString() ?? "") : "";
+                    double progress = root.TryGetProperty("progress", out var pProp) ? pProp.GetDouble() : 0;
 
-                    // If needed, we can push values to the DockViewModel or handle them.
-                    // Windows natively links WebView2 playing media with system SMTC.
+                    bool metadataChanged = CurrentTitle != title || CurrentArtist != artist;
+                    bool playStateChanged = CurrentIsPlaying == paused;
+
+                    CurrentTitle = title;
+                    CurrentArtist = artist;
+                    CurrentTimeStr = time;
+                    CurrentProgress = progress;
+                    CurrentIsPlaying = !paused;
+
+                    if (!string.IsNullOrEmpty(artwork) && artwork != CurrentArtworkUrl)
+                    {
+                        CurrentArtworkUrl = artwork;
+                        _ = LoadArtworkAsync(artwork);
+                    }
+
+                    if (metadataChanged || playStateChanged)
+                    {
+                        TrackChanged?.Invoke(this, EventArgs.Empty);
+
+                        if (!paused && !string.IsNullOrWhiteSpace(title) && metadataChanged)
+                        {
+                            try
+                            {
+                                WallFlow.Windows.FloatingMediaOrbWindow.ShowOrb(
+                                    title,
+                                    artist,
+                                    CurrentArtwork,
+                                    isPlaying: true);
+                            }
+                            catch { }
+                        }
+                    }
                 }
             }
         }
         catch { }
     }
 
-    public async void TogglePlayPause()
+    private async Task LoadArtworkAsync(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
+            var bytes = await client.GetByteArrayAsync(url);
+            if (bytes == null || bytes.Length == 0) return;
+
+            using var ms = new MemoryStream(bytes);
+            var bi = new BitmapImage();
+            bi.BeginInit();
+            bi.CacheOption = BitmapCacheOption.OnLoad;
+            bi.StreamSource = ms;
+            bi.DecodePixelWidth = 100;
+            bi.EndInit();
+            bi.Freeze();
+
+            Dispatcher.Invoke(() =>
+            {
+                CurrentArtwork = bi;
+                TrackChanged?.Invoke(this, EventArgs.Empty);
+            });
+        }
+        catch { }
+    }
+
+    public static string? PendingSearchQuery { get; set; }
+
+    public void SearchAndPlay(string query)
+    {
+        PlayMusic(query, showWindow: true);
+    }
+
+    public void PlayMusic(string trackIdOrQuery, bool showWindow = false)
+    {
+        if (string.IsNullOrWhiteSpace(trackIdOrQuery))
+        {
+            if (showWindow) ShowWithAnimation();
+            return;
+        }
+
+        string targetUrl;
+        if (trackIdOrQuery.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            trackIdOrQuery.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            targetUrl = trackIdOrQuery;
+        }
+        else if (trackIdOrQuery.Length == 11 && !trackIdOrQuery.Contains(' '))
+        {
+            targetUrl = $"https://music.youtube.com/watch?v={trackIdOrQuery}";
+        }
+        else
+        {
+            targetUrl = $"https://music.youtube.com/search?q={Uri.EscapeDataString(trackIdOrQuery)}";
+        }
+
+        PendingSearchQuery = targetUrl;
+
+        // If window is not loaded, show it invisibly so WPF initializes HWND and WebView2
+        if (!IsLoaded)
+        {
+            Opacity = 0;
+            Show();
+            if (!showWindow)
+            {
+                Hide();
+            }
+        }
+
+        try
+        {
+            if (webView != null && webView.CoreWebView2 != null)
+            {
+                webView.CoreWebView2.Navigate(targetUrl);
+                PendingSearchQuery = null;
+                _ = Task.Delay(2000).ContinueWith(_ => Dispatcher.Invoke(EnsurePlaying));
+            }
+            else
+            {
+                if (webView != null)
+                {
+                    webView.Source = new Uri(targetUrl);
+                }
+            }
+        }
+        catch { }
+
+        if (showWindow)
+        {
+            ShowWithAnimation();
+        }
+    }
+
+    public async void EnsurePlaying()
     {
         try
         {
-            if (webView.CoreWebView2 != null)
+            if (webView?.CoreWebView2 != null)
             {
-                await webView.ExecuteScriptAsync(
-                    "document.querySelector('video')?.paused ? document.querySelector('video')?.play() : document.querySelector('video')?.pause()"
-                );
+                await webView.CoreWebView2.ExecuteScriptAsync(@"
+                    (function() {
+                        try {
+                            const video = document.querySelector('video');
+                            if (video && video.paused) {
+                                video.play().catch(() => {});
+                            }
+                            const playBtn = document.querySelector('ytmusic-player-bar #play-pause-button, button#play-pause-button');
+                            if (playBtn && (playBtn.getAttribute('aria-label') === 'Play' || playBtn.getAttribute('aria-label') === 'Reproducir')) {
+                                playBtn.click();
+                            }
+                        } catch (e) { }
+                    })();
+                ");
+            }
+        }
+        catch { }
+    }
+
+    public async Task<bool> TogglePlayPauseAsync()
+    {
+        try
+        {
+            if (webView?.CoreWebView2 != null)
+            {
+                string script = @"
+                    (function() {
+                        try {
+                            var v = document.querySelector('video');
+                            var wasPaused = v ? v.paused : false;
+                            var playBtn = document.querySelector('ytmusic-player-bar #play-pause-button, button#play-pause-button, #play-pause-button');
+                            if (playBtn) {
+                                playBtn.click();
+                            } else if (v) {
+                                if (wasPaused) v.play().catch(function(){});
+                                else v.pause();
+                            }
+                            return wasPaused;
+                        } catch(e) {
+                            return false;
+                        }
+                    })();
+                ";
+                string result = await webView.CoreWebView2.ExecuteScriptAsync(script);
+                if (bool.TryParse(result, out bool isNowPlaying))
+                {
+                    CurrentIsPlaying = isNowPlaying;
+                    TrackChanged?.Invoke(this, EventArgs.Empty);
+                    return isNowPlaying;
+                }
+            }
+        }
+        catch { }
+        CurrentIsPlaying = !CurrentIsPlaying;
+        TrackChanged?.Invoke(this, EventArgs.Empty);
+        return CurrentIsPlaying;
+    }
+
+    public async void TogglePlayPause()
+    {
+        await TogglePlayPauseAsync();
+    }
+
+    public async Task NextTrackAsync()
+    {
+        try
+        {
+            if (webView?.CoreWebView2 != null)
+            {
+                await webView.CoreWebView2.ExecuteScriptAsync(@"
+                    (function() {
+                        try {
+                            var btn = document.querySelector('ytmusic-player-bar .next-button, button.next-button, .next-button');
+                            if (btn) btn.click();
+                        } catch(e) {}
+                    })();
+                ");
             }
         }
         catch { }
@@ -302,13 +627,23 @@ public partial class YouTubeMusicWindow : Window, IWidget
 
     public async void NextTrack()
     {
+        await NextTrackAsync();
+    }
+
+    public async Task PreviousTrackAsync()
+    {
         try
         {
-            if (webView.CoreWebView2 != null)
+            if (webView?.CoreWebView2 != null)
             {
-                await webView.ExecuteScriptAsync(
-                    "document.querySelector('ytmusic-player-bar .next-button')?.click()"
-                );
+                await webView.CoreWebView2.ExecuteScriptAsync(@"
+                    (function() {
+                        try {
+                            var btn = document.querySelector('ytmusic-player-bar .previous-button, button.previous-button, .previous-button');
+                            if (btn) btn.click();
+                        } catch(e) {}
+                    })();
+                ");
             }
         }
         catch { }
@@ -316,16 +651,295 @@ public partial class YouTubeMusicWindow : Window, IWidget
 
     public async void PreviousTrack()
     {
+        await PreviousTrackAsync();
+    }
+
+    public bool IsRepeatTrack { get; private set; }
+
+    public async Task<bool> ToggleRepeatTrackAsync(bool? forceState = null)
+    {
         try
         {
-            if (webView.CoreWebView2 != null)
+            if (webView?.CoreWebView2 != null)
             {
-                await webView.ExecuteScriptAsync(
-                    "document.querySelector('ytmusic-player-bar .previous-button')?.click()"
-                );
+                bool newState = forceState ?? !IsRepeatTrack;
+                string jsBool = newState ? "true" : "false";
+
+                string script = $@"(function() {{
+                    try {{
+                        const enable = {jsBool};
+                        window.__wallflowRepeatTrack = enable;
+                        const video = document.querySelector('video');
+                        if (video) {{
+                            video.loop = enable;
+                            if (!window.__wallflowLoopHooked) {{
+                                window.__wallflowLoopHooked = true;
+                                video.addEventListener('ended', function(e) {{
+                                    if (window.__wallflowRepeatTrack) {{
+                                        try {{
+                                            e.stopImmediatePropagation();
+                                            video.currentTime = 0;
+                                            video.play();
+                                        }} catch(err) {{}}
+                                    }}
+                                }}, true);
+                                video.addEventListener('timeupdate', function(e) {{
+                                    if (window.__wallflowRepeatTrack && video.duration > 0 && video.currentTime >= video.duration - 0.25) {{
+                                        try {{
+                                            video.currentTime = 0;
+                                            video.play();
+                                        }} catch(err) {{}}
+                                    }}
+                                }}, true);
+                            }}
+                        }}
+
+                        const playerBar = document.querySelector('ytmusic-player-bar');
+                        const repeatBtn = document.querySelector('ytmusic-player-bar .repeat, button.repeat, .repeat-button');
+                        if (playerBar && repeatBtn) {{
+                            const targetMode = enable ? 'ONE' : 'NONE';
+                            for (let i = 0; i < 3; i++) {{
+                                if (playerBar.repeatMode_ === targetMode) break;
+                                repeatBtn.click();
+                            }}
+                        }} else if (repeatBtn) {{
+                            repeatBtn.click();
+                        }}
+                        return true;
+                    }} catch(e) {{
+                        return false;
+                    }}
+                }})();";
+
+                string res = await webView.CoreWebView2.ExecuteScriptAsync(script);
+                IsRepeatTrack = newState;
+                return res == "true";
             }
         }
         catch { }
+        return false;
+    }
+
+    public async Task<string> GetQueueJsonAsync()
+    {
+        try
+        {
+            if (webView?.CoreWebView2 != null)
+            {
+                string script = @"
+                    (function() {
+                        try {
+                            function extractItems() {
+                                const queueEls = document.querySelectorAll('ytmusic-player-queue-item');
+                                if (!queueEls || queueEls.length === 0) return null;
+                                let list = [];
+                                for (let i = 0; i < queueEls.length; i++) {
+                                    const el = queueEls[i];
+                                    const titleEl = el.querySelector('.song-title') || el.querySelector('.title') || el.querySelector('yt-formatted-string.title');
+                                    const bylineEl = el.querySelector('.byline') || el.querySelector('yt-formatted-string.byline');
+                                    const durEl = el.querySelector('.duration') || el.querySelector('.time-info') || el.querySelector('yt-formatted-string.duration') || el.querySelector('[class*=\'duration\']');
+                                    const imgEl = el.querySelector('img');
+                                    const isSelected = el.hasAttribute('selected') || el.classList.contains('selected') || el.getAttribute('aria-selected') === 'true';
+
+                                    // Robust extraction of videoId across Polymer models, links, and thumbnails
+                                    let videoId = '';
+                                    try {
+                                        const d = el.data || (el.__data ? (el.__data.data || el.__data) : null);
+                                        if (d) {
+                                            if (typeof d.videoId === 'string' && d.videoId.length === 11) videoId = d.videoId;
+                                            else if (d.playlistPanelVideoRenderer && d.playlistPanelVideoRenderer.videoId) videoId = d.playlistPanelVideoRenderer.videoId;
+                                            else if (d.navigationEndpoint && d.navigationEndpoint.watchEndpoint && d.navigationEndpoint.watchEndpoint.videoId) videoId = d.navigationEndpoint.watchEndpoint.videoId;
+                                        }
+                                    } catch(e) {}
+
+                                    if (!videoId) {
+                                        try {
+                                            const pbr = el.querySelector('ytmusic-play-button-renderer');
+                                            const pd = pbr ? (pbr.data || (pbr.__data ? (pbr.__data.data || pbr.__data) : null)) : null;
+                                            if (pd && pd.navigationEndpoint && pd.navigationEndpoint.watchEndpoint && pd.navigationEndpoint.watchEndpoint.videoId) {
+                                                videoId = pd.navigationEndpoint.watchEndpoint.videoId;
+                                            }
+                                        } catch(e) {}
+                                    }
+
+                                    if (!videoId) {
+                                        try {
+                                            const img = el.querySelector('img');
+                                            if (img && img.src) {
+                                                const m = img.src.match(/\/vi(?:_webp)?\/([a-zA-Z0-9_-]{11})\//);
+                                                if (m) videoId = m[1];
+                                            }
+                                        } catch(e) {}
+                                    }
+
+                                    if (!videoId) {
+                                        try {
+                                            const linkEl = el.querySelector('a[href*=\'watch?v=\']') || el.querySelector('a');
+                                            if (linkEl && linkEl.href) {
+                                                const hrefStr = linkEl.href;
+                                                const vIdx = hrefStr.indexOf('v=');
+                                                if (vIdx !== -1) {
+                                                    const sub = hrefStr.substring(vIdx + 2);
+                                                    const ampIdx = sub.indexOf('&');
+                                                    videoId = ampIdx !== -1 ? sub.substring(0, ampIdx) : sub;
+                                                }
+                                            }
+                                        } catch(e) {}
+                                    }
+
+                                    const title = titleEl ? (titleEl.innerText || titleEl.textContent || '').trim() : '';
+                                    if (title) {
+                                        list.push({
+                                            index: i,
+                                            title: title,
+                                            artist: bylineEl ? (bylineEl.innerText || bylineEl.textContent || '').trim() : '',
+                                            duration: durEl ? (durEl.innerText || durEl.textContent || '').trim() : '',
+                                            thumbnail: imgEl ? (imgEl.src || '') : '',
+                                            selected: isSelected,
+                                            videoId: videoId
+                                        });
+                                    }
+                                }
+                                return list.length > 0 ? list : null;
+                            }
+
+                            let items = extractItems();
+                            if (!items) {
+                                const queueBtn = document.querySelector('ytmusic-player-bar .queue-button, #right-controls .queue-button, ytmusic-player-bar [aria-label*=""Queue"" i], ytmusic-player-bar [aria-label*=""Cola"" i]');
+                                if (queueBtn) {
+                                    queueBtn.click();
+                                    items = extractItems();
+                                }
+                            }
+
+                            return JSON.stringify(items || []);
+                        } catch(e) {
+                            return '[]';
+                        }
+                    })();
+                ";
+                string jsonResult = await webView.CoreWebView2.ExecuteScriptAsync(script);
+                if (!string.IsNullOrEmpty(jsonResult))
+                {
+                    if (jsonResult.StartsWith("\"") && jsonResult.EndsWith("\""))
+                    {
+                        try
+                        {
+                            jsonResult = System.Text.Json.JsonSerializer.Deserialize<string>(jsonResult) ?? "[]";
+                        }
+                        catch { }
+                    }
+                    return jsonResult;
+                }
+            }
+        }
+        catch { }
+        return "[]";
+    }
+
+    public async Task<bool> PlayQueueTrackAsync(int index, string? videoId = null)
+    {
+        try
+        {
+            if (webView?.CoreWebView2 != null)
+            {
+                string safeVid = (videoId ?? string.Empty).Replace("'", "").Replace("\"", "").Trim();
+                string script = @"
+                    (function() {
+                        try {
+                            const idx = __INDEX__;
+                            const vid = '__VID__';
+
+                            // 1. Direct Queue element interaction in DOM (click on row, title, play-button, dblclick)
+                            const queueEls = document.querySelectorAll('ytmusic-player-queue-item');
+                            let domClicked = false;
+                            if (queueEls && queueEls[idx]) {
+                                const row = queueEls[idx];
+                                try {
+                                    row.scrollIntoView({ block: 'nearest' });
+                                } catch(e) {}
+
+                                function dispatchClick(target) {
+                                    if (!target) return;
+                                    const opts = { bubbles: true, cancelable: true, composed: true, view: window };
+                                    try { target.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch(e) {}
+                                    try { target.dispatchEvent(new MouseEvent('mousedown', opts)); } catch(e) {}
+                                    try { target.dispatchEvent(new PointerEvent('pointerup', opts)); } catch(e) {}
+                                    try { target.dispatchEvent(new MouseEvent('mouseup', opts)); } catch(e) {}
+                                    try { target.dispatchEvent(new MouseEvent('click', opts)); } catch(e) {}
+                                    if (typeof target.click === 'function') {
+                                        try { target.click(); } catch(e) {}
+                                    }
+                                }
+
+                                const titleEl = row.querySelector('.song-title, yt-formatted-string.title, .title') || row.querySelector('.song-info');
+                                const playBtn = row.querySelector('ytmusic-play-button-renderer');
+                                const playBtnInner = playBtn ? (playBtn.shadowRoot ? playBtn.shadowRoot.querySelector('#button, button, #icon') : null) : null;
+
+                                if (titleEl) dispatchClick(titleEl);
+                                if (playBtnInner) dispatchClick(playBtnInner);
+                                if (playBtn) dispatchClick(playBtn);
+                                dispatchClick(row);
+
+                                try {
+                                    row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, composed: true, view: window }));
+                                } catch(e) {}
+
+                                // Polymer navigation endpoint
+                                try {
+                                    const endpoint = row.data?.navigationEndpoint || 
+                                                     row.__data?.data?.navigationEndpoint ||
+                                                     row.__data?.navigationEndpoint;
+                                    if (endpoint) {
+                                        const app = document.querySelector('ytmusic-app');
+                                        if (app && typeof app.navigate_ === 'function') {
+                                            app.navigate_(endpoint);
+                                        }
+                                    }
+                                } catch(e) {}
+
+                                domClicked = true;
+                            }
+
+                            // 2. If videoId is provided and valid, try player.loadVideoById or window.location
+                            if (vid && vid.length === 11) {
+                                const player = document.querySelector('#movie_player') || 
+                                               document.querySelector('ytmusic-player-bar')?.playerApi_;
+                                if (player && typeof player.loadVideoById === 'function') {
+                                    try {
+                                        player.loadVideoById(vid);
+                                        return true;
+                                    } catch(e) {}
+                                }
+                                if (!domClicked) {
+                                    window.location.href = 'https://music.youtube.com/watch?v=' + vid;
+                                    return true;
+                                }
+                            }
+
+                            return domClicked;
+                        } catch(e) {
+                            return false;
+                        }
+                    })();
+                ".Replace("__INDEX__", index.ToString())
+                 .Replace("__VID__", safeVid);
+
+                string res = await webView.CoreWebView2.ExecuteScriptAsync(script);
+                
+                // If in-page JS failed and we have a valid 11-char videoId, navigate directly:
+                if (res != "true" && !string.IsNullOrEmpty(safeVid) && safeVid.Length == 11)
+                {
+                    webView.CoreWebView2.Navigate($"https://music.youtube.com/watch?v={safeVid}");
+                    _ = Task.Delay(1800).ContinueWith(_ => Dispatcher.Invoke(EnsurePlaying));
+                    return true;
+                }
+
+                return res == "true";
+            }
+        }
+        catch { }
+        return false;
     }
 
     private void CoreWebView2_WebResourceRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)

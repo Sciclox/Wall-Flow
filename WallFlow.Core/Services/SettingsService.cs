@@ -8,6 +8,7 @@ public class AppSettings
 {
     public string WallpaperDirectory { get; set; } = "";
     public System.Collections.Generic.List<string> PinnedAppPaths { get; set; } = new();
+    public System.Collections.Generic.List<string> FavoriteWallpapers { get; set; } = new();
     public System.Collections.Generic.Dictionary<string, int> AppLaunchCounts { get; set; } = new();
     public string WeatherCity { get; set; } = "";
 
@@ -19,6 +20,8 @@ public class AppSettings
     public string? UserDockBackgroundColor { get; set; }
 
     // Behavior & dimensions
+    public bool EnableDock { get; set; } = true;
+    public bool EnableSpotlight { get; set; } = true;
     public bool AutoHide { get; set; } = false;
     public double BorderThickness { get; set; } = 3.8;
     public double DockHeight { get; set; } = 56.0;
@@ -63,6 +66,7 @@ public class AppSettings
     public string Hotkey_YouTube { get; set; } = "";
     public string Hotkey_WebBrowser { get; set; } = "";
     public string Hotkey_TogglePinApp { get; set; } = "Ctrl+P";
+    public string Hotkey_RunAsAdmin { get; set; } = "Ctrl+Shift+Enter";
     public double WidgetClipboardX { get; set; } = -1;
     public double WidgetClipboardY { get; set; } = -1;
 
@@ -137,7 +141,7 @@ public class AppSettings
 
     // Gemini AI settings
     public string? GeminiApiKey { get; set; } = "";
-    public string GeminiModel { get; set; } = "gemini-2.5-flash";
+    public string GeminiModel { get; set; } = "gemini-3.5-flash-lite";
 
     // Browser color customization
     public bool BrowserUseDockColors { get; set; } = true;
@@ -232,24 +236,41 @@ public static class SettingsService
             _settings.AppLaunchCounts = new System.Collections.Generic.Dictionary<string, int>();
         }
 
+        if (_settings.FavoriteWallpapers == null)
+        {
+            _settings.FavoriteWallpapers = new System.Collections.Generic.List<string>();
+        }
+
         if (string.IsNullOrEmpty(_settings.SpotlightThemeMode))
         {
             _settings.SpotlightThemeMode = _settings.SpotlightUseDockColors ? "Dock" : "Personalizado";
         }
+
+        if (string.IsNullOrEmpty(_settings.Hotkey_PinnedApps))
+        {
+            _settings.Hotkey_PinnedApps = "Alt+Space";
+        }
     }
+
+    private static readonly object _saveLock = new();
 
     public static void Save()
     {
-        try
+        lock (_saveLock)
         {
-            Directory.CreateDirectory(SettingsFolder);
-            var json = JsonSerializer.Serialize(Instance, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(SettingsFile, json);
-            EventBus.Publish(new SettingsChangedEvent());
-        }
-        catch
-        {
-            // Handle save error
+            try
+            {
+                Directory.CreateDirectory(SettingsFolder);
+                var json = JsonSerializer.Serialize(Instance, new JsonSerializerOptions { WriteIndented = true });
+                string tempFile = $"{SettingsFile}.tmp.{Guid.NewGuid():N}";
+                File.WriteAllText(tempFile, json);
+                File.Move(tempFile, SettingsFile, overwrite: true);
+                EventBus.Publish(new SettingsChangedEvent());
+            }
+            catch
+            {
+                // Handle save error
+            }
         }
     }
 

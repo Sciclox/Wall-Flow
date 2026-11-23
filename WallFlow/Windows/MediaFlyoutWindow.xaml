@@ -29,7 +29,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="12" SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              TextBlock.FontFamily="Segoe MDL2 Assets" TextBlock.FontSize="10" />
+                                              TextBlock.FontFamily="{DynamicResource LucideIconsFont}" TextBlock.FontSize="11" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -62,7 +62,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="19" SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              TextBlock.FontFamily="Segoe MDL2 Assets" TextBlock.FontSize="14" />
+                                              TextBlock.FontFamily="{DynamicResource LucideIconsFont}" TextBlock.FontSize="15" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -149,7 +149,7 @@
 
                 <Button Grid.Column="0"
                         Style="{StaticResource SessionSwitchButtonStyle}"
-                        Content="&#xE0E2;"
+                        Content="&#xE06E;"
                         Click="PrevSession_Click"
                         ToolTip="Sesión anterior" />
 
@@ -166,7 +166,7 @@
 
                 <Button Grid.Column="2"
                         Style="{StaticResource SessionSwitchButtonStyle}"
-                        Content="&#xE0E3;"
+                        Content="&#xE06F;"
                         Click="NextSession_Click"
                         ToolTip="Siguiente sesión" />
             </Grid>
@@ -198,13 +198,13 @@
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <!-- Skip Previous -->
                 <Button Style="{StaticResource MediaControlButtonStyle}"
-                        Content="&#xE892;"
+                        Content="&#xE15F;"
                         Click="Prev_Click" />
 
                 <!-- Play / Pause (Larger center button) -->
                 <Button x:Name="PlayPauseButton"
                         Style="{StaticResource MediaControlButtonStyle}"
-                        Content="&#xE768;"
+                        Content="&#xE13C;"
                         Click="PlayPause_Click"
                         Width="44" Height="44"
                         Margin="12,0">
@@ -213,7 +213,7 @@
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="22" SnapsToDevicePixels="True">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextBlock.FontFamily="Segoe MDL2 Assets" TextBlock.FontSize="16" />
+                                                  TextBlock.FontFamily="{DynamicResource LucideIconsFont}" TextBlock.FontSize="17" />
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -236,7 +236,7 @@
 
                 <!-- Skip Next -->
                 <Button Style="{StaticResource MediaControlButtonStyle}"
-                        Content="&#xE893;"
+                        Content="&#xE160;"
                         Click="Next_Click" />
             </StackPanel>
 

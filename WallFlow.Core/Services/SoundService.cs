@@ -19,37 +19,50 @@ public enum SoundType
 
 public static class SoundService
 {
-    private static readonly string SoundsFolder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "WallFlow", "Sounds");
-
     private const int SampleRate = 44100;
 
-    private static readonly Dictionary<string, CachedSound> _cachedSounds = new Dictionary<string, CachedSound>();
-    private static readonly object _cacheLock = new object();
+    private static readonly Dictionary<string, CachedSound> _cachedSounds = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object _cacheLock = new();
 
-    static SoundService()
+    private static WaveOutEvent? _outputDevice;
+    private static MixingSampleProvider? _mixer;
+    private static readonly object _playerLock = new();
+
+    private static void EnsureMixerInitialized(WaveFormat waveFormat)
     {
-        try
+        lock (_playerLock)
         {
-            // Force clean regeneration of sounds on start to fix any old corrupted/static files
-            if (Directory.Exists(SoundsFolder))
+            if (_outputDevice == null)
             {
-                foreach (var file in Directory.GetFiles(SoundsFolder, "*.wav"))
+                try
                 {
-                    try
-                    {
-                        File.Delete(file);
-                    }
-                    catch { }
+                    _mixer = new MixingSampleProvider(waveFormat) { ReadFully = true };
+                    _outputDevice = new WaveOutEvent { DesiredLatency = 80 };
+                    _outputDevice.Init(_mixer);
+                    _outputDevice.Play();
+                }
+                catch
+                {
+                    _outputDevice = null;
+                    _mixer = null;
                 }
             }
         }
-        catch { }
     }
 
     public static void Shutdown()
     {
+        lock (_playerLock)
+        {
+            try
+            {
+                _outputDevice?.Stop();
+                _outputDevice?.Dispose();
+                _outputDevice = null;
+                _mixer = null;
+            }
+            catch { }
+        }
     }
 
     private class CachedSound
@@ -57,22 +70,13 @@ public static class SoundService
         public float[] AudioData { get; }
         public WaveFormat WaveFormat { get; }
 
-        public CachedSound(string filePath)
+        public CachedSound(short[] samples, int sampleRate)
         {
-            using (var reader = new AudioFileReader(filePath))
+            WaveFormat = new WaveFormat(sampleRate, 16, 1);
+            AudioData = new float[samples.Length];
+            for (int i = 0; i < samples.Length; i++)
             {
-                WaveFormat = reader.WaveFormat;
-                var wholeFile = new List<float>((int)(reader.Length / 4));
-                var readBuffer = new float[reader.WaveFormat.SampleRate * reader.WaveFormat.Channels];
-                int samplesRead;
-                while ((samplesRead = reader.Read(readBuffer, 0, readBuffer.Length)) > 0)
-                {
-                    for (int i = 0; i < samplesRead; i++)
-                    {
-                        wholeFile.Add(readBuffer[i]);
-                    }
-                }
-                AudioData = wholeFile.ToArray();
+                AudioData[i] = samples[i] / 32768f;
             }
         }
     }
@@ -101,13 +105,33 @@ public static class SoundService
         public WaveFormat WaveFormat => _cachedSound.WaveFormat;
     }
 
+    private static CachedSound GetOrCreateSound(string profile, SoundType type)
+    {
+        string key = $"{profile}_{type}";
+        lock (_cacheLock)
+        {
+            if (_cachedSounds.TryGetValue(key, out var cached))
+                return cached;
+
+            short[] samples = profile.ToLowerInvariant() switch
+            {
+                "cyberpunk" => GenerateCyberpunkSound(type),
+                "holographic" => GenerateHolographicSound(type),
+                _ => GenerateZenSound(type)
+            };
+
+            cached = new CachedSound(samples, SampleRate);
+            _cachedSounds[key] = cached;
+            return cached;
+        }
+    }
+
     public static void PreloadAsync()
     {
         Task.Run(() =>
         {
             try
             {
-                Directory.CreateDirectory(SoundsFolder);
                 var profiles = new[] { "Zen", "Cyberpunk", "Holographic" };
                 var types = new[] { SoundType.Hover, SoundType.Click, SoundType.Whoosh, SoundType.Ping };
 
@@ -115,21 +139,7 @@ public static class SoundService
                 {
                     foreach (var type in types)
                     {
-                        string fileName = $"{profile}_{type}.wav";
-                        string filePath = Path.Combine(SoundsFolder, fileName);
-                        
-                        EnsureSoundExists(profile, type, filePath);
-                        
-                        lock (_cacheLock)
-                        {
-                            if (!_cachedSounds.ContainsKey(filePath))
-                            {
-                                if (File.Exists(filePath))
-                                {
-                                    _cachedSounds[filePath] = new CachedSound(filePath);
-                                }
-                            }
-                        }
+                        GetOrCreateSound(profile, type);
                     }
                 }
             }
@@ -159,23 +169,7 @@ public static class SoundService
         {
             try
             {
-                Directory.CreateDirectory(SoundsFolder);
-                string fileName = $"{profile}_{type}.wav";
-                string filePath = Path.Combine(SoundsFolder, fileName);
-
-                EnsureSoundExists(profile, type, filePath);
-
-                CachedSound? cachedSound;
-                lock (_cacheLock)
-                {
-                    if (!_cachedSounds.TryGetValue(filePath, out cachedSound))
-                    {
-                        if (!File.Exists(filePath)) return;
-                        cachedSound = new CachedSound(filePath);
-                        _cachedSounds[filePath] = cachedSound;
-                    }
-                }
-
+                var cachedSound = GetOrCreateSound(profile, type);
                 ISampleProvider provider = new CachedSoundSampleProvider(cachedSound);
 
                 var volumeProvider = new VolumeSampleProvider(provider)
@@ -183,43 +177,29 @@ public static class SoundService
                     Volume = (float)Math.Clamp(volume, 0.0, 1.0)
                 };
 
-                var waveOut = new WaveOutEvent();
-                waveOut.PlaybackStopped += (s, ev) =>
-                {
-                    try { waveOut.Dispose(); } catch { }
-                };
+                EnsureMixerInitialized(provider.WaveFormat);
 
-                waveOut.Init(volumeProvider);
-                waveOut.Play();
+                if (_mixer != null)
+                {
+                    lock (_playerLock)
+                    {
+                        _mixer.AddMixerInput(volumeProvider);
+                    }
+                }
+                else
+                {
+                    var waveOut = new WaveOutEvent();
+                    waveOut.PlaybackStopped += (s, ev) =>
+                    {
+                        try { waveOut.Dispose(); } catch { }
+                    };
+
+                    waveOut.Init(volumeProvider);
+                    waveOut.Play();
+                }
             }
             catch { }
         });
-    }
-
-    private static void EnsureSoundExists(string profile, SoundType type, string filePath)
-    {
-        if (File.Exists(filePath)) return;
-
-        try
-        {
-            short[] samples;
-            switch (profile.ToLowerInvariant())
-            {
-                case "cyberpunk":
-                    samples = GenerateCyberpunkSound(type);
-                    break;
-                case "holographic":
-                    samples = GenerateHolographicSound(type);
-                    break;
-                case "zen":
-                default:
-                    samples = GenerateZenSound(type);
-                    break;
-            }
-
-            WriteWavFile(filePath, samples, SampleRate);
-        }
-        catch { }
     }
 
     private static short[] GenerateZenSound(SoundType type)
@@ -470,33 +450,5 @@ public static class SoundService
         }
 
         return samples;
-    }
-
-    private static void WriteWavFile(string filePath, short[] samples, int sampleRate)
-    {
-        using (var fs = new FileStream(filePath, FileMode.Create))
-        using (var bw = new BinaryWriter(fs))
-        {
-            int dataSize = samples.Length * 2;
-
-            bw.Write(Encoding.ASCII.GetBytes("RIFF"));
-            bw.Write(36 + dataSize);
-            bw.Write(Encoding.ASCII.GetBytes("WAVE"));
-            bw.Write(Encoding.ASCII.GetBytes("fmt "));
-            bw.Write(16); // format chunk size
-            bw.Write((short)1); // PCM format
-            bw.Write((short)1); // mono channel
-            bw.Write(sampleRate);
-            bw.Write(sampleRate * 2); // byte rate (sampleRate * bitsPerSample * channels / 8)
-            bw.Write((short)2); // block align
-            bw.Write((short)16); // bits per sample
-            bw.Write(Encoding.ASCII.GetBytes("data"));
-            bw.Write(dataSize);
-
-            foreach (var sample in samples)
-            {
-                bw.Write(sample);
-            }
-        }
     }
 }

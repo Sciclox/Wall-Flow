@@ -29,6 +29,7 @@ public class ClipboardService
     public static ClipboardService Instance => _instance ??= new ClipboardService();
 
     private readonly string _cacheFolder;
+    private readonly string _historyFilePath;
     private readonly List<ClipboardItem> _history = new();
     private readonly object _lock = new();
     private bool _isInternalCopy = false;
@@ -48,27 +49,114 @@ public class ClipboardService
 
     private ClipboardService()
     {
-        _cacheFolder = Path.Combine(
+        var appData = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "WallFlow", "clipboard_cache");
+            "WallFlow");
+        _cacheFolder = Path.Combine(appData, "clipboard_cache");
+        _historyFilePath = Path.Combine(appData, "clipboard_history.json");
 
         try
         {
-            if (!Directory.Exists(_cacheFolder))
+            Directory.CreateDirectory(_cacheFolder);
+            LoadHistory();
+            CleanOrphanImages();
+        }
+        catch { }
+    }
+
+    private void LoadHistory()
+    {
+        try
+        {
+            if (File.Exists(_historyFilePath))
             {
-                Directory.CreateDirectory(_cacheFolder);
-            }
-            else
-            {
-                // Clear cache folder on startup to save space
-                var di = new DirectoryInfo(_cacheFolder);
-                foreach (var file in di.GetFiles())
+                var json = File.ReadAllText(_historyFilePath);
+                var items = System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(json);
+                if (items != null)
                 {
-                    try { file.Delete(); } catch { }
+                    lock (_lock)
+                    {
+                        _history.Clear();
+                        foreach (var item in items)
+                        {
+                            if (item.Type == "Image" && (string.IsNullOrEmpty(item.ImagePath) || !File.Exists(item.ImagePath)))
+                            {
+                                continue;
+                            }
+                            _history.Add(item);
+                        }
+                    }
                 }
             }
         }
         catch { }
+    }
+
+    private void SaveHistoryAsync()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                List<ClipboardItem> snapshot;
+                lock (_lock)
+                {
+                    snapshot = new List<ClipboardItem>(_history);
+                }
+
+                var json = System.Text.Json.JsonSerializer.Serialize(snapshot);
+                string tempFile = _historyFilePath + ".tmp." + Guid.NewGuid().ToString("N");
+                File.WriteAllText(tempFile, json);
+                File.Move(tempFile, _historyFilePath, overwrite: true);
+            }
+            catch { }
+        });
+    }
+
+    private void CleanOrphanImages()
+    {
+        try
+        {
+            HashSet<string> referencedFiles;
+            lock (_lock)
+            {
+                referencedFiles = new HashSet<string>(
+                    _history.Where(h => h.Type == "Image" && !string.IsNullOrEmpty(h.ImagePath))
+                            .Select(h => Path.GetFullPath(h.ImagePath)),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (Directory.Exists(_cacheFolder))
+            {
+                var di = new DirectoryInfo(_cacheFolder);
+                foreach (var file in di.GetFiles())
+                {
+                    if (!referencedFiles.Contains(file.FullName))
+                    {
+                        try { file.Delete(); } catch { }
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    public void ClearAllHistory()
+    {
+        lock (_lock)
+        {
+            foreach (var item in _history)
+            {
+                if (item.Type == "Image" && !string.IsNullOrEmpty(item.ImagePath) && File.Exists(item.ImagePath))
+                {
+                    try { File.Delete(item.ImagePath); } catch { }
+                }
+            }
+            _history.Clear();
+        }
+
+        SaveHistoryAsync();
+        HistoryChanged?.Invoke();
     }
 
     /// <summary>
@@ -138,6 +226,7 @@ public class ClipboardService
         }
 
         HistoryChanged?.Invoke();
+        SaveHistoryAsync();
     }
 
     public void CopyToClipboardInternal(Guid id)
@@ -193,6 +282,7 @@ public class ClipboardService
                 }
                 _history.Remove(item);
                 HistoryChanged?.Invoke();
+                SaveHistoryAsync();
             }
         }
     }
@@ -229,26 +319,37 @@ public class ClipboardService
                             var bitmap = Clipboard.GetImage();
                             if (bitmap != null)
                             {
-                                string fileName = Guid.NewGuid().ToString() + ".png";
-                                string filePath = Path.Combine(_cacheFolder, fileName);
-
-                                using (var fs = new FileStream(filePath, FileMode.Create))
+                                bitmap.Freeze();
+                                Task.Run(() =>
                                 {
-                                    var encoder = new PngBitmapEncoder();
-                                    encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                                    encoder.Save(fs);
-                                }
+                                    try
+                                    {
+                                        string fileName = Guid.NewGuid().ToString() + ".png";
+                                        string filePath = Path.Combine(_cacheFolder, fileName);
 
-                                var colors = ExtractDominantColors(bitmap);
+                                        using (var fs = new FileStream(filePath, FileMode.Create))
+                                        {
+                                            var encoder = new PngBitmapEncoder();
+                                            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                                            encoder.Save(fs);
+                                        }
 
-                                newItem = new ClipboardItem
-                                {
-                                    Type = "Image",
-                                    ImagePath = filePath,
-                                    Content = filePath,
-                                    Colors = colors,
-                                    Tags = new List<string> { "#Imágenes", "#Color" }
-                                };
+                                        var colors = ExtractDominantColors(bitmap);
+
+                                        var imageItem = new ClipboardItem
+                                        {
+                                            Type = "Image",
+                                            ImagePath = filePath,
+                                            Content = filePath,
+                                            Colors = colors,
+                                            Tags = new List<string> { "#Imágenes", "#Color" }
+                                        };
+
+                                        AddItemToHistory(imageItem);
+                                    }
+                                    catch { }
+                                });
+                                break;
                             }
                         }
                         // 2. Check for File Drop List
@@ -283,45 +384,7 @@ public class ClipboardService
 
                         if (newItem != null)
                         {
-                            lock (_lock)
-                            {
-                                var existing = _history.FirstOrDefault(h => 
-                                    h.Type == newItem.Type && 
-                                    (h.Content == newItem.Content || 
-                                     (h.Type == "Image" && !string.IsNullOrEmpty(h.ImagePath) && !string.IsNullOrEmpty(newItem.ImagePath) && 
-                                      Path.GetFileName(h.ImagePath) == Path.GetFileName(newItem.ImagePath)))
-                                );
-
-                                if (existing != null)
-                                {
-                                    _history.Remove(existing);
-                                    existing.Timestamp = DateTime.Now;
-                                    _history.Insert(0, existing);
-
-                                    if (newItem.Type == "Image" && File.Exists(newItem.ImagePath))
-                                    {
-                                        try { File.Delete(newItem.ImagePath); } catch { }
-                                    }
-                                }
-                                else
-                                {
-                                    _history.Insert(0, newItem);
-                                }
-
-                                // Limit history size to 50
-                                while (_history.Count > 50)
-                                {
-                                    var old = _history[_history.Count - 1];
-                                    if (old.Type == "Image" && File.Exists(old.ImagePath))
-                                    {
-                                        try { File.Delete(old.ImagePath); } catch { }
-                                    }
-                                    _history.RemoveAt(_history.Count - 1);
-                                }
-                            }
-
-                            HistoryChanged?.Invoke();
-                            SoundService.Play(SoundType.Ping);
+                            AddItemToHistory(newItem);
                         }
 
                         break; // Success
@@ -339,6 +402,50 @@ public class ClipboardService
                 }
             });
         });
+    }
+
+    private void AddItemToHistory(ClipboardItem newItem)
+    {
+        lock (_lock)
+        {
+            var existing = _history.FirstOrDefault(h => 
+                h.Type == newItem.Type && 
+                (h.Content == newItem.Content || 
+                 (h.Type == "Image" && !string.IsNullOrEmpty(h.ImagePath) && !string.IsNullOrEmpty(newItem.ImagePath) && 
+                  Path.GetFileName(h.ImagePath) == Path.GetFileName(newItem.ImagePath)))
+            );
+
+            if (existing != null)
+            {
+                _history.Remove(existing);
+                existing.Timestamp = DateTime.Now;
+                _history.Insert(0, existing);
+
+                if (newItem.Type == "Image" && File.Exists(newItem.ImagePath))
+                {
+                    try { File.Delete(newItem.ImagePath); } catch { }
+                }
+            }
+            else
+            {
+                _history.Insert(0, newItem);
+            }
+
+            // Limit history size to 50
+            while (_history.Count > 50)
+            {
+                var old = _history[_history.Count - 1];
+                if (old.Type == "Image" && File.Exists(old.ImagePath))
+                {
+                    try { File.Delete(old.ImagePath); } catch { }
+                }
+                _history.RemoveAt(_history.Count - 1);
+            }
+        }
+
+        HistoryChanged?.Invoke();
+        SaveHistoryAsync();
+        SoundService.Play(SoundType.Ping);
     }
 
     private bool IsDuplicate(string content)

@@ -17,6 +17,8 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using WallFlow.Services;
+using WallFlow.Native;
+using static WallFlow.Native.NativeMethods;
 
 namespace WallFlow.Windows;
 
@@ -25,7 +27,7 @@ public partial class OnlineGalleryWindow : Window, IWidget
     string IWidget.Name => "OnlineGallery";
     public void Open() { Show(); Activate(); }
     public bool IsOpen => IsLoaded && IsVisible;
-    private readonly UHDPaperService _service = new();
+    private readonly UHDPaperService _service = UHDPaperService.Instance;
     private string _wallpaperDir;
     private readonly ObservableCollection<StackPanel> _rows = new();
     private readonly SemaphoreSlim _thumbnailThrottle = new(2, 2);
@@ -53,13 +55,7 @@ public partial class OnlineGalleryWindow : Window, IWidget
     private static readonly string[] SupportedExtensions =
         [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"];
 
-    private const int SPI_SETDESKWALLPAPER = 20;
-    private const int SPIF_UPDATEINIFILE = 0x01;
-    private const int SPIF_SENDCHANGE = 0x02;
-    private const int WM_SETTINGCHANGE = 0x001A;
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 
     private const int PAGE_SIZE = 20;
     private const int TILES_PER_ROW = 4;
@@ -1002,12 +998,13 @@ public partial class OnlineGalleryWindow : Window, IWidget
             if (string.IsNullOrEmpty(downloaded) || !File.Exists(downloaded))
             { StatusText.Text = "Error al descargar"; return; }
 
-            WallpaperTransitionService.ApplyWallpaperWithFade(downloaded, () =>
+            WallpaperTransitionService.ApplyWallpaper(downloaded, () =>
             {
                 StatusText.Text = "¡Aplicado como wallpaper!";
                 Services.BackdropHelper.RefreshBackdrop(this);
-                if (((System.Windows.Window)ApplicationHost.Instance) != null)
-                    Services.BackdropHelper.RefreshBackdrop(((System.Windows.Window)ApplicationHost.Instance));
+                if (ApplicationHost.Instance is System.Windows.Window hostWin)
+                    Services.BackdropHelper.RefreshBackdrop(hostWin);
+                DockWindow.Instance?.UpdateAccentColorFromWallpaper(downloaded);
             });
         }
         catch (OperationCanceledException) { }
@@ -1179,12 +1176,13 @@ public partial class OnlineGalleryWindow : Window, IWidget
 
     private void ApplyLocalWallpaper(WallpaperEntry entry)
     {
-        WallpaperTransitionService.ApplyWallpaperWithFade(entry.FilePath, () =>
+        WallpaperTransitionService.ApplyWallpaper(entry.FilePath, () =>
         {
             StatusText.Text = $"Aplicado: {entry.FileName}";
             Services.BackdropHelper.RefreshBackdrop(this);
-            if (((System.Windows.Window)ApplicationHost.Instance) != null)
-                Services.BackdropHelper.RefreshBackdrop(((System.Windows.Window)ApplicationHost.Instance));
+            if (ApplicationHost.Instance is System.Windows.Window hostWin)
+                Services.BackdropHelper.RefreshBackdrop(hostWin);
+            DockWindow.Instance?.UpdateAccentColorFromWallpaper(entry.FilePath);
         });
     }
 
